@@ -963,6 +963,38 @@ Next priority:
 3. Defer more scalar architecture sweeps until graph lifetime/update cost is either reduced or built into the Pareto table as a first-class deployment parameter.
 
 
+## Stage 33: Skin-Aware Graph Cache Validity
+
+Stage 33 added a displacement/skin validity probe to the trajectory replay benchmark. This converts the fixed `K` from Stage 32 into a physically interpretable edge-state lifetime rule: rebuild when `max_displacement_since_rebuild > 0.5 * skin_margin`. The benchmark records skin margin, half-skin threshold, max displacement, rebuild count, rebuild steps, and rebuild causes.
+
+Verification and implementation gate:
+
+- Added `graph_cache_displacement_probe(reference_positions, positions, skin_margin)`.
+- Added `--trajectory-skin-margin` to `benchmark_rtece_scalar.py`.
+- `test/test_rtece_scalar.py`: 42 passed after the change.
+
+GPU probe setup: radial8/24x24 `rtece_element_density`, DFT valid `:256`, 12770 atoms, float32, one V100, `--force-mode auto`, `trajectory_displacement_std=0.001`. This is a small-window validity probe; absolute atom-step/s should not be mixed directly with the 1024-config Stage-32 throughput rows because the smaller batch underutilizes the GPU.
+
+| skin margin A | half-skin threshold A | force steps | rebuild count | rebuild steps | atom-step/s | DFT F MAE |
+|---:|---:|---:|---:|---|---:|---:|
+| 0.000 | n/a | 200 | 0 | [] | 14880257 | 34.14 |
+| 0.008 | 0.004 | 200 | 0 | [] | 14623702 | 34.14 |
+| 0.004 | 0.002 | 100 | 0 | [] | 14750307 | 34.14 |
+| 0.002 | 0.001 | 20 | 10 | [1,3,5,7,9,11,13,15,17,19] | 15839 | 34.14 |
+
+Stage-33 interpretation against TECE/TACE:
+
+- Edge-state lifetime is now a controlled deployment parameter, not a guessed rebuild interval. This directly supports the TECE/TACE route where retained edge relations become persistent coarse-grained topology state while descriptor/force work is short-lived and fused in kernels.
+- The skin criterion sharply separates valid cache reuse from graph-bound execution. In this synthetic trajectory, the observed no-rebuild max displacement is about 0.00173 A, so skin margins 0.004 A and 0.008 A preserve cached throughput; skin margin 0.002 A rebuilds every two steps and collapses throughput.
+- Stage 32 showed that K around 2000 is needed to cross 1e7 atom-step/s on the 1024-config window. Stage 33 clarifies the missing physical condition: such a lifetime is only legitimate if displacement remains below half the selected skin margin, or if a faster provider can update neighbor topology cheaply.
+
+Next priority:
+
+1. Prototype a neighbor-provider boundary with explicit `valid_until_rebuild`/`needs_rebuild` state, so MD loops can query cache validity instead of hard-coding K.
+2. Measure the cost of graph-validity checks separately from full ASE rebuilds. The validity check should be device-side and O(N), otherwise it can become another hidden bottleneck.
+3. Only after this provider layer exists should we revisit scalar architecture variants, because the current limiting axis is graph lifetime/update cost rather than descriptor semantics.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
