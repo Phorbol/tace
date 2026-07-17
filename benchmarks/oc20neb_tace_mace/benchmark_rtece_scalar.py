@@ -45,6 +45,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Include ASE neighbor-list graph construction inside the timed loop.",
     )
+    parser.add_argument(
+        "--batch-graph-construction",
+        action="store_true",
+        help="When graph construction is timed, rebuild all graphs and collate before one batched model pass.",
+    )
     return parser.parse_args()
 
 
@@ -82,6 +87,11 @@ def choose_rtece_force_mode(
     return "autograd"
 
 
+def validate_graph_construction_args(*, include_graph_construction: bool, batch_graph_construction: bool) -> None:
+    if batch_graph_construction and not include_graph_construction:
+        raise ValueError("--batch-graph-construction requires --include-graph-construction")
+
+
 def load_atoms_window(configs: Path, *, start_config: int, limit_configs: int | None):
     import ase.io
 
@@ -98,6 +108,10 @@ def load_atoms_window(configs: Path, *, start_config: int, limit_configs: int | 
 
 def main() -> None:
     args = parse_args()
+    validate_graph_construction_args(
+        include_graph_construction=bool(args.include_graph_construction),
+        batch_graph_construction=bool(args.batch_graph_construction),
+    )
     dtype = torch.float64 if args.default_dtype == "float64" else torch.float32
     requested = torch.device(args.device)
     device = requested if requested.type == "cpu" or torch.cuda.is_available() else torch.device("cpu")
@@ -139,6 +153,23 @@ def main() -> None:
     def forward_once(collect: bool):
         if prebuilt_graph is not None:
             out = run_model(prebuilt_graph)
+            if not collect:
+                return []
+            return [
+                {
+                    "energy": out["energy"].detach().cpu().numpy(),
+                    "forces": out["forces"].detach().cpu().numpy(),
+                }
+            ]
+
+        if args.batch_graph_construction:
+            graph = collate_graphs(
+                [
+                    atoms_to_graph(atoms, cutoff=config.cutoff, device=device, dtype=dtype)[0]
+                    for atoms in atoms_list
+                ]
+            )
+            out = run_model(graph)
             if not collect:
                 return []
             return [
@@ -202,6 +233,7 @@ def main() -> None:
         "num_radial": int(model.config.num_radial),
         "num_parameters": int(sum(p.numel() for p in model.parameters())),
         "includes_graph_construction": bool(args.include_graph_construction),
+        "batched_graph_construction": bool(args.batch_graph_construction),
         "prebuilt_batched_graph": prebuilt_graph is not None,
         "measure_passes": args.measure_passes,
         "pass_times_s": pass_times,

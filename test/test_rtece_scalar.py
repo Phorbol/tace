@@ -816,6 +816,19 @@ def test_rtece_auto_force_mode_prefers_fused_element_density_only_when_eligible(
     )
 
 
+def test_batched_graph_construction_requires_graph_construction_timing():
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import validate_graph_construction_args
+
+    validate_graph_construction_args(include_graph_construction=True, batch_graph_construction=True)
+    validate_graph_construction_args(include_graph_construction=False, batch_graph_construction=False)
+    try:
+        validate_graph_construction_args(include_graph_construction=False, batch_graph_construction=True)
+    except ValueError as exc:
+        assert "--include-graph-construction" in str(exc)
+    else:
+        raise AssertionError("batched graph construction should require graph-construction timing")
+
+
 def test_rtece_benchmark_help_exposes_force_mode():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     result = subprocess.run(
@@ -828,6 +841,7 @@ def test_rtece_benchmark_help_exposes_force_mode():
 
     assert result.returncode == 0, result.stderr
     assert "--force-mode" in result.stdout
+    assert "--batch-graph-construction" in result.stdout
     assert "auto" in result.stdout
     assert "analytic_pair" in result.stdout
     assert "analytic_pair_triton_force" in result.stdout
