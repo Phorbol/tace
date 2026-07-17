@@ -24,18 +24,22 @@ Topology comparison on the same `:1024` window:
 
 | metric | value |
 |---|---:|
-| ASE edges | 1,193,050 |
-| torch non-PBC edges | 825,510 |
-| overlap edges | 825,510 |
-| missing ASE/PBC edges | 367,540 |
-| extra torch edges | 0 |
-| ASE edge recall | 0.6919 |
-| torch edge precision | 1.0000 |
+| ASE edge entries | 1,221,178 |
+| ASE unique edges | 1,193,050 |
+| torch non-PBC unique edges | 825,510 |
+| overlap with ASE unique edges | 825,510 |
+| missing ASE/PBC unique edges | 367,540 |
+| extra torch unique edges | 0 |
+| raw ASE unique-edge recall | 0.6919 |
+| active ASE direct-distance unique edges | 825,510 |
+| active unique-edge recall | 1.0000 |
+| inactive ASE direct-distance entries | 368,880 |
+| duplicate ASE edge entries | 28,128 |
 | mismatch configs | 1024 / 1024 |
 
 Interpretation:
 
 - This is the first measured non-ASE topology rebuild backend. It improves invalid-cache update-only throughput from 2.19e4 atom-step/s with ASE to 6.88e5 atom-step/s, about a 31x speedup.
 - The backend is still far from the cached-topology upper bound: 0.172 s per update versus about 5 us for fixed-topology position refresh. The remaining cost is Python per-config looping and many small dense radius kernels, not scalar rTECE model evaluation.
-- The topology comparison rejects `torch_radius_nopbc` as a correct provider for the current PBC dataset. It recovers only 69.2% of ASE edges because the OC20NEB configs have full PBC.
-- The next clean backend is therefore not another scalar architecture or another non-PBC tweak. It should be a PBC-aware, batched cell-list/neighbor provider, ideally with one batched kernel over the whole graph window rather than one Python loop per config. The stage still moves the TECE route forward because it quantifies the gap between ASE, naive tensor radius rebuild, and fixed-topology upper bound.
+- The raw topology comparison shows that `torch_radius_nopbc` recovers only 69.2% of ASE unique edges because the OC20NEB configs have full PBC. However, the current rTECE graph does not store periodic shift vectors, so model geometry uses direct coordinate differences. Under that implemented direct-distance semantics, `torch_radius_nopbc` recovers 100% of active unique edges inside the cutoff and drops 368,880 inactive ASE edge entries.
+- This exposes a code/theory mismatch that is now a priority: either formalize the current rTECE endpoint as a direct-distance graph and remove ASE PBC overhead, or extend `RTECEGraph` and the fused evaluator to carry PBC shift/displacement state. A production PBC neighbor provider still needs a batched cell-list or MD-runtime neighbor interface; the current non-PBC torch backend is useful evidence, not the final backend.
