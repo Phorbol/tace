@@ -734,6 +734,37 @@ Stage-23 interpretation:
 - The current scalar rTECE Pareto front is now: radial4 element-density 16x16 for maximum throughput, radial6 element-density 24x24 as a high-throughput intermediate, pair-32 Triton, element-density 24x24, and element-density 32x32. The next clean step is either (1) radial5/hidden16-24 to fill the large error gap between radial4 and radial8, or (2) fused descriptor construction to reduce the remaining `index_add_` cost without further semantic loss.
 
 
+## Stage 24 Smoke: Radial5 Gap-Fill Under the Triton Element-Density Evaluator
+
+Stage 23 established two separated regimes: radial4 gives an extreme-throughput endpoint with about 44 meV/A force MAE, while radial8 recovers much better accuracy near 30 meV/A at lower throughput. Stage 24 tested the missing middle point, `num_radial=5`, under the same TECE-positive element-density descriptor and `analytic_element_triton_force` evaluator. This keeps the degradation axis clean: only radial density resolution and scalar head width vary.
+
+4096-config prefix sweep, all `rtece_element_density`, mixed labels, force weight 30, and `analytic_element_triton_force`:
+
+| num radial | hidden | params | atoms/s | peak alloc MB | DFT F MAE | teacher F MAE | interpretation |
+|---:|---|---:|---:|---:|---:|---:|---|
+| 4 | 16x16 | 449 | 42954558 | 436.4 | 43.91 | 47.77 | Stage-23 maximum-throughput endpoint |
+| 5 | 16x16 | 481 | 38825023 | 495.4 | 39.02 | 43.07 | new useful middle point; faster and slightly more accurate than pair32 |
+| 5 | 20x20 | 681 | 38384295 | 495.4 | 49.64 | 53.20 | dominated; widening head did not help |
+| 5 | 24x24 | 913 | 37893470 | 495.4 | 46.57 | 50.23 | dominated by radial5/16x16 |
+| 6 | 24x24 | 961 | 34333375 | 554.9 | 42.87 | 46.67 | dominated by radial5/16x16 on prefix window |
+| 8 | 24x24 | 1057 | 30655057 | 674.7 | 30.19 | 35.83 | lower-error element-density point |
+
+Offset-window robustness for radial5/16x16:
+
+| extxyz index | configs | atoms/s | DFT F MAE | DFT F RMSE | DFT E MAE | interpretation |
+|---|---:|---:|---:|---:|---:|---|
+| `:4096` | 4096 | 38423189 | 39.02 | 114.24 | 1449.6 | prefix rebenchmark |
+| `4096:8192` | 4096 | 39634440 | 41.61 | 123.82 | 1533.4 | stable error band, harder window |
+| `8192:12288` | 1808 | 33595106 | 40.55 | 122.25 | 1358.6 | shorter tail window, same force-error regime |
+
+Stage-24 interpretation:
+
+- Radial5/16x16 is the first clean gap-fill point between the radial4 ultra-fast endpoint and the radial8 lower-error element-density points. It keeps element-conditioned radial density, conservative forces, and the Triton evaluator, but uses only 481 parameters and 5 radial channels.
+- This point weakly dominates pair32 on the prefix benchmark: higher throughput, fewer parameters, lower memory, and slightly lower DFT force MAE. It also has a clear TECE explanation: adding one radial channel beyond radial4 recovers enough radial resolution to reduce force error without returning to the full radial8 cost.
+- Wider heads at radial5 are negative results. The `20x20` and `24x24` heads are slower and much less accurate, reinforcing the Stage-23 conclusion that readout width does not compensate for coarse/noisy radial projection under this small-data distillation setup.
+- The current scalar rTECE Pareto front is now cleaner: radial4/16x16 for maximum throughput, radial5/16x16 as the useful fast middle point near pair-level accuracy, radial8/24x24 for much lower force error, and radial8/32x32 for the current lowest scalar force error. The next priority should shift from head-width sweeps to either fused descriptor construction or a radial5 training robustness repeat with a different seed/longer training, because the non-monotonic head behavior suggests training variance or optimization stability matters.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
