@@ -995,6 +995,38 @@ Next priority:
 3. Only after this provider layer exists should we revisit scalar architecture variants, because the current limiting axis is graph lifetime/update cost rather than descriptor semantics.
 
 
+## Stage 34: Graph-Cache Provider Boundary And Validity Timing
+
+Stage 34 added a reusable trajectory graph-cache provider boundary and separated O(N) cache-validity timing from fused model timing. This follows Stage 33 directly: the MD loop should query `needs_rebuild` from state, not hard-code a rebuild interval.
+
+Verification and implementation gate:
+
+- Added `TrajectoryGraphCacheProvider(reference_positions, skin_margin)` with `check(positions)` and `mark_rebuilt(positions, step, cause)`.
+- Added `--trajectory-validity-only` to time position generation plus provider validity checks without model evaluation or graph rebuild.
+- Validity-only JSON rows now set `prediction_errors_available=false` and leave MAE/RMSE fields as `null`, so they cannot be mistaken for model Pareto rows.
+- `test/test_rtece_scalar.py`: 45 passed after the change.
+
+GPU setup: radial8/24x24 `rtece_element_density`, DFT valid `:1024`, 59193 atoms, float32, one V100, `--force-mode auto`, `trajectory_displacement_std=0.001`, `trajectory_skin_margin=0.004`, 2000 force steps/pass.
+
+| mode | validity only | force steps | rebuild count | max displacement A | atom-step/s | seconds/pass | ms/step | peak alloc MB | DFT F MAE |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| provider validity check | yes | 2000 | 0 | 0.001733 | 356832007 | 0.331770 | 0.166 | 24.5 | n/a |
+| cached fused model + validity | no | 2000 | 0 | 0.001733 | 38889577 | 3.044158 | 1.522 | 69.8 | 33.17 |
+
+Stage-34 interpretation against TECE/TACE:
+
+- The graph/edge state lifetime axis is now represented as an explicit provider interface, matching the TECE/TACE compiler interpretation: retained edge topology is persistent coarse-grained state, while descriptor/force work remains short-lived fused kernel work.
+- The O(N) validity probe is not the dominant bottleneck on this benchmark window. It costs about 0.166 ms/step, versus about 1.522 ms/step for cached fused model plus validity. However, this is still about 11% of the cached model step, so production code should keep the check device-side and avoid host synchronization.
+- With skin margin 0.004 A, the synthetic trajectory stays valid for 2000 force steps because max displacement is about 0.00173 A, below the half-skin threshold 0.002 A. This gives a physically interpretable condition under which the Stage-32 K=2000 throughput claim is legitimate.
+- The remaining end-to-end gap is no longer deciding when a graph is valid. It is what happens when `needs_rebuild=True`: the current fallback is still full ASE reconstruction. The next clean target is a fast neighbor update/rebuild provider and a benchmark that separates provider update cost from fused model cost.
+
+Next priority:
+
+1. Prototype the provider update path: keep the provider interface, but add a `rebuild_graph_from_positions` backend abstraction so ASE reconstruction is only one backend.
+2. Measure three costs separately on the same window: validity check, provider update/rebuild, fused model force pass.
+3. Fold these deployment costs into the Pareto table as first-class axes alongside architecture error, because graph lifetime/update cost now determines whether scalar rTECE reaches NEP/DPA-style throughput end-to-end.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
