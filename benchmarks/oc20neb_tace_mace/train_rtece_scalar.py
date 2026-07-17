@@ -22,6 +22,13 @@ from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
 )
 
 
+def set_training_seed(seed: int) -> None:
+    np.random.seed(int(seed))
+    torch.manual_seed(int(seed))
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(int(seed))
+
+
 def parse_hidden_channels(value: str) -> tuple[int, ...]:
     channels = tuple(int(part.strip()) for part in value.split(",") if part.strip())
     if not channels:
@@ -262,6 +269,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--hidden-channels", default="64,64")
     parser.add_argument("--num-radial", type=int, default=8)
+    parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--energy-weight", type=float, default=1.0)
     parser.add_argument("--force-weight", type=float, default=10.0)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
@@ -274,6 +282,7 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    set_training_seed(args.seed)
     dtype = torch.float64 if args.default_dtype == "float64" else torch.float32
     requested = torch.device(args.device)
     device = requested if requested.type == "cpu" or torch.cuda.is_available() else torch.device("cpu")
@@ -325,6 +334,7 @@ def main() -> None:
             "energy_per_atom_shift": config.energy_per_atom_shift,
             "hidden_channels": list(config.hidden_channels),
             "num_radial": config.num_radial,
+            "seed": int(args.seed),
             "energy_weight": args.energy_weight,
             "force_weight": args.force_weight,
             "device": str(device),

@@ -760,6 +760,7 @@ def test_rtece_train_help_exposes_num_radial():
 
     assert result.returncode == 0, result.stderr
     assert "--num-radial" in result.stdout
+    assert "--seed" in result.stdout
 
 
 def test_summary_extracts_force_throughput_pareto_front():
@@ -844,6 +845,14 @@ def test_rtece_matrix_sbatch_forwards_num_radial():
 
     assert "NUM_RADIAL=${NUM_RADIAL:-8}" in script
     assert '--num-radial "${NUM_RADIAL}"' in script
+
+
+def test_rtece_matrix_sbatch_forwards_seed():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
+
+    assert "SEED=${SEED:-0}" in script
+    assert '--seed "${SEED}"' in script
 
 
 def test_extxyz_index_supports_offset_windows():
