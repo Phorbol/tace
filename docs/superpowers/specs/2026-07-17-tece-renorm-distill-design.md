@@ -881,6 +881,24 @@ Stage-29 interpretation:
 - The next clean priority is therefore not another radial/head sweep. It is batched graph construction, graph/neighbor cache reuse, or direct MD-runtime integration that keeps neighbor lists and edge buffers alive across steps. This is the next system-level renormalization axis required before claiming NEP/DPA-style throughput in an end-to-end setting.
 
 
+## Stage 30: Graph Runtime Cost Split
+
+Stage 30 split the Stage-29 end-to-end bottleneck into three runtime modes for the same radial8/24x24 checkpoint. All rows use DFT valid `:1024`, 59193 atoms, float32, one V100, and `--force-mode auto`, which resolves to `analytic_element_triton_descriptor_force`.
+
+| runtime mode | prebuilt graph | graph construction timed | batched model pass | atoms/s | configs/s | seconds/pass | DFT F MAE |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| prebuilt batched graph | yes | no | yes | 36564104 | 632535 | 0.001619 | 33.17 |
+| rebuild graphs, then batch | no | yes | yes | 9879 | 171 | 5.992034 | 33.17 |
+| rebuild graph per config | no | yes | no | 8599 | 149 | 6.883463 | 33.17 |
+
+Stage-30 interpretation:
+
+- Batching the model pass after rebuilding all graphs improves the current ASE-style end-to-end path by only about 15% over rebuilding and evaluating per configuration. That is far too small to explain the gap to the prebuilt batched graph throughput.
+- The dominant runtime bottleneck is therefore ASE neighbor-list and graph construction, not the fused rTECE force pass and not primarily per-config Python model dispatch.
+- This sharpens the TECE system-renormalization route: the local graph/edge buffer must become a persistent coarse-grained state across MD steps, with skin/cache updates, rather than a transient object reconstructed from scratch each step.
+- The next implementation target should be a graph-cache benchmark that builds a graph once, reuses it across repeated force passes, and models amortized rebuild intervals. The longer-term target is an MD-runtime neighbor-list provider feeding the fused descriptor/force kernels directly.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
