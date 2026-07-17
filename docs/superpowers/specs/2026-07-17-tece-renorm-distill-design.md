@@ -365,6 +365,31 @@ Stage-11 interpretation:
 - The result supports the document hypothesis that the key bottleneck was not only representation dimension, but the lifetime of high-rank/autograd state in the force path. Early scalarization plus analytic/fused force propagation is the clean route toward NEP/DPA-class throughput inside the TECE framework.
 - Next priority: characterize robustness/transfer of the analytic pair point, then explore analytic/fused extensions only after pair is fully characterized. Edge sketches remain lower priority because they were accuracy-neutral and throughput-dominated before force-path optimization.
 
+## Stage 12 Smoke: Analytic rTECE Pair Offset-Window Robustness
+
+Stage 11 used prefix slices of the valid extxyz file. Stage 12 added `--start-config` support to the rTECE benchmark and reran the same job-678603 best checkpoint on non-prefix windows. This checks whether the current >1e7 atoms/s endpoint is a stable low-precision model point rather than an artifact of the first valid configurations.
+
+Implementation gate:
+
+- `benchmark_rtece_scalar.py` now exposes `--start-config`, records `start_config` and `extxyz_index` in JSON, and uses a local ASE extxyz window loader.
+- `rtece_scalar_benchmark.sbatch` forwards `START_CONFIG`.
+- Full rTECE test file after the change: 18 passed.
+
+DFT valid-window comparison for the same checkpoint and analytic-pair force mode:
+
+| job | extxyz index | configs | atoms | atoms/s | peak alloc MB | DFT F MAE | DFT F RMSE | DFT E MAE | interpretation |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---|
+| 678636 | `:4096` | 4096 | 250355 | 16091763 | 1405.4 | 47.93 | 118.66 | 1408.55 | prefix baseline from Stage 11 |
+| 678654 | `4096:8192` | 4096 | 275414 | 16188377 | 1534.0 | 50.59 | 128.06 | 1494.59 | same throughput class and same force-error regime |
+| 678655 | `8192:12288` | 1808 | 120704 | 15241383 | 686.6 | 50.23 | 126.36 | 1345.99 | tail window is shorter but still stable |
+
+Stage-12 interpretation:
+
+- The analytic `rtece_pair` point is not merely a prefix-window artifact. Across the valid file, DFT force MAE stays around 48-51 meV/A while single-V100 prebuilt-graph throughput stays around 15.2-16.2M atoms/s.
+- The model should be treated as the current high-throughput/low-precision Pareto endpoint, not as a high-accuracy replacement for TACE/MACE. The large energy MAE remains a known limitation of this aggressively scalarized residual model.
+- The result strengthens the TECE/TACE document hypothesis: the decisive simplification is progressive deletion of persistent high-rank equivariant state plus analytic/fused force propagation, not another small parameter sweep of the original architecture.
+- Next priority: produce a more systematic Pareto surface around this endpoint by varying only theoretically ordered rTECE axes: validation/training label mix and capacity at fixed scalarized pair physics first, then analytic/fused low-order descriptors if they provide measured force-error reduction without destroying the >1e7 atoms/s regime.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
