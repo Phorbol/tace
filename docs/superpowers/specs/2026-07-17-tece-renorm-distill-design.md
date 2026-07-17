@@ -1027,6 +1027,39 @@ Next priority:
 3. Fold these deployment costs into the Pareto table as first-class axes alongside architecture error, because graph lifetime/update cost now determines whether scalar rTECE reaches NEP/DPA-style throughput end-to-end.
 
 
+## Stage 35: ASE Graph Update Backend Timing
+
+Stage 35 added a `GraphUpdateBackend` boundary and timed graph update/rebuild separately from validity checks and fused model evaluation. The current backend is still `ase_neighborlist`; the purpose of this stage is to quantify the remaining deployment gap and make the backend replaceable.
+
+Verification and implementation gate:
+
+- Added `GraphUpdateBackend(name, rebuild_fn)` with rebuild count, per-rebuild times, and total rebuild time.
+- Added `--trajectory-update-only` to run position generation, cache validity checks, and provider graph updates/rebuilds without model evaluation.
+- Normal trajectory replay now routes rebuilds through the same backend and records the same update timing fields.
+- `test/test_rtece_scalar.py`: 46 passed after the change.
+
+GPU setup: radial8/24x24 `rtece_element_density`, DFT valid `:1024`, 59193 atoms, float32, one V100, `--force-mode auto`, `trajectory_displacement_std=0.001`.
+
+| mode | skin margin A | force steps | rebuilds | graph update total s | mean update s | seconds/pass | atom-step/s | DFT F MAE |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| update-only valid cache | 0.004 | 2000 | 0 | 0.000 | n/a | 0.325606 | 363586905 | n/a |
+| update-only invalid cache | 0.002 | 20 | 10 | 53.943 | 5.394 | 53.948049 | 21944 | n/a |
+| fused model + invalid updates | 0.002 | 20 | 10 | 54.377 | 5.438 | 54.416800 | 21755 | 33.17 |
+
+Stage-35 interpretation against TECE/TACE:
+
+- The deployment cost is now separated into three measured pieces: validity check, graph update/rebuild, and fused rTECE force pass. This is the system-level counterpart of the TECE/TACE operator projection route.
+- When the cache remains valid, update-only timing is essentially the Stage-34 O(N) validity cost: about 0.326 s for 2000 steps on the 59193-atom window.
+- When the cache is invalid every two steps, the current ASE backend dominates end-to-end cost. Ten graph rebuilds take about 54 s, roughly 5.4 s per 1024-config rebuild. Adding 20 fused force evaluations increases total time by only about 0.47 s.
+- Therefore invalid-cache execution is graph-update-bound, not model-bound. This cleanly answers the current priority question: replacing or accelerating the provider backend is necessary before further scalar architecture sweeps can move end-to-end throughput.
+
+Next priority:
+
+1. Implement a faster provider backend candidate, even if approximate at first: reuse existing edge topology with skin, or build a cell-list neighbor update path outside ASE for the batched graph.
+2. Keep reporting Pareto rows as `(architecture error, cached model throughput, validity cost, update/rebuild cost)`, because the deployment front is now a coupled model-system curve.
+3. Revisit scalar descriptor variants only after the provider backend no longer dominates invalid-cache throughput.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
