@@ -73,6 +73,12 @@ def parse_args() -> argparse.Namespace:
         default=0.0,
         help="Deterministic per-step synthetic displacement scale in Angstrom for trajectory replay.",
     )
+    parser.add_argument(
+        "--trajectory-skin-margin",
+        type=float,
+        default=0.0,
+        help="In trajectory replay mode, rebuild when max displacement since graph build exceeds half this skin margin.",
+    )
     return parser.parse_args()
 
 
@@ -117,11 +123,14 @@ def validate_graph_construction_args(
     replay_cached_graph: bool,
     trajectory_replay_steps: int = 0,
     trajectory_rebuild_interval: int = 0,
+    trajectory_skin_margin: float = 0.0,
 ) -> None:
     if trajectory_replay_steps < 0:
         raise ValueError(f"--trajectory-replay-steps must be non-negative, got {trajectory_replay_steps}")
     if trajectory_rebuild_interval < 0:
         raise ValueError(f"--trajectory-rebuild-interval must be non-negative, got {trajectory_rebuild_interval}")
+    if trajectory_skin_margin < 0.0:
+        raise ValueError(f"--trajectory-skin-margin must be non-negative, got {trajectory_skin_margin}")
     if batch_graph_construction and not include_graph_construction:
         raise ValueError("--batch-graph-construction requires --include-graph-construction")
     if replay_cached_graph and include_graph_construction:
@@ -137,6 +146,34 @@ def validate_graph_construction_args(
             raise ValueError("--trajectory-rebuild-interval must be positive when enabled")
     elif trajectory_rebuild_interval:
         raise ValueError("--trajectory-rebuild-interval requires --trajectory-replay-steps")
+    elif trajectory_skin_margin > 0.0:
+        raise ValueError("--trajectory-skin-margin requires --trajectory-replay-steps")
+
+
+def graph_cache_displacement_probe(
+    reference_positions: torch.Tensor,
+    positions: torch.Tensor,
+    *,
+    skin_margin: float,
+) -> dict[str, object]:
+    if tuple(reference_positions.shape) != tuple(positions.shape):
+        raise ValueError(
+            f"reference positions shape {tuple(reference_positions.shape)} does not match positions shape {tuple(positions.shape)}"
+        )
+    displacement = (positions - reference_positions).norm(dim=-1)
+    max_displacement = displacement.max() if displacement.numel() else reference_positions.new_tensor(0.0)
+    if skin_margin <= 0.0:
+        return {
+            "max_displacement": max_displacement,
+            "threshold": None,
+            "rebuild_required": False,
+        }
+    threshold = 0.5 * float(skin_margin)
+    return {
+        "max_displacement": max_displacement,
+        "threshold": threshold,
+        "rebuild_required": bool(float(max_displacement.detach().cpu()) > threshold),
+    }
 
 
 def synthetic_trajectory_positions(
@@ -208,6 +245,7 @@ def main() -> None:
         replay_cached_graph=bool(args.replay_cached_graph),
         trajectory_replay_steps=int(args.trajectory_replay_steps),
         trajectory_rebuild_interval=int(args.trajectory_rebuild_interval),
+        trajectory_skin_margin=float(args.trajectory_skin_margin),
     )
     dtype = torch.float64 if args.default_dtype == "float64" else torch.float32
     requested = torch.device(args.device)
@@ -228,6 +266,10 @@ def main() -> None:
     replay_positions = None
     trajectory_template = None
     trajectory_base_positions = None
+    trajectory_reference_positions = None
+    trajectory_report_rebuild_steps: list[int] = []
+    trajectory_report_rebuild_causes: list[str] = []
+    trajectory_report_max_displacement = 0.0
     if not args.include_graph_construction:
         prebuilt_graph = collate_graphs(
             [
@@ -238,6 +280,7 @@ def main() -> None:
         if args.trajectory_replay_steps > 0:
             trajectory_template = prebuilt_graph
             trajectory_base_positions = prebuilt_graph.pos.detach().clone()
+            trajectory_reference_positions = trajectory_base_positions.clone()
             prebuilt_graph = None
         elif args.replay_cached_graph:
             replay_template = prebuilt_graph
@@ -298,9 +341,14 @@ def main() -> None:
             ]
 
         if trajectory_template is not None:
-            if trajectory_base_positions is None:
+            nonlocal trajectory_reference_positions, trajectory_report_rebuild_steps, trajectory_report_rebuild_causes, trajectory_report_max_displacement
+            if trajectory_base_positions is None or trajectory_reference_positions is None:
                 raise RuntimeError("trajectory replay positions were not initialized")
             graph_template = trajectory_template
+            reference_positions = trajectory_reference_positions
+            pass_rebuild_steps: list[int] = []
+            pass_rebuild_causes: list[str] = []
+            pass_max_displacement = 0.0
             collected = []
             for step in range(int(args.trajectory_replay_steps)):
                 positions = synthetic_trajectory_positions(
@@ -308,8 +356,25 @@ def main() -> None:
                     step=step,
                     displacement_std=float(args.trajectory_displacement_std),
                 )
+                probe = graph_cache_displacement_probe(
+                    reference_positions,
+                    positions,
+                    skin_margin=float(args.trajectory_skin_margin),
+                )
+                pass_max_displacement = max(
+                    pass_max_displacement,
+                    float(probe["max_displacement"].detach().cpu()),
+                )
+                rebuild_cause = None
                 if step > 0 and args.trajectory_rebuild_interval and step % int(args.trajectory_rebuild_interval) == 0:
+                    rebuild_cause = "interval"
+                if step > 0 and bool(probe["rebuild_required"]):
+                    rebuild_cause = "skin" if rebuild_cause is None else f"{rebuild_cause}+skin"
+                if rebuild_cause is not None:
                     graph_template = rebuild_batched_graph_from_positions(positions)
+                    reference_positions = positions.detach().clone()
+                    pass_rebuild_steps.append(step)
+                    pass_rebuild_causes.append(rebuild_cause)
                     graph = graph_template
                 else:
                     graph = replay_graph_positions(graph_template, positions)
@@ -321,6 +386,11 @@ def main() -> None:
                             "forces": out["forces"].detach().cpu().numpy(),
                         }
                     )
+            trajectory_reference_positions = reference_positions
+            if collect:
+                trajectory_report_rebuild_steps = pass_rebuild_steps
+                trajectory_report_rebuild_causes = pass_rebuild_causes
+                trajectory_report_max_displacement = pass_max_displacement
             return collected
 
         if args.batch_graph_construction:
@@ -403,6 +473,12 @@ def main() -> None:
         "trajectory_replay_steps": int(args.trajectory_replay_steps),
         "trajectory_rebuild_interval": int(args.trajectory_rebuild_interval),
         "trajectory_displacement_std": float(args.trajectory_displacement_std),
+        "trajectory_skin_margin": float(args.trajectory_skin_margin),
+        "trajectory_skin_threshold": 0.5 * float(args.trajectory_skin_margin) if float(args.trajectory_skin_margin) > 0.0 else None,
+        "trajectory_rebuild_count": len(trajectory_report_rebuild_steps),
+        "trajectory_rebuild_steps": trajectory_report_rebuild_steps,
+        "trajectory_rebuild_causes": trajectory_report_rebuild_causes,
+        "trajectory_max_displacement_since_rebuild_a": trajectory_report_max_displacement,
         "prebuilt_batched_graph": prebuilt_graph is not None,
         "measure_passes": args.measure_passes,
         "force_steps_per_pass": force_steps_per_pass,

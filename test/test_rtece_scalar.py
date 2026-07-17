@@ -910,6 +910,29 @@ def test_synthetic_trajectory_positions_keep_initial_frame_exact():
     assert not torch.equal(moved, base)
 
 
+def test_trajectory_cache_displacement_probe_uses_half_skin_margin():
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import graph_cache_displacement_probe
+
+    reference = torch.tensor(
+        [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+        dtype=torch.float64,
+    )
+    moved = reference.clone()
+    moved[1, 0] += 0.24
+
+    valid = graph_cache_displacement_probe(reference, moved, skin_margin=0.50)
+    invalid = graph_cache_displacement_probe(reference, moved, skin_margin=0.40)
+    disabled = graph_cache_displacement_probe(reference, moved, skin_margin=0.0)
+
+    assert valid["max_displacement"] == torch.tensor(0.24, dtype=torch.float64)
+    assert valid["threshold"] == 0.25
+    assert valid["rebuild_required"] is False
+    assert invalid["threshold"] == 0.20
+    assert invalid["rebuild_required"] is True
+    assert disabled["rebuild_required"] is False
+    assert disabled["threshold"] is None
+
+
 def test_rtece_benchmark_help_exposes_force_mode():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     result = subprocess.run(
@@ -927,6 +950,7 @@ def test_rtece_benchmark_help_exposes_force_mode():
     assert "--trajectory-replay-steps" in result.stdout
     assert "--trajectory-rebuild-interval" in result.stdout
     assert "--trajectory-displacement-std" in result.stdout
+    assert "--trajectory-skin-margin" in result.stdout
     assert "auto" in result.stdout
     assert "analytic_pair" in result.stdout
     assert "analytic_pair_triton_force" in result.stdout
