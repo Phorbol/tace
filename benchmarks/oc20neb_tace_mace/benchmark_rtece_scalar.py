@@ -20,7 +20,7 @@ from benchmarks.oc20neb_tace_mace.benchmark_models import (
     reference_arrays,
     summarize_errors,
 )
-from benchmarks.oc20neb_tace_mace.rtece_scalar_model import collate_graphs
+from benchmarks.oc20neb_tace_mace.rtece_scalar_model import RTECEScalarConfig, collate_graphs
 from benchmarks.oc20neb_tace_mace.train_rtece_scalar import atoms_to_graph, load_checkpoint
 
 
@@ -37,8 +37,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--measure-passes", type=int, default=3)
     parser.add_argument(
         "--force-mode",
-        choices=("autograd", "analytic_pair", "analytic_pair_triton_force", "analytic_element_triton_force", "analytic_element_triton_descriptor_force", "analytic_density", "analytic_element_packed"),
-        default="autograd",
+        choices=("auto", "autograd", "analytic_pair", "analytic_pair_triton_force", "analytic_element_triton_force", "analytic_element_triton_descriptor_force", "analytic_density", "analytic_element_packed"),
+        default="auto",
     )
     parser.add_argument(
         "--include-graph-construction",
@@ -57,6 +57,29 @@ def extxyz_index(*, start_config: int, limit_configs: int | None) -> str:
         return ":" if start_config == 0 else f"{start_config}:"
     stop_config = start_config + limit_configs
     return f":{stop_config}" if start_config == 0 else f"{start_config}:{stop_config}"
+
+
+def choose_rtece_force_mode(
+    requested: str,
+    config: RTECEScalarConfig,
+    *,
+    device_type: str,
+    dtype: torch.dtype,
+) -> str:
+    if requested != "auto":
+        return requested
+    eligible_element_density = (
+        bool(config.use_element_density)
+        and not bool(config.use_density_quadratic)
+        and not bool(config.use_vector_moments)
+        and not bool(config.use_atomic_moments)
+        and int(config.num_edge_sketches) == 0
+        and device_type == "cuda"
+        and dtype == torch.float32
+    )
+    if eligible_element_density:
+        return "analytic_element_triton_descriptor_force"
+    return "autograd"
 
 
 def load_atoms_window(configs: Path, *, start_config: int, limit_configs: int | None):
@@ -79,6 +102,7 @@ def main() -> None:
     requested = torch.device(args.device)
     device = requested if requested.type == "cpu" or torch.cuda.is_available() else torch.device("cpu")
     model, config = load_checkpoint(args.model, dtype=dtype, device=device)
+    force_mode = choose_rtece_force_mode(args.force_mode, config, device_type=device.type, dtype=dtype)
     for param in model.parameters():
         param.requires_grad_(False)
 
@@ -98,17 +122,17 @@ def main() -> None:
         )
 
     def run_model(graph):
-        if args.force_mode == "analytic_pair":
+        if force_mode == "analytic_pair":
             return model.forward_pair_analytic_forces(graph)
-        if args.force_mode == "analytic_pair_triton_force":
+        if force_mode == "analytic_pair_triton_force":
             return model.forward_pair_triton_force_analytic_forces(graph)
-        if args.force_mode == "analytic_element_triton_force":
+        if force_mode == "analytic_element_triton_force":
             return model.forward_element_density_triton_force_analytic_forces(graph)
-        if args.force_mode == "analytic_element_triton_descriptor_force":
+        if force_mode == "analytic_element_triton_descriptor_force":
             return model.forward_element_density_triton_descriptor_force_analytic_forces(graph)
-        if args.force_mode == "analytic_density":
+        if force_mode == "analytic_density":
             return model.forward_density_analytic_forces(graph)
-        if args.force_mode == "analytic_element_packed":
+        if force_mode == "analytic_element_packed":
             return model.forward_element_density_packed_analytic_forces(graph)
         return model(graph)
 
@@ -172,7 +196,8 @@ def main() -> None:
         "device": str(device),
         "default_dtype": args.default_dtype,
         "model_class": model.__class__.__name__,
-        "force_mode": args.force_mode,
+        "requested_force_mode": args.force_mode,
+        "force_mode": force_mode,
         "hidden_channels": list(model.config.hidden_channels),
         "num_radial": int(model.config.num_radial),
         "num_parameters": int(sum(p.numel() for p in model.parameters())),

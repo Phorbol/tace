@@ -14,7 +14,7 @@ if str(REPO_ROOT) not in sys.path:
 import torch
 
 from benchmarks.oc20neb_tace_mace.benchmark_models import log
-from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import load_atoms_window
+from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import choose_rtece_force_mode, load_atoms_window
 from benchmarks.oc20neb_tace_mace.rtece_scalar_model import collate_graphs
 from benchmarks.oc20neb_tace_mace.train_rtece_scalar import atoms_to_graph, load_checkpoint
 
@@ -34,8 +34,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-ops", type=int, default=20)
     parser.add_argument(
         "--force-mode",
-        choices=("autograd", "analytic_pair", "analytic_pair_triton_force", "analytic_element_triton_force", "analytic_element_triton_descriptor_force", "analytic_density", "analytic_element_packed"),
-        default="analytic_pair",
+        choices=("auto", "autograd", "analytic_pair", "analytic_pair_triton_force", "analytic_element_triton_force", "analytic_element_triton_descriptor_force", "analytic_density", "analytic_element_packed"),
+        default="auto",
     )
     return parser.parse_args()
 
@@ -89,6 +89,7 @@ def main() -> None:
     requested = torch.device(args.device)
     device = requested if requested.type == "cpu" or torch.cuda.is_available() else torch.device("cpu")
     model, config = load_checkpoint(args.model, dtype=dtype, device=device)
+    force_mode = choose_rtece_force_mode(args.force_mode, config, device_type=device.type, dtype=dtype)
     for param in model.parameters():
         param.requires_grad_(False)
 
@@ -103,7 +104,7 @@ def main() -> None:
     atoms = int(sum(len(atoms) for atoms in atoms_list))
 
     for _ in range(max(0, args.warmup_passes)):
-        run_model(model, graph, args.force_mode)
+        run_model(model, graph, force_mode)
     if device.type == "cuda":
         torch.cuda.synchronize()
 
@@ -113,7 +114,7 @@ def main() -> None:
 
     with torch.profiler.profile(activities=activities, record_shapes=False, profile_memory=True) as prof:
         for _ in range(max(1, args.profile_passes)):
-            run_model(model, graph, args.force_mode)
+            run_model(model, graph, force_mode)
             if device.type == "cuda":
                 torch.cuda.synchronize()
             prof.step()
@@ -133,7 +134,8 @@ def main() -> None:
         "atoms": atoms,
         "device": str(device),
         "default_dtype": args.default_dtype,
-        "force_mode": args.force_mode,
+        "requested_force_mode": args.force_mode,
+        "force_mode": force_mode,
         "profile_passes": args.profile_passes,
         "num_parameters": int(sum(p.numel() for p in model.parameters())),
         "trace_output": str(args.trace_output) if args.trace_output is not None else None,

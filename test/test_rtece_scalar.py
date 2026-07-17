@@ -780,6 +780,42 @@ def test_density_analytic_forces_match_autograd_forces_for_quadratic_descriptors
         rtol=1e-8,
     )
 
+def test_rtece_auto_force_mode_prefers_fused_element_density_only_when_eligible():
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import choose_rtece_force_mode
+
+    element = RTECEScalarConfig(
+        variant="rtece_element_density",
+        use_element_density=True,
+        use_atomic_moments=False,
+        num_edge_sketches=0,
+    )
+    pair = RTECEScalarConfig(variant="rtece_pair")
+    vector = RTECEScalarConfig(variant="rtece_vector_moments", use_vector_moments=True)
+
+    assert (
+        choose_rtece_force_mode(
+            "auto",
+            element,
+            device_type="cuda",
+            dtype=torch.float32,
+        )
+        == "analytic_element_triton_descriptor_force"
+    )
+    assert choose_rtece_force_mode("auto", element, device_type="cpu", dtype=torch.float32) == "autograd"
+    assert choose_rtece_force_mode("auto", element, device_type="cuda", dtype=torch.float64) == "autograd"
+    assert choose_rtece_force_mode("auto", pair, device_type="cuda", dtype=torch.float32) == "autograd"
+    assert choose_rtece_force_mode("auto", vector, device_type="cuda", dtype=torch.float32) == "autograd"
+    assert (
+        choose_rtece_force_mode(
+            "analytic_element_triton_force",
+            element,
+            device_type="cuda",
+            dtype=torch.float32,
+        )
+        == "analytic_element_triton_force"
+    )
+
+
 def test_rtece_benchmark_help_exposes_force_mode():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     result = subprocess.run(
@@ -792,6 +828,7 @@ def test_rtece_benchmark_help_exposes_force_mode():
 
     assert result.returncode == 0, result.stderr
     assert "--force-mode" in result.stdout
+    assert "auto" in result.stdout
     assert "analytic_pair" in result.stdout
     assert "analytic_pair_triton_force" in result.stdout
     assert "analytic_element_triton_force" in result.stdout
