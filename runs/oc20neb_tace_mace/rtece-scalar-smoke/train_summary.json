@@ -1,0 +1,11 @@
+{
+  "checkpoint": "runs/oc20neb_tace_mace/rtece-scalar-smoke/rtece_scalar.pt",
+  "default_dtype": "float32",
+  "device": "cpu",
+  "final_loss": 3.61350679397583,
+  "steps": 4,
+  "train_configs": 8,
+  "train_file": "runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz",
+  "valid_file": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "variant": "rtece_pair"
+}

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+import subprocess
+import sys
 
 import torch
 
@@ -227,3 +229,19 @@ def test_rtece_benchmark_row_is_summary_compatible():
     assert row["atoms_per_second"] == 100000.0
     assert row["dft_f_mae_mev_a"] == 40.0
     assert row["teacher_f_mae_mev_a"] == 39.0
+
+
+def test_rtece_scripts_are_directly_executable():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    for script in (
+        "benchmarks/oc20neb_tace_mace/train_rtece_scalar.py",
+        "benchmarks/oc20neb_tace_mace/benchmark_rtece_scalar.py",
+    ):
+        result = subprocess.run(
+            [sys.executable, script, "--help"],
+            cwd=root,
+            check=False,
+            capture_output=True,
+            text=True,
+        )
+        assert result.returncode == 0, result.stderr
