@@ -233,6 +233,39 @@ def test_rtece_benchmark_row_is_summary_compatible():
     assert row["teacher_f_mae_mev_a"] == 39.0
 
 
+def test_parse_hidden_channels_accepts_ordered_capacity_axis():
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import parse_hidden_channels
+
+    assert parse_hidden_channels("32") == (32,)
+    assert parse_hidden_channels("32,64") == (32, 64)
+    assert parse_hidden_channels("32, 64,128") == (32, 64, 128)
+
+
+def test_loss_for_batch_honors_force_weight_axis():
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import loss_for_batch
+
+    config = build_rtece_config("rtece_pair")
+    model = RTECEScalarModel(config).double()
+    for param in model.parameters():
+        param.data.zero_()
+    graph = RTECEGraph(
+        z=torch.tensor([1, 1], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(2),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+    ref_energy = torch.zeros(1, dtype=torch.float64)
+    ref_forces = torch.ones((2, 3), dtype=torch.float64)
+
+    assert torch.allclose(
+        loss_for_batch(model, graph, ref_energy, ref_forces, force_weight=0.0),
+        torch.tensor(0.0, dtype=torch.float64),
+    )
+    assert torch.allclose(
+        loss_for_batch(model, graph, ref_energy, ref_forces, force_weight=2.0),
+        torch.tensor(2.0, dtype=torch.float64),
+    )
+
 def test_rtece_scripts_are_directly_executable():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     for script in (

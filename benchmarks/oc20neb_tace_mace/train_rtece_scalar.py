@@ -22,6 +22,15 @@ from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
 )
 
 
+def parse_hidden_channels(value: str) -> tuple[int, ...]:
+    channels = tuple(int(part.strip()) for part in value.split(",") if part.strip())
+    if not channels:
+        raise ValueError("hidden channel list must contain at least one integer")
+    if any(channel < 1 for channel in channels):
+        raise ValueError(f"hidden channels must be positive, got {channels}")
+    return channels
+
+
 def save_checkpoint(path: Path, model: RTECEScalarModel, config: RTECEScalarConfig) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save({"config": asdict(config), "state_dict": model.state_dict()}, path)
@@ -102,17 +111,23 @@ def loss_for_batch(
     graph: RTECEGraph,
     ref_energy: torch.Tensor,
     ref_forces: torch.Tensor,
+    *,
+    energy_weight: float = 1.0,
+    force_weight: float = 10.0,
 ) -> torch.Tensor:
     out = model(graph)
     natoms = graph.z.numel()
     e_loss = ((out["energy"] - ref_energy) / natoms).pow(2).mean()
     f_loss = (out["forces"] - ref_forces).pow(2).mean()
-    return e_loss + 10.0 * f_loss
+    return float(energy_weight) * e_loss + float(force_weight) * f_loss
 
 
 def evaluate_loss(
     model: RTECEScalarModel,
     samples: list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]],
+    *,
+    energy_weight: float = 1.0,
+    force_weight: float = 10.0,
 ) -> float:
     if not samples:
         raise ValueError("evaluate_loss requires at least one sample")
@@ -120,7 +135,20 @@ def evaluate_loss(
     model.eval()
     losses = []
     for graph, energy, forces in samples:
-        losses.append(float(loss_for_batch(model, graph, energy, forces).detach().cpu()))
+        losses.append(
+            float(
+                loss_for_batch(
+                    model,
+                    graph,
+                    energy,
+                    forces,
+                    energy_weight=energy_weight,
+                    force_weight=force_weight,
+                )
+                .detach()
+                .cpu()
+            )
+        )
     if was_training:
         model.train()
     return float(sum(losses) / len(losses))
@@ -136,6 +164,8 @@ def train_steps(
     eval_interval: int = 0,
     best_checkpoint_path: Path | None = None,
     config: RTECEScalarConfig | None = None,
+    energy_weight: float = 1.0,
+    force_weight: float = 10.0,
 ) -> dict[str, float | int | None]:
     if not samples:
         raise ValueError("train_steps requires at least one sample")
@@ -149,20 +179,37 @@ def train_steps(
     for step in range(max_steps):
         graph, energy, forces = samples[step % len(samples)]
         opt.zero_grad(set_to_none=True)
-        loss = loss_for_batch(model, graph, energy, forces)
+        loss = loss_for_batch(
+            model,
+            graph,
+            energy,
+            forces,
+            energy_weight=energy_weight,
+            force_weight=force_weight,
+        )
         loss.backward()
         opt.step()
         final_loss = float(loss.detach().cpu())
         step_num = step + 1
         if valid_samples is not None and eval_interval > 0 and step_num % eval_interval == 0:
-            valid_loss = evaluate_loss(model, valid_samples)
+            valid_loss = evaluate_loss(
+                model,
+                valid_samples,
+                energy_weight=energy_weight,
+                force_weight=force_weight,
+            )
             if best_valid_loss is None or valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
                 best_step = step_num
                 if best_checkpoint_path is not None:
                     save_checkpoint(best_checkpoint_path, model, config)
     if valid_samples is not None and best_valid_loss is None:
-        best_valid_loss = evaluate_loss(model, valid_samples)
+        best_valid_loss = evaluate_loss(
+            model,
+            valid_samples,
+            energy_weight=energy_weight,
+            force_weight=force_weight,
+        )
         best_step = max_steps
         if best_checkpoint_path is not None:
             save_checkpoint(best_checkpoint_path, model, config)
@@ -210,6 +257,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--valid-limit-configs", type=int, default=64)
     parser.add_argument("--max-steps", type=int, default=1000)
     parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--hidden-channels", default="64,64")
+    parser.add_argument("--energy-weight", type=float, default=1.0)
+    parser.add_argument("--force-weight", type=float, default=10.0)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
     parser.add_argument("--default-dtype", choices=("float32", "float64"), default="float32")
     parser.add_argument("--no-fit-energy-shift", action="store_true")
@@ -223,7 +273,10 @@ def main() -> None:
     dtype = torch.float64 if args.default_dtype == "float64" else torch.float32
     requested = torch.device(args.device)
     device = requested if requested.type == "cpu" or torch.cuda.is_available() else torch.device("cpu")
-    config = build_rtece_config(args.variant)
+    config = replace(
+        build_rtece_config(args.variant),
+        hidden_channels=parse_hidden_channels(args.hidden_channels),
+    )
     samples = load_samples(
         args.train_file,
         cutoff=config.cutoff,
@@ -254,6 +307,8 @@ def main() -> None:
         eval_interval=args.eval_interval,
         best_checkpoint_path=best_checkpoint_path,
         config=config,
+        energy_weight=args.energy_weight,
+        force_weight=args.force_weight,
     )
     summary.update(
         {
@@ -263,6 +318,9 @@ def main() -> None:
             "train_configs": len(samples),
             "valid_configs": len(valid_samples) if valid_samples is not None else 0,
             "energy_per_atom_shift": config.energy_per_atom_shift,
+            "hidden_channels": list(config.hidden_channels),
+            "energy_weight": args.energy_weight,
+            "force_weight": args.force_weight,
             "device": str(device),
             "default_dtype": args.default_dtype,
             "checkpoint": str(args.output_dir / "rtece_scalar.pt"),

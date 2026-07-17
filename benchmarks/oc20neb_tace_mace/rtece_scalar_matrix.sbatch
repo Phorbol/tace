@@ -26,6 +26,9 @@ VALID_LIMIT_CONFIGS=${VALID_LIMIT_CONFIGS:-64}
 BENCH_LIMIT_CONFIGS=${BENCH_LIMIT_CONFIGS:-1024}
 MAX_STEPS=${MAX_STEPS:-200}
 LR=${LR:-1e-3}
+HIDDEN_CHANNELS=${HIDDEN_CHANNELS:-64,64}
+ENERGY_WEIGHT=${ENERGY_WEIGHT:-1.0}
+FORCE_WEIGHT=${FORCE_WEIGHT:-10.0}
 MEASURE_PASSES=${MEASURE_PASSES:-5}
 DEFAULT_DTYPE=${DEFAULT_DTYPE:-float32}
 EVAL_INTERVAL=${EVAL_INTERVAL:-100}
@@ -40,6 +43,9 @@ export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
 echo "host=$(hostname)"
 echo "run_root=${RUN_ROOT}"
+echo "hidden_channels=${HIDDEN_CHANNELS}"
+echo "energy_weight=${ENERGY_WEIGHT}"
+echo "force_weight=${FORCE_WEIGHT}"
 "${TACE_PYTHON}" -V
 nvidia-smi -L
 
@@ -61,6 +67,9 @@ for variant in "${variant_args[@]}"; do
     --valid-limit-configs "${VALID_LIMIT_CONFIGS}" \
     --max-steps "${MAX_STEPS}" \
     --lr "${LR}" \
+    --hidden-channels "${HIDDEN_CHANNELS}" \
+    --energy-weight "${ENERGY_WEIGHT}" \
+    --force-weight "${FORCE_WEIGHT}" \
     --device cuda \
     --default-dtype "${DEFAULT_DTYPE}" \
     --eval-interval "${EVAL_INTERVAL}"
