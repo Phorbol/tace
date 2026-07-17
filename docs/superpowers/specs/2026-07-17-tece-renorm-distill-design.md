@@ -1060,6 +1060,35 @@ Next priority:
 3. Revisit scalar descriptor variants only after the provider backend no longer dominates invalid-cache throughput.
 
 
+## Stage 36: Cached-Topology Update Backend
+
+Stage 36 added the first non-ASE graph update backend candidate to the trajectory provider boundary. The new `cached_topology` backend reuses the cached `z`, `edge_index`, and `batch` tensors and only refreshes positions through `replay_graph_positions`. This is deliberately an upper-bound backend: it measures the cost of position refresh under a fixed topology assumption, not a real neighbor-list rebuild.
+
+Implementation gate:
+
+- `benchmark_rtece_scalar.py` now exposes `--graph-update-backend {ase_neighborlist,cached_topology}`.
+- `make_graph_update_backend(...)` constructs either the existing ASE rebuild backend or the cached-topology position-refresh backend.
+- `test/test_rtece_scalar.py`: 47 passed after the change.
+- A CPU smoke with forced skin invalidation used `cached_topology`, recorded 4 graph updates, and spent 13.7 us total in graph update timing.
+
+GPU setup: radial8/24x24 `rtece_element_density`, DFT valid `:1024`, 59193 atoms, float32, one V100, `--force-mode auto`, `trajectory_displacement_std=0.001`, `trajectory_skin_margin=0.002`.
+
+| backend | mode | force steps | rebuild/update events | graph update total s | mean update s | seconds/pass | atom-step/s | DFT F MAE |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| `cached_topology` | update-only invalid cache | 20 | 10 | 0.0000446 | 0.00000446 | 0.003787 | 312592485 | n/a |
+| `cached_topology` | fused model + invalid updates | 20 | 10 | 0.0000529 | 0.00000529 | 0.032912 | 35970261 | 33.17 |
+| `cached_topology` | fused model + invalid updates | 2000 | 1039 | 0.005264 | 0.00000507 | 3.196984 | 37030530 | 33.17 |
+| `ase_neighborlist` | update-only invalid cache | 20 | 10 | 53.943 | 5.394 | 53.948049 | 21944 | n/a |
+| `ase_neighborlist` | fused model + invalid updates | 20 | 10 | 54.377 | 5.438 | 54.416800 | 21755 | 33.17 |
+
+Stage-36 interpretation against TECE/TACE:
+
+- This validates the provider/backend abstraction introduced in Stage 35. The same invalid-cache benchmark can now expose graph-update cost as a backend-dependent deployment axis rather than hiding it inside model timing.
+- Cached-topology update reduces the measured update event from about 5.39 s for ASE rebuild to about 5 us for topology reuse plus position refresh. With forced invalidation every two steps, atom-step/s rises from about 2.18e4 with ASE updates to about 3.60e7 with cached-topology updates.
+- The result should not be interpreted as a correct invalid-neighbor solution. It assumes topology can be reused even when the skin criterion reports invalid. Its value is to quantify the upper bound of the TECE system-renormalized runtime when edge topology is persistent and only positions are refreshed.
+- The clean theoretical route is now sharper: semantic projection and fused scalar descriptors already deliver high model throughput; graph lifetime and safe topology update determine end-to-end throughput. The next stage should implement or benchmark a real fast neighbor provider, such as a cell-list or MD-runtime neighbor-list interface, rather than return to scalar head or radial sweeps.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
