@@ -661,6 +661,41 @@ Stage-21 interpretation:
 - Next priority: extend the same fused-evaluator idea to the TECE-positive element-density descriptor, but do it as a clean scalar renormalized operator: compute `rho` and `rho_z`, descriptor gradients, radial derivative, and force accumulation without materializing avoidable edge temporaries. In parallel, test whether smaller readout heads on the now-fast pair endpoint create a useful ultra-fast sub-front, because profiler shows GEMM/MLP is now the largest remaining pair cost.
 
 
+## Stage 22 Smoke: Triton Element-Density Force Evaluator
+
+Stage 21 proved that a fused scalar force evaluator can move the pure pair rTECE endpoint into a NEP/DPA-like throughput regime without changing model parameters. Stage 22 applied the same evaluator discipline to the TECE-positive element-density descriptor, which had been the best lower-error scalar rTECE front point. The model architecture, checkpoints, labels, and conservative chain rule are unchanged; only the edge force-scale evaluation and force accumulation are moved into Triton.
+
+Implementation gate:
+
+- `RTECEScalarModel.forward_element_density_triton_force_analytic_forces` supports only density plus element-density descriptors and rejects CPU graphs before importing Triton.
+- `benchmark_rtece_scalar.py` and `profile_rtece_scalar.py` expose `--force-mode analytic_element_triton_force`.
+- The Triton kernel evaluates `(grad_rho + z_j grad_rho_z) dR/dr` and atomic force scatter directly from node-level scaled atomic numbers.
+- Full rTECE scalar test file after the change: 33 passed.
+
+4096-config prefix A/B benchmark on the same element-density checkpoints:
+
+| checkpoint | force mode | params | atoms/s | seconds/pass | peak alloc MB | peak reserved MB | DFT F MAE | DFT F RMSE | interpretation |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| element-density 24x24 | analytic_density | 1057 | 15920358 | 0.015725 | 1404.9 | 1716 | 30.19297 | 111.49715 | previous intermediate front point |
+| element-density 24x24 | analytic_element_triton_force | 1057 | 30655057 | 0.008167 | 674.7 | 1084 | 30.19297 | 111.49715 | same error, 1.93x throughput |
+| element-density 32x32 | analytic_density | 1665 | 14696599 | 0.017035 | 1404.9 | 1716 | 28.14186 | 109.92687 | previous lower-error front point |
+| element-density 32x32 | analytic_element_triton_force | 1665 | 26033459 | 0.009617 | 674.7 | 1084 | 28.14186 | 109.92687 | same error, 1.77x throughput |
+
+Profiler evidence for element-density 24x24, inclusive device time over 5 profiled passes:
+
+| point | leading ops | interpretation |
+|---|---|---|
+| element-density 24x24 analytic density | `aten::mul` 24.01 ms, `index_add_` 9.32 ms, `index` 7.51 ms, `div` 5.96 ms | PyTorch scalar descriptor and force path launch many elementwise/gather/scatter kernels |
+| element-density 24x24 Triton force | `aten::mul` 7.10 ms, `index_add_` 6.46 ms, `_element_density_force_kernel` 4.55 ms, `sub/pow/index/div` 2.3-3.1 ms | force accumulation is largely fused; descriptor density construction scatter is now the remaining physics bottleneck |
+
+Stage-22 interpretation:
+
+- This is a second positive evaluator-level result and the strongest evidence so far that the TECE/TACE degradation route is practical: the same scalar renormalized descriptor hierarchy now spans about 31.1M atoms/s at 39.42 meV/A and 26.0M atoms/s at 28.14 meV/A on the 4096-config V100 window.
+- The Pareto front is now mostly evaluator-shifted: pair-32 Triton is the maximum-throughput endpoint, element-density 24x24 Triton is the near-maximum-throughput lower-error point, and element-density 32x32 Triton is the current lower-error scalar point. Pair-64 and all unfused versions are dominated on this benchmark window.
+- The remaining bottleneck is no longer the old analytic force scatter alone. For element-density, PyTorch still materializes radial features, neighbor-weighted radial features, and two density scatters before the MLP gradient. A next clean implementation step is a fused descriptor-construction plus force evaluator, but it must preserve conservative forces and exact descriptor semantics.
+- The next architecture question should be narrower: after fusion, do smaller readout heads or fewer radial channels give a useful ultra-fast sub-front without losing the element-density chemistry benefit? This is now a systematic Pareto refinement within the TECE scalar projection, not random hyperparameter search.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
