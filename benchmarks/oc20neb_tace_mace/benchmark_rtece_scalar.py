@@ -20,6 +20,7 @@ from benchmarks.oc20neb_tace_mace.benchmark_models import (
     reference_arrays,
     summarize_errors,
 )
+from benchmarks.oc20neb_tace_mace.rtece_scalar_model import collate_graphs
 from benchmarks.oc20neb_tace_mace.train_rtece_scalar import atoms_to_graph, load_checkpoint
 
 
@@ -33,6 +34,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--default-dtype", choices=("float32", "float64"), default="float32")
     parser.add_argument("--limit-configs", type=int, default=128)
     parser.add_argument("--measure-passes", type=int, default=3)
+    parser.add_argument(
+        "--include-graph-construction",
+        action="store_true",
+        help="Include ASE neighbor-list graph construction inside the timed loop.",
+    )
     return parser.parse_args()
 
 
@@ -47,8 +53,27 @@ def main() -> None:
 
     atoms_list = load_atoms(args.configs, args.limit_configs)
     ref_e, ref_f, natoms = reference_arrays(atoms_list, "energy", "forces")
+    prebuilt_graph = None
+    if not args.include_graph_construction:
+        prebuilt_graph = collate_graphs(
+            [
+                atoms_to_graph(atoms, cutoff=config.cutoff, device=device, dtype=dtype)[0]
+                for atoms in atoms_list
+            ]
+        )
 
     def forward_once(collect: bool):
+        if prebuilt_graph is not None:
+            out = model(prebuilt_graph)
+            if not collect:
+                return []
+            return [
+                {
+                    "energy": out["energy"].detach().cpu().numpy(),
+                    "forces": out["forces"].detach().cpu().numpy(),
+                }
+            ]
+
         outputs = []
         for atoms in atoms_list:
             graph, _, _ = atoms_to_graph(atoms, cutoff=config.cutoff, device=device, dtype=dtype)
@@ -93,7 +118,8 @@ def main() -> None:
         "default_dtype": args.default_dtype,
         "model_class": model.__class__.__name__,
         "num_parameters": int(sum(p.numel() for p in model.parameters())),
-        "includes_graph_construction": True,
+        "includes_graph_construction": bool(args.include_graph_construction),
+        "prebuilt_batched_graph": prebuilt_graph is not None,
         "measure_passes": args.measure_passes,
         "pass_times_s": pass_times,
         "seconds_per_pass": seconds_per_pass,

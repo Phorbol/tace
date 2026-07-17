@@ -9,6 +9,7 @@ import torch
 from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
     RTECEGraph,
     RTECEScalarModel,
+    collate_graphs,
     atomic_scalar_descriptors,
     build_rtece_config,
     descriptor_dim,
@@ -245,3 +246,31 @@ def test_rtece_scripts_are_directly_executable():
             text=True,
         )
         assert result.returncode == 0, result.stderr
+
+
+
+def test_collate_graphs_matches_individual_energies():
+    config = build_rtece_config("rtece_edge_sketch8")
+    model = RTECEScalarModel(config).double().eval()
+    g1 = RTECEGraph(
+        z=torch.tensor([1, 1], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(2),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+    g2 = RTECEGraph(
+        z=torch.tensor([6, 1, 1], dtype=torch.long),
+        pos=torch.tensor(
+            [[0.0, 0.0, 0.0], [0.6, 0.1, 0.0], [-0.2, 0.5, 0.0]],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    e1 = model(g1)["energy"]
+    e2 = model(g2)["energy"]
+    batched = model(collate_graphs([g1, g2]))["energy"]
+
+    assert batched.shape == (2,)
+    assert torch.allclose(batched, torch.cat([e1, e2]), atol=1e-10, rtol=1e-10)

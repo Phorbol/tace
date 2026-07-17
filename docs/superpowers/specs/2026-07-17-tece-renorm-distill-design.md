@@ -213,15 +213,16 @@ Smoke metrics:
 | DFT F MAE | 55.24 meV/A | finite but not trained enough for accuracy conclusion |
 | DFT F RMSE | 103.44 meV/A | smoke only |
 | DFT E MAE | 5689.69 meV/atom | expected poor value after 4 steps without energy offset handling |
-| CPU atoms/s | 375.03 | includes ASE neighbor-list graph construction; not comparable to GPU TACE/MACE Pareto rows |
+| CPU atoms/s, graph construction included | 375.03 | includes ASE neighbor-list graph construction; not comparable to GPU TACE/MACE Pareto rows |
+| CPU atoms/s, prebuilt batched graph | 1694.93 | still CPU smoke, but closer to model-forward benchmark semantics |
 | parameters | 4865 | small scalar head; parameter count is diagnostic only, not the success metric |
 
 Stage-5 interpretation against `TECE_design_space.md`:
 
 - This is the first true T3 branch: it removes persistent high-rank equivariant state and retains only low-order scalar contractions/sketches before the MLP head.
 - The force path is conservative because forces are `-grad(total_energy, positions)`, so the route remains a usable potential-energy model rather than an unconstrained force regressor.
-- The benchmark JSON is schema-compatible with the existing Pareto summary, but `includes_graph_construction: true` and CPU fallback mean this smoke result must not be ranked against GPU TACE/MACE throughput.
-- The next priority is a GPU smoke/full run for `rtece_pair`, `rtece_atomic_moments`, and `rtece_edge_sketch8`, plus energy normalization/offset handling before interpreting energy MAE. Do not return to T2 radial/hidden-size sweeps unless T3 fails on GPU throughput.
+- The benchmark JSON is schema-compatible with the existing Pareto summary. The original smoke row used `includes_graph_construction: true`; a follow-up benchmark now supports prebuilt batched graphs with `includes_graph_construction: false` and `prebuilt_batched_graph: true`, which is the correct method for GPU Pareto comparison.
+- The next priority is a GPU smoke/full run for `rtece_pair`, `rtece_atomic_moments`, and `rtece_edge_sketch8` under the prebuilt batched benchmark, plus energy normalization/offset handling before interpreting energy MAE. Do not return to T2 radial/hidden-size sweeps unless T3 fails on GPU throughput.
 
 ## Stage Review Rule
 

@@ -45,6 +45,34 @@ class RTECEGraph:
     batch: torch.Tensor
 
 
+def collate_graphs(graphs: list[RTECEGraph]) -> RTECEGraph:
+    if not graphs:
+        raise ValueError("collate_graphs requires at least one graph")
+    z_parts = []
+    pos_parts = []
+    edge_parts = []
+    batch_parts = []
+    node_offset = 0
+    for graph_idx, graph in enumerate(graphs):
+        num_nodes = graph.z.shape[0]
+        z_parts.append(graph.z)
+        pos_parts.append(graph.pos)
+        batch_parts.append(torch.full_like(graph.batch, graph_idx))
+        if graph.edge_index.numel() > 0:
+            edge_parts.append(graph.edge_index + node_offset)
+        node_offset += num_nodes
+    if edge_parts:
+        edge_index = torch.cat(edge_parts, dim=1)
+    else:
+        edge_index = graphs[0].edge_index.new_zeros((2, 0))
+    return RTECEGraph(
+        z=torch.cat(z_parts, dim=0),
+        pos=torch.cat(pos_parts, dim=0),
+        edge_index=edge_index,
+        batch=torch.cat(batch_parts, dim=0),
+    )
+
+
 def compute_pair_geometry(graph: RTECEGraph) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     src, dst = graph.edge_index
     vectors = graph.pos[dst] - graph.pos[src]
