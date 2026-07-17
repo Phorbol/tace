@@ -993,6 +993,43 @@ def test_cached_topology_update_backend_reuses_edges_and_updates_positions():
     assert backend.rebuild_count == 1
 
 
+def test_torch_radius_nopbc_update_backend_rebuilds_edges_within_each_batch():
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import make_graph_update_backend
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import RTECEGraph
+
+    template = RTECEGraph(
+        z=torch.tensor([6, 8, 1, 7], dtype=torch.long),
+        pos=torch.zeros((4, 3), dtype=torch.float64),
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=torch.tensor([0, 0, 0, 1], dtype=torch.long),
+    )
+    new_positions = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [0.9, 0.0, 0.0],
+            [2.2, 0.0, 0.0],
+            [0.1, 0.0, 0.0],
+        ],
+        dtype=torch.float64,
+    )
+
+    backend = make_graph_update_backend(
+        backend_name="torch_radius_nopbc",
+        rebuild_fn=lambda positions: (_ for _ in ()).throw(AssertionError("ASE rebuild should not run")),
+        template_graph=template,
+        cutoff=1.0,
+    )
+    graph = backend.rebuild(new_positions)
+
+    assert graph.z is template.z
+    assert graph.batch is template.batch
+    assert torch.equal(graph.pos, new_positions)
+    assert graph.pos is not template.pos
+    assert graph.edge_index.tolist() == [[0, 1], [1, 0]]
+    assert backend.name == "torch_radius_nopbc"
+    assert backend.rebuild_count == 1
+
+
 def test_graph_update_backend_records_rebuild_timing():
     from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import GraphUpdateBackend
 
@@ -1068,6 +1105,7 @@ def test_rtece_benchmark_help_exposes_force_mode():
     assert "--trajectory-validity-only" in result.stdout
     assert "--trajectory-update-only" in result.stdout
     assert "--graph-update-backend" in result.stdout
+    assert "torch_radius_nopbc" in result.stdout
     assert "auto" in result.stdout
     assert "analytic_pair" in result.stdout
     assert "analytic_pair_triton_force" in result.stdout

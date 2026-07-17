@@ -91,7 +91,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--graph-update-backend",
-        choices=("ase_neighborlist", "cached_topology"),
+        choices=("ase_neighborlist", "cached_topology", "torch_radius_nopbc"),
         default="ase_neighborlist",
         help="Graph update backend used when trajectory replay invalidates the cached graph.",
     )
@@ -199,6 +199,7 @@ def make_graph_update_backend(
     backend_name: str,
     rebuild_fn,
     template_graph: RTECEGraph | None = None,
+    cutoff: float | None = None,
 ) -> GraphUpdateBackend:
     if backend_name == "ase_neighborlist":
         return GraphUpdateBackend("ase_neighborlist", rebuild_fn)
@@ -208,6 +209,15 @@ def make_graph_update_backend(
         return GraphUpdateBackend(
             "cached_topology",
             lambda positions: replay_graph_positions(template_graph, positions),
+        )
+    if backend_name == "torch_radius_nopbc":
+        if template_graph is None:
+            raise ValueError("torch_radius_nopbc graph update backend requires a template graph")
+        if cutoff is None:
+            raise ValueError("torch_radius_nopbc graph update backend requires a cutoff")
+        return GraphUpdateBackend(
+            "torch_radius_nopbc",
+            lambda positions: torch_radius_nopbc_graph(template_graph, positions, cutoff=float(cutoff)),
         )
     raise ValueError(f"unknown graph update backend: {backend_name}")
 
@@ -315,6 +325,49 @@ def replay_graph_positions(template: RTECEGraph, positions: torch.Tensor) -> RTE
     )
 
 
+def torch_radius_nopbc_graph(template: RTECEGraph, positions: torch.Tensor, *, cutoff: float) -> RTECEGraph:
+    if cutoff <= 0.0:
+        raise ValueError(f"cutoff must be positive, got {cutoff}")
+    if tuple(positions.shape) != tuple(template.pos.shape):
+        raise ValueError(f"positions shape {tuple(positions.shape)} does not match graph shape {tuple(template.pos.shape)}")
+    pos = positions.to(device=template.pos.device, dtype=template.pos.dtype)
+    batch = template.batch
+    if batch.ndim != 1 or batch.shape[0] != template.z.shape[0]:
+        raise ValueError("template batch must be a one-dimensional tensor with one entry per atom")
+    if batch.numel() == 0:
+        edge_index = template.edge_index.new_zeros((2, 0))
+    else:
+        changes = torch.nonzero(batch[1:] != batch[:-1], as_tuple=False).flatten() + 1
+        starts = torch.cat([batch.new_tensor([0]), changes])
+        stops = torch.cat([changes, batch.new_tensor([batch.numel()])])
+        edge_parts = []
+        cutoff_sq = float(cutoff) * float(cutoff)
+        for start_tensor, stop_tensor in zip(starts, stops, strict=True):
+            start = int(start_tensor.detach().cpu())
+            stop = int(stop_tensor.detach().cpu())
+            count = stop - start
+            if count <= 1:
+                continue
+            block = pos[start:stop]
+            delta = block[:, None, :] - block[None, :, :]
+            dist_sq = delta.square().sum(dim=-1)
+            mask = dist_sq < cutoff_sq
+            mask.fill_diagonal_(False)
+            src, dst = torch.nonzero(mask, as_tuple=True)
+            if src.numel() > 0:
+                edge_parts.append(torch.stack([src + start, dst + start], dim=0))
+        if edge_parts:
+            edge_index = torch.cat(edge_parts, dim=1).to(device=template.edge_index.device, dtype=template.edge_index.dtype)
+        else:
+            edge_index = template.edge_index.new_zeros((2, 0))
+    return RTECEGraph(
+        z=template.z,
+        pos=pos,
+        edge_index=edge_index,
+        batch=template.batch,
+    )
+
+
 def prediction_error_payload(first_outputs: list[dict[str, np.ndarray]], ref_e, ref_f, natoms) -> dict[str, object]:
     if not first_outputs:
         return {
@@ -418,6 +471,7 @@ def main() -> None:
         backend_name=args.graph_update_backend,
         rebuild_fn=rebuild_batched_graph_from_positions,
         template_graph=trajectory_template,
+        cutoff=float(config.cutoff),
     )
 
     def reset_trajectory_runtime_state() -> None:
@@ -432,6 +486,7 @@ def main() -> None:
             backend_name=args.graph_update_backend,
             rebuild_fn=rebuild_batched_graph_from_positions,
             template_graph=trajectory_template,
+            cutoff=float(config.cutoff),
         )
 
     def run_model(graph):
