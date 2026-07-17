@@ -993,6 +993,30 @@ def test_cached_topology_update_backend_reuses_edges_and_updates_positions():
     assert backend.rebuild_count == 1
 
 
+def test_atoms_to_torch_radius_nopbc_graph_builds_direct_edges():
+    from ase import Atoms
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import atoms_to_torch_radius_nopbc_graph
+
+    atoms = Atoms(
+        numbers=[6, 8, 1],
+        positions=[[0.0, 0.0, 0.0], [0.9, 0.0, 0.0], [2.2, 0.0, 0.0]],
+        pbc=True,
+        cell=[3.0, 3.0, 3.0],
+    )
+
+    graph = atoms_to_torch_radius_nopbc_graph(
+        atoms,
+        cutoff=1.0,
+        device=torch.device("cpu"),
+        dtype=torch.float64,
+    )
+
+    assert graph.z.tolist() == [6, 8, 1]
+    assert graph.pos.dtype == torch.float64
+    assert graph.batch.tolist() == [0, 0, 0]
+    assert graph.edge_index.tolist() == [[0, 1], [1, 0]]
+
+
 def test_torch_radius_nopbc_update_backend_rebuilds_edges_within_each_batch():
     from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import make_graph_update_backend
     from benchmarks.oc20neb_tace_mace.rtece_scalar_model import RTECEGraph
@@ -1105,6 +1129,7 @@ def test_rtece_benchmark_help_exposes_force_mode():
     assert "--trajectory-validity-only" in result.stdout
     assert "--trajectory-update-only" in result.stdout
     assert "--graph-update-backend" in result.stdout
+    assert "--graph-construction-backend" in result.stdout
     assert "torch_radius_nopbc" in result.stdout
     assert "auto" in result.stdout
     assert "analytic_pair" in result.stdout

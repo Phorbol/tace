@@ -95,6 +95,12 @@ def parse_args() -> argparse.Namespace:
         default="ase_neighborlist",
         help="Graph update backend used when trajectory replay invalidates the cached graph.",
     )
+    parser.add_argument(
+        "--graph-construction-backend",
+        choices=("ase_neighborlist", "torch_radius_nopbc"),
+        default="ase_neighborlist",
+        help="Graph construction backend for initial and timed atom-to-graph builds.",
+    )
     return parser.parse_args()
 
 
@@ -368,6 +374,39 @@ def torch_radius_nopbc_graph(template: RTECEGraph, positions: torch.Tensor, *, c
     )
 
 
+def atoms_to_torch_radius_nopbc_graph(
+    atoms,
+    *,
+    cutoff: float,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> RTECEGraph:
+    z = torch.tensor(atoms.numbers, dtype=torch.long, device=device)
+    pos = torch.tensor(atoms.positions, dtype=dtype, device=device)
+    template = RTECEGraph(
+        z=z,
+        pos=pos,
+        edge_index=torch.zeros((2, 0), dtype=torch.long, device=device),
+        batch=torch.zeros(len(atoms), dtype=torch.long, device=device),
+    )
+    return torch_radius_nopbc_graph(template, pos, cutoff=float(cutoff))
+
+
+def build_atom_graph(
+    atoms,
+    *,
+    graph_construction_backend: str,
+    cutoff: float,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> RTECEGraph:
+    if graph_construction_backend == "ase_neighborlist":
+        return atoms_to_graph(atoms, cutoff=cutoff, device=device, dtype=dtype)[0]
+    if graph_construction_backend == "torch_radius_nopbc":
+        return atoms_to_torch_radius_nopbc_graph(atoms, cutoff=cutoff, device=device, dtype=dtype)
+    raise ValueError(f"unknown graph construction backend: {graph_construction_backend}")
+
+
 def prediction_error_payload(first_outputs: list[dict[str, np.ndarray]], ref_e, ref_f, natoms) -> dict[str, object]:
     if not first_outputs:
         return {
@@ -438,7 +477,7 @@ def main() -> None:
     if not args.include_graph_construction:
         prebuilt_graph = collate_graphs(
             [
-                atoms_to_graph(atoms, cutoff=config.cutoff, device=device, dtype=dtype)[0]
+                build_atom_graph(atoms, graph_construction_backend=args.graph_construction_backend, cutoff=config.cutoff, device=device, dtype=dtype)
                 for atoms in atoms_list
             ]
         )
@@ -585,7 +624,7 @@ def main() -> None:
         if args.batch_graph_construction:
             graph = collate_graphs(
                 [
-                    atoms_to_graph(atoms, cutoff=config.cutoff, device=device, dtype=dtype)[0]
+                    build_atom_graph(atoms, graph_construction_backend=args.graph_construction_backend, cutoff=config.cutoff, device=device, dtype=dtype)
                     for atoms in atoms_list
                 ]
             )
@@ -601,7 +640,13 @@ def main() -> None:
 
         outputs = []
         for atoms in atoms_list:
-            graph, _, _ = atoms_to_graph(atoms, cutoff=config.cutoff, device=device, dtype=dtype)
+            graph = build_atom_graph(
+                atoms,
+                graph_construction_backend=args.graph_construction_backend,
+                cutoff=config.cutoff,
+                device=device,
+                dtype=dtype,
+            )
             out = run_model(graph)
             if collect:
                 outputs.append(
@@ -671,6 +716,7 @@ def main() -> None:
         "trajectory_rebuild_steps": trajectory_report_rebuild_steps,
         "trajectory_rebuild_causes": trajectory_report_rebuild_causes,
         "trajectory_max_displacement_since_rebuild_a": trajectory_report_max_displacement,
+        "graph_construction_backend": args.graph_construction_backend,
         "graph_update_backend": graph_update_backend.name if graph_update_backend is not None else None,
         "graph_update_rebuild_count": graph_update_backend.rebuild_count if graph_update_backend is not None else 0,
         "graph_update_total_s": graph_update_backend.total_rebuild_time_s if graph_update_backend is not None else 0.0,
