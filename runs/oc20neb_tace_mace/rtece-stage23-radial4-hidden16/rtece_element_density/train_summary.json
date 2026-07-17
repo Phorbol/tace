@@ -1,0 +1,23 @@
+{
+  "best_checkpoint": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-stage23-radial4-hidden16/rtece_element_density/rtece_scalar_best.pt",
+  "best_step": 1000,
+  "best_valid_loss": 3.411444814162678,
+  "checkpoint": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-stage23-radial4-hidden16/rtece_element_density/rtece_scalar.pt",
+  "default_dtype": "float32",
+  "device": "cuda",
+  "energy_per_atom_shift": -4.614658449410656,
+  "energy_weight": 1.0,
+  "final_loss": 5.177371501922607,
+  "force_weight": 30.0,
+  "hidden_channels": [
+    16,
+    16
+  ],
+  "num_radial": 4,
+  "steps": 1000,
+  "train_configs": 512,
+  "train_file": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz",
+  "valid_configs": 256,
+  "valid_file": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "variant": "rtece_element_density"
+}

@@ -696,6 +696,44 @@ Stage-22 interpretation:
 - The next architecture question should be narrower: after fusion, do smaller readout heads or fewer radial channels give a useful ultra-fast sub-front without losing the element-density chemistry benefit? This is now a systematic Pareto refinement within the TECE scalar projection, not random hyperparameter search.
 
 
+## Stage 23 Smoke: Radial/Head Capacity Under the Triton Element-Density Evaluator
+
+Stage 22 moved the TECE-positive element-density descriptor into the high-throughput regime. Stage 23 tested whether the next Pareto axis should be a controlled scalar-projection capacity reduction rather than adding new moment descriptors. The experiment fixed the descriptor semantics to `rtece_element_density`, fixed the conservative Triton force evaluator, and swept only radial resolution and scalar readout width.
+
+Implementation gate:
+
+- `train_rtece_scalar.py` now exposes `--num-radial`, records `num_radial` in `train_summary.json`, and saves it in the checkpoint config.
+- `rtece_scalar_matrix.sbatch` forwards `NUM_RADIAL`, making radial-channel sweeps reproducible from Slurm logs.
+- `benchmark_rtece_scalar.py` now records `hidden_channels` and `num_radial`; `summarize_tece_distill.py` preserves them in rows.
+- Full rTECE scalar test file after the change: 35 passed.
+
+4096-config prefix sweep, all `rtece_element_density`, mixed labels, force weight 30, and `analytic_element_triton_force`:
+
+| num radial | hidden | params | atoms/s | peak alloc MB | DFT F MAE | teacher F MAE | interpretation |
+|---:|---|---:|---:|---:|---:|---:|---|
+| 4 | 16x16 | 449 | 42305218 | 436.4 | 43.91 | 47.77 | new maximum-throughput endpoint; large accuracy penalty |
+| 4 | 24x24 | 865 | 40459620 | 436.4 | 48.65 | 52.13 | dominated by radial4/16x16 |
+| 6 | 16x16 | 513 | 35899727 | 554.9 | 45.42 | 49.18 | dominated by radial4/16x16 |
+| 6 | 24x24 | 961 | 34333375 | 554.9 | 42.87 | 46.67 | high-throughput intermediate point, still much worse than pair-32 |
+| 8 | 24x24 | 1057 | 30655057 | 674.7 | 30.19 | 35.83 | Stage-22 near-maximum-throughput lower-error point |
+| 8 | 32x32 | 1665 | 26033459 | 674.7 | 28.14 | 33.93 | current lower-error scalar point |
+
+Offset-window robustness for the new radial4/16x16 maximum-throughput endpoint:
+
+| extxyz index | configs | atoms/s | DFT F MAE | DFT F RMSE | DFT E MAE | interpretation |
+|---|---:|---:|---:|---:|---:|---|
+| `:4096` | 4096 | 42954558 | 43.91 | 114.91 | 1430.0 | prefix rebenchmark with architecture metadata |
+| `4096:8192` | 4096 | 43229041 | 43.93 | 122.23 | 1516.6 | stable force MAE, higher RMSE on harder window |
+| `8192:12288` | 1808 | 38643787 | 42.99 | 120.32 | 1349.6 | shorter tail window, same force-error regime |
+
+Stage-23 interpretation:
+
+- Reducing radial channels is a real TECE scalar-projection capacity knob, not arbitrary parameter tuning. It coarsens the learned radial density basis while preserving element-conditioned scalar density and conservative forces.
+- `num_radial=4, hidden=16x16` creates a new ultra-fast endpoint around 43M atoms/s with stable force MAE around 43-44 meV/A. This is faster than the pair-32 Triton endpoint but less accurate, so it belongs only to the extreme-throughput end of the Pareto curve.
+- The sweep shows a non-monotonic capacity effect: radial4/24x24 is worse than radial4/16x16, and radial6/16x16 is dominated. Wider heads do not automatically recover accuracy when radial resolution is too coarse; the descriptor bottleneck is semantic/radial, not just MLP capacity.
+- The current scalar rTECE Pareto front is now: radial4 element-density 16x16 for maximum throughput, radial6 element-density 24x24 as a high-throughput intermediate, pair-32 Triton, element-density 24x24, and element-density 32x32. The next clean step is either (1) radial5/hidden16-24 to fill the large error gap between radial4 and radial8, or (2) fused descriptor construction to reduce the remaining `index_add_` cost without further semantic loss.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
