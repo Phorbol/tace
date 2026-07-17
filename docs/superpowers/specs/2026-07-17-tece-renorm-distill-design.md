@@ -838,6 +838,28 @@ Stage-27 interpretation:
 - The next priority is not more training. It is to rebenchmark radial4/16x16, radial5/16x16, radial8/24x24, and radial8/32x32 under `analytic_element_triton_descriptor_force`, then report a new Pareto curve with the same DFT/teacher windows.
 
 
+## Stage 28: Fused Descriptor rTECE Pareto Rebenchmark
+
+Stage 28 rebenchmarked the current element-density scalar rTECE front with the Stage-27 fused evaluator. The checkpoints were unchanged; the benchmark fixed `analytic_element_triton_descriptor_force`, DFT/teacher valid prefix `:4096`, 250355 atoms, prebuilt batched graph, float32, and one V100.
+
+DFT/teacher prefix comparison:
+
+| point | num radial | hidden | params | atoms/s | peak alloc MB | DFT F MAE | DFT F RMSE | teacher F MAE | status |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---|
+| radial4h16 | 4 | 16x16 | 449 | 72644836 | 176.6 | 43.91 | 114.91 | 47.77 | max-throughput endpoint |
+| radial5h16 seed2-long | 5 | 16x16 | 481 | 64515626 | 178.0 | 38.28 | 112.60 | 42.24 | seed-sensitive middle point |
+| radial5h16 stage24 | 5 | 16x16 | 481 | 64463762 | 178.0 | 39.02 | 114.24 | 43.07 | dominated by seed2-long under best-seed selection |
+| radial8h24 | 8 | 24x24 | 1057 | 50929958 | 212.1 | 30.19 | 111.50 | 35.83 | lower-error front point |
+| radial8h32 | 8 | 32x32 | 1665 | 40750024 | 242.7 | 28.14 | 109.93 | 33.93 | lowest-error scalar point |
+
+Stage-28 interpretation:
+
+- The fused evaluator produces a new Pareto curve rather than a minor implementation optimization. The maximum-throughput scalar TECE endpoint is now radial4/16x16 at 72.6M atoms/s, while radial8/24x24 reaches 50.9M atoms/s at 30.19 meV/A.
+- This supports the document thesis that model degradation and hardware renormalization are coupled. A less degraded radial8 descriptor can remain high-throughput once descriptor construction is fused and edge-state lifetime is shortened.
+- The current clean front is radial4/16x16, radial5/16x16 as a seed-sensitive band, radial8/24x24, and radial8/32x32. The radial5 seed2-long point dominates the Stage-24 radial5 checkpoint, but Stage 25-26 require reporting radial5 as stochastic unless the protocol explicitly uses best-of-N seeds.
+- The next training-method priority is direct DFT-force validation selection or a reported best-of-N seed protocol for radial5. The next implementation priority is to make the fused descriptor path the default for eligible element-density benchmarks, then profile graph construction/neighbor-list overhead because the model force pass is now extremely fast.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

@@ -1,0 +1,39 @@
+{
+  "atoms": 250355,
+  "atoms_per_second": 71064971.00158107,
+  "backend": "rtece_scalar",
+  "configs": 4096,
+  "configs_path": "runs/oc20neb_tace_mace/tece-distill-20260717/teacher_valid.extxyz",
+  "configs_per_second": 1162677.4828642372,
+  "default_dtype": "float32",
+  "device": "cuda",
+  "extxyz_index": ":4096",
+  "force_mode": "analytic_element_triton_descriptor_force",
+  "hidden_channels": [
+    16,
+    16
+  ],
+  "includes_graph_construction": false,
+  "mae_e_mev_atom": 1424.5615460596937,
+  "mae_f_mev_a": 47.766697733926726,
+  "measure_passes": 5,
+  "model": "runs/oc20neb_tace_mace/rtece-stage23-radial4-hidden16/rtece_element_density/rtece_scalar_best.pt",
+  "model_class": "RTECEScalarModel",
+  "num_parameters": 449,
+  "num_radial": 4,
+  "pass_times_s": [
+    0.0044897261541336775,
+    0.0033255349844694138,
+    0.003274145070463419,
+    0.0032596939709037542,
+    0.0032654148526489735
+  ],
+  "peak_allocated_mb": 176.56201171875,
+  "peak_reserved_mb": 356.0,
+  "prebuilt_batched_graph": true,
+  "rmse_e_mev_atom": 1712.408564674968,
+  "rmse_f_mev_a": 116.17023286905703,
+  "seconds_per_pass": 0.0035229030065238474,
+  "start_config": 0,
+  "variant": "rtece_element_density"
+}
