@@ -15,6 +15,7 @@ class RTECEScalarConfig:
     max_atomic_number: int = 100
     use_atomic_moments: bool = False
     num_edge_sketches: int = 0
+    energy_per_atom_shift: float = 0.0
 
 
 def build_rtece_config(variant: str) -> RTECEScalarConfig:
@@ -196,6 +197,14 @@ class RTECEScalarModel(torch.nn.Module):
         atomic_energy = self.energy_head(atomic_input).squeeze(-1)
         num_graphs = int(graph.batch.max().item()) + 1 if graph.batch.numel() else 1
         energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
+        if self.config.energy_per_atom_shift:
+            atom_counts = scatter_sum(
+                torch.ones_like(atomic_energy[:, None]),
+                graph.batch,
+                num_graphs,
+            ).squeeze(-1)
+            shift = pos.new_tensor(float(self.config.energy_per_atom_shift))
+            energy = energy + atom_counts * shift
         forces = -torch.autograd.grad(
             energy.sum(),
             pos,

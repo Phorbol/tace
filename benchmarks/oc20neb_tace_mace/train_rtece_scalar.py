@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 import sys
 
@@ -82,6 +82,21 @@ def atoms_to_graph(
     return RTECEGraph(z=z, pos=pos, edge_index=edge_index, batch=batch), energy, forces
 
 
+def fit_energy_per_atom_shift(
+    samples: list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]],
+) -> float:
+    if not samples:
+        raise ValueError("fit_energy_per_atom_shift requires at least one sample")
+    total_energy = 0.0
+    total_atoms = 0
+    for graph, energy, _ in samples:
+        total_energy += float(energy.detach().sum().cpu())
+        total_atoms += int(graph.z.numel())
+    if total_atoms <= 0:
+        raise ValueError("cannot fit energy shift for zero atoms")
+    return total_energy / float(total_atoms)
+
+
 def loss_for_batch(
     model: RTECEScalarModel,
     graph: RTECEGraph,
@@ -154,6 +169,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
     parser.add_argument("--default-dtype", choices=("float32", "float64"), default="float32")
+    parser.add_argument("--no-fit-energy-shift", action="store_true")
     return parser.parse_args()
 
 
@@ -163,7 +179,6 @@ def main() -> None:
     requested = torch.device(args.device)
     device = requested if requested.type == "cpu" or torch.cuda.is_available() else torch.device("cpu")
     config = build_rtece_config(args.variant)
-    model = RTECEScalarModel(config).to(device=device, dtype=dtype)
     samples = load_samples(
         args.train_file,
         cutoff=config.cutoff,
@@ -171,6 +186,9 @@ def main() -> None:
         dtype=dtype,
         limit_configs=args.limit_configs,
     )
+    if not args.no_fit_energy_shift:
+        config = replace(config, energy_per_atom_shift=fit_energy_per_atom_shift(samples))
+    model = RTECEScalarModel(config).to(device=device, dtype=dtype)
     summary = train_steps(model, samples, max_steps=args.max_steps, lr=args.lr)
     summary.update(
         {
@@ -178,6 +196,7 @@ def main() -> None:
             "train_file": str(args.train_file),
             "valid_file": str(args.valid_file),
             "train_configs": len(samples),
+            "energy_per_atom_shift": config.energy_per_atom_shift,
             "device": str(device),
             "default_dtype": args.default_dtype,
             "checkpoint": str(args.output_dir / "rtece_scalar.pt"),

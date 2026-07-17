@@ -8,6 +8,7 @@ import torch
 
 from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
     RTECEGraph,
+    RTECEScalarConfig,
     RTECEScalarModel,
     collate_graphs,
     atomic_scalar_descriptors,
@@ -274,3 +275,49 @@ def test_collate_graphs_matches_individual_energies():
 
     assert batched.shape == (2,)
     assert torch.allclose(batched, torch.cat([e1, e2]), atol=1e-10, rtol=1e-10)
+
+
+
+def test_energy_per_atom_shift_adds_zeroth_order_energy():
+    config = RTECEScalarConfig(
+        variant="rtece_pair",
+        use_atomic_moments=False,
+        num_edge_sketches=0,
+        energy_per_atom_shift=1.25,
+    )
+    model = RTECEScalarModel(config).double()
+    for param in model.parameters():
+        param.data.zero_()
+    graph = RTECEGraph(
+        z=torch.tensor([1, 1], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(2),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+
+    out = model(graph)
+
+    assert torch.allclose(out["energy"], torch.tensor([2.5], dtype=torch.float64))
+
+
+def test_fit_energy_per_atom_shift_uses_total_energy_per_total_atom():
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import fit_energy_per_atom_shift
+
+    g1 = RTECEGraph(
+        z=torch.tensor([1, 1], dtype=torch.long),
+        pos=torch.zeros((2, 3), dtype=torch.float64),
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+    g2 = RTECEGraph(
+        z=torch.tensor([1, 1, 1], dtype=torch.long),
+        pos=torch.zeros((3, 3), dtype=torch.float64),
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+    samples = [
+        (g1, torch.tensor([2.0], dtype=torch.float64), torch.zeros((2, 3), dtype=torch.float64)),
+        (g2, torch.tensor([6.0], dtype=torch.float64), torch.zeros((3, 3), dtype=torch.float64)),
+    ]
+
+    assert fit_energy_per_atom_shift(samples) == 1.6
