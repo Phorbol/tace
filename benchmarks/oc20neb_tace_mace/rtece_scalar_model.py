@@ -334,6 +334,57 @@ class RTECEScalarModel(torch.nn.Module):
             raise ValueError("forward_pair_analytic_forces only supports pure rtece_pair descriptors")
         return self.forward_density_analytic_forces(graph)
 
+    def forward_element_density_packed_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+        if not self.config.use_element_density:
+            raise ValueError("forward_element_density_packed_analytic_forces requires use_element_density=True")
+        if self.config.use_density_quadratic or self.config.use_vector_moments:
+            raise ValueError("packed element-density path only supports density plus element density")
+        if self.config.use_atomic_moments or self.config.num_edge_sketches:
+            raise ValueError("packed element-density path only supports scalar density descriptors")
+        pos = graph.pos
+        src, dst = graph.edge_index
+        num_nodes = graph.z.shape[0]
+        num_graphs = int(graph.batch.max().item()) + 1 if graph.batch.numel() else 1
+
+        vectors = pos[dst] - pos[src]
+        distances = vectors.norm(dim=-1).clamp_min(1e-12)
+        unit = vectors / distances[:, None]
+        radial, radial_derivative = radial_features_and_derivatives(distances, self.config)
+        radial_detached = radial.detach()
+        neighbor_z = graph.z[src].to(dtype=pos.dtype, device=pos.device) / float(self.config.max_atomic_number)
+        edge_descriptors = torch.cat([radial_detached, radial_detached * neighbor_z[:, None]], dim=-1)
+        descriptors = scatter_sum(edge_descriptors, dst, num_nodes).requires_grad_(True)
+
+        z_scaled = graph.z.to(dtype=pos.dtype, device=pos.device).view(-1, 1)
+        z_scaled = z_scaled / float(self.config.max_atomic_number)
+        atomic_energy = self.energy_head(torch.cat([z_scaled, descriptors], dim=-1)).squeeze(-1)
+        energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
+        if self.config.energy_per_atom_shift:
+            atom_counts = scatter_sum(
+                torch.ones_like(atomic_energy[:, None]),
+                graph.batch,
+                num_graphs,
+            ).squeeze(-1)
+            energy = energy + atom_counts * pos.new_tensor(float(self.config.energy_per_atom_shift))
+
+        descriptor_grad = torch.autograd.grad(
+            energy.sum(),
+            descriptors,
+            create_graph=False,
+            retain_graph=False,
+        )[0]
+        density_grad, element_density_grad = descriptor_grad.split(self.config.num_radial, dim=-1)
+        edge_scale = (
+            (density_grad[dst] + element_density_grad[dst] * neighbor_z[:, None])
+            * radial_derivative
+        ).sum(dim=-1)
+        grad_vectors = edge_scale[:, None] * unit
+        grad_pos = pos.new_zeros(pos.shape)
+        grad_pos.index_add_(0, dst, grad_vectors)
+        grad_pos.index_add_(0, src, -grad_vectors)
+        forces = -grad_pos
+        return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
+
     def forward(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
         pos = graph.pos
         if not pos.requires_grad:

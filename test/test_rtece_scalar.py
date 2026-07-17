@@ -574,6 +574,42 @@ def test_density_analytic_forces_match_autograd_forces_for_element_descriptors()
     )
 
 
+def test_packed_element_density_analytic_forces_match_autograd_forces():
+    config = RTECEScalarConfig(
+        variant="rtece_element_density",
+        use_element_density=True,
+        use_atomic_moments=False,
+        num_edge_sketches=0,
+        energy_per_atom_shift=-0.25,
+    )
+    model = RTECEScalarModel(config).double().eval()
+    graph = RTECEGraph(
+        z=torch.tensor([6, 8, 1, 1], dtype=torch.long),
+        pos=torch.tensor(
+            [
+                [0.0, 0.0, 0.0],
+                [0.7, 0.2, 0.1],
+                [-0.3, 0.6, -0.2],
+                [0.4, -0.5, 0.3],
+            ],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(4),
+        batch=torch.zeros(4, dtype=torch.long),
+    )
+
+    autograd_out = model(graph)
+    packed_out = model.forward_element_density_packed_analytic_forces(graph)
+
+    assert torch.allclose(packed_out["energy"], autograd_out["energy"], atol=1e-10, rtol=1e-10)
+    assert torch.allclose(
+        packed_out["forces"],
+        autograd_out["forces"],
+        atol=1e-8,
+        rtol=1e-8,
+    )
+
+
 def test_density_analytic_forces_match_autograd_forces_for_vector_moments():
     config = RTECEScalarConfig(
         variant="rtece_vector_moments",
@@ -659,6 +695,7 @@ def test_rtece_benchmark_help_exposes_force_mode():
     assert "--force-mode" in result.stdout
     assert "analytic_pair" in result.stdout
     assert "analytic_density" in result.stdout
+    assert "analytic_element_packed" in result.stdout
 
 
 def test_summary_extracts_force_throughput_pareto_front():
