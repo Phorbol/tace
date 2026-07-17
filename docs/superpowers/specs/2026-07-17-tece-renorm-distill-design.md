@@ -899,6 +899,42 @@ Stage-30 interpretation:
 - The next implementation target should be a graph-cache benchmark that builds a graph once, reuses it across repeated force passes, and models amortized rebuild intervals. The longer-term target is an MD-runtime neighbor-list provider feeding the fused descriptor/force kernels directly.
 
 
+## Stage 31: Cached Graph Replay And Edge-State Lifetime
+
+Stage 31 implemented the Stage-30 graph-cache benchmark. The test keeps the same radial8/24x24 `rtece_element_density` checkpoint, DFT valid `:1024` prefix, 59193 atoms, float32, one V100, and `--force-mode auto`, which resolves to `analytic_element_triton_descriptor_force`. The new replay mode builds one graph template, reuses `z`, `edge_index`, and `batch`, refreshes positions, and runs one batched fused conservative force pass.
+
+| runtime mode | prebuilt graph | graph construction timed | replay cached graph | atoms/s | configs/s | seconds/pass | peak alloc MB | DFT F MAE |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| prebuilt batched graph | yes | no | no | 36790610 | 636453 | 0.001609 | 63.2 | 33.17 |
+| cached graph replay | no | no | yes | 36793984 | 636512 | 0.001609 | 64.6 | 33.17 |
+| rebuild graphs, then batch | no | yes | no | 9885 | 171 | 5.987913 | 78.2 | 33.17 |
+
+Amortized throughput under the measured cost model, using `seconds_per_step = cached_model_pass + graph_rebuild / K = 0.001608768 + 5.987913 / K`:
+
+| graph rebuild interval K | amortized atoms/s | interpretation |
+|---:|---:|---|
+| 1 | 9883 | current rebuild-every-step ASE-style path |
+| 10 | 98589 | still graph-bound |
+| 100 | 962677 | below target throughput class |
+| 1000 | 7791955 | near target, still below 1e7 atoms-step/s |
+| 2000 | 12860426 | crosses 1e7 under this model |
+| 5000 | 21092515 | graph cost no longer dominant |
+| 10000 | 26813771 | approaches cached model-pass ceiling |
+
+Stage-31 interpretation against TECE/TACE:
+
+- This confirms that the high-throughput rTECE scalar force pass is not the current limiting factor once descriptor construction and conservative force accumulation are fused. Cached graph replay matches the prebuilt graph path within measurement noise while preserving identical force error.
+- The missing system-level renormalization axis is edge-state lifetime. In TECE/TACE terms, the local neighbor graph and edge buffers must be treated as a persistent coarse-grained state with controlled refresh, not as transient Python/ASE objects reconstructed every force call.
+- This is consistent with the TECE paper's emphasis on edge many-body construction and the TACE paper's controlled ACE hierarchy: the projection route cannot stop at deleting channels/radial modes. It must also downfold the runtime representation so retained edge relations are short-lived in kernels but long-lived as reusable topology state.
+- The measured end-to-end target is now quantitative. With the current ASE rebuild cost, a rebuild interval around 2000 force steps is needed to exceed 1e7 atoms-step/s. A production MD neighbor provider could lower the rebuild term, so the next experiment should measure or prototype that provider rather than run another radial/head sweep.
+
+Next priority:
+
+1. Implement a minimal MD-runtime neighbor-list interface or synthetic provider that updates positions on device and keeps edge buffers persistent across force calls.
+2. Measure graph rebuild/update amortization on trajectory-like displacement rather than static extxyz replay.
+3. Keep the current scalar Pareto front fixed for now: radial4/16x16, radial5 band, radial8/24x24, radial8/32x32 under the fused evaluator. Reopen architecture sweeps only after the graph-lifetime bottleneck is reduced or quantified in an MD-style loop.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
