@@ -196,6 +196,21 @@ def density_scalar_descriptors(
     return torch.cat(parts, dim=-1) if len(parts) > 1 else density
 
 
+def packed_element_density_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
+    if not config.use_element_density:
+        raise ValueError("packed_element_density_descriptors requires use_element_density=True")
+    if config.use_density_quadratic or config.use_vector_moments:
+        raise ValueError("packed element-density descriptors only support density plus element density")
+    if config.use_atomic_moments or config.num_edge_sketches:
+        raise ValueError("packed element-density descriptors only support scalar density descriptors")
+    _, distances, _ = compute_pair_geometry(graph)
+    radial = compute_radial_features(distances, config)
+    src, dst = graph.edge_index
+    neighbor_z = graph.z[src].to(dtype=graph.pos.dtype, device=graph.pos.device) / float(config.max_atomic_number)
+    edge_descriptors = torch.cat([radial, radial * neighbor_z[:, None]], dim=-1)
+    return scatter_sum(edge_descriptors, dst, graph.z.shape[0])
+
+
 def atomic_scalar_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
     moments = compute_atomic_moments(graph, config)
     density = moments["density"]
@@ -437,6 +452,60 @@ class RTECEScalarModel(torch.nn.Module):
             create_graph=False,
             retain_graph=False,
         )
+        forces = element_density_forces_triton(
+            pos=pos,
+            edge_index=graph.edge_index,
+            node_z=node_z,
+            density_grad=density_grad,
+            element_density_grad=element_density_grad,
+            cutoff=float(self.config.cutoff),
+            num_radial=int(self.config.num_radial),
+        )
+        return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
+
+    def forward_element_density_triton_descriptor_force_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+        if not self.config.use_element_density:
+            raise ValueError("forward_element_density_triton_descriptor_force_analytic_forces requires use_element_density=True")
+        if self.config.use_density_quadratic or self.config.use_vector_moments:
+            raise ValueError("Triton element-density descriptor+force path only supports density plus element density")
+        if self.config.use_atomic_moments or self.config.num_edge_sketches:
+            raise ValueError("Triton element-density descriptor+force path only supports scalar density descriptors")
+        if graph.pos.device.type != "cuda":
+            raise RuntimeError("Triton element-density descriptor+force path requires a CUDA graph")
+        from benchmarks.oc20neb_tace_mace.rtece_triton_kernels import (
+            element_density_descriptors_triton,
+            element_density_forces_triton,
+        )
+
+        pos = graph.pos
+        num_graphs = int(graph.batch.max().item()) + 1 if graph.batch.numel() else 1
+        node_z = graph.z.to(dtype=pos.dtype, device=pos.device) / float(self.config.max_atomic_number)
+        descriptors = element_density_descriptors_triton(
+            pos=pos,
+            edge_index=graph.edge_index,
+            node_z=node_z,
+            cutoff=float(self.config.cutoff),
+            num_radial=int(self.config.num_radial),
+        ).requires_grad_(True)
+
+        z_scaled = node_z.view(-1, 1)
+        atomic_energy = self.energy_head(torch.cat([z_scaled, descriptors], dim=-1)).squeeze(-1)
+        energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
+        if self.config.energy_per_atom_shift:
+            atom_counts = scatter_sum(
+                torch.ones_like(atomic_energy[:, None]),
+                graph.batch,
+                num_graphs,
+            ).squeeze(-1)
+            energy = energy + atom_counts * pos.new_tensor(float(self.config.energy_per_atom_shift))
+
+        descriptor_grad = torch.autograd.grad(
+            energy.sum(),
+            descriptors,
+            create_graph=False,
+            retain_graph=False,
+        )[0]
+        density_grad, element_density_grad = descriptor_grad.split(self.config.num_radial, dim=-1)
         forces = element_density_forces_triton(
             pos=pos,
             edge_index=graph.edge_index,

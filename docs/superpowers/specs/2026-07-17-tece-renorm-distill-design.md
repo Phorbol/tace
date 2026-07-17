@@ -812,6 +812,32 @@ Stage-26 interpretation:
 - The next priority should move away from more radial/head sweeps. Either improve the selection protocol by validating/checkpointing directly on the DFT-force target over a larger slice, or implement fused descriptor construction for the stable element-density family so the lower-error radial8 points can move toward the radial4/radial5 throughput regime without adding semantic complexity.
 
 
+## Stage 27: Triton Fused Element-Density Descriptor
+
+Stage 27 tested the second Stage-26 priority: keep the stable scalar TECE element-density architecture fixed, but reduce edge/state lifetime by moving descriptor construction from PyTorch radial tensors and `index_add_` into a fused Triton edge kernel. The new `analytic_element_triton_descriptor_force` path builds packed `[rho, rho_z]` descriptors with Triton, then reuses the existing Triton conservative force kernel.
+
+Implementation gate:
+
+- Added a CPU/PyTorch equivalence anchor, `packed_element_density_descriptors`, for packed `[rho, rho_z]` descriptors.
+- Added `element_density_descriptors_triton` and `RTECEScalarModel.forward_element_density_triton_descriptor_force_analytic_forces`.
+- Exposed `analytic_element_triton_descriptor_force` in benchmark and profiler force-mode choices.
+- Full rTECE scalar test file after the change: 38 passed.
+
+4096-config prefix benchmark on the same radial8/24x24 checkpoint (`rtece-scalar-678773`, 1057 parameters):
+
+| force mode | atoms/s | seconds/pass | peak alloc MB | DFT F MAE | DFT F RMSE | DFT E MAE |
+|---|---:|---:|---:|---:|---:|---:|
+| `analytic_element_triton_force` | 29413444 | 0.008512 | 674.7 | 30.19297 | 111.49715 | 1402.9 |
+| `analytic_element_triton_descriptor_force` | 50975964 | 0.004911 | 212.1 | 30.19297 | 111.49715 | 1402.9 |
+
+Stage-27 interpretation:
+
+- This is a clean positive result for the TECE/TACE renormalization route because it changes hardware realization, not model semantics: same checkpoint, same scalar element-density descriptor, same conservative analytic force, same force error within float noise.
+- The bottleneck diagnosis from the TECE design document is supported. Removing long-lived edge radial tensors and PyTorch `index_add_` descriptor construction raises radial8/24x24 throughput from about 29.4M to 51.0M atoms/s and cuts peak allocation from 674.7MB to 212.1MB on the 4096-config prefix.
+- The Pareto front must be recomputed. The lower-error radial8/24x24 point now exceeds the previous radial4 maximum-throughput endpoint measured with the older evaluator, so architecture simplification and hardware renormalization are not independent axes.
+- The next priority is not more training. It is to rebenchmark radial4/16x16, radial5/16x16, radial8/24x24, and radial8/32x32 under `analytic_element_triton_descriptor_force`, then report a new Pareto curve with the same DFT/teacher windows.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

@@ -37,7 +37,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--measure-passes", type=int, default=3)
     parser.add_argument(
         "--force-mode",
-        choices=("autograd", "analytic_pair", "analytic_pair_triton_force", "analytic_element_triton_force", "analytic_density", "analytic_element_packed"),
+        choices=("autograd", "analytic_pair", "analytic_pair_triton_force", "analytic_element_triton_force", "analytic_element_triton_descriptor_force", "analytic_density", "analytic_element_packed"),
         default="autograd",
     )
     parser.add_argument(
@@ -104,6 +104,8 @@ def main() -> None:
             return model.forward_pair_triton_force_analytic_forces(graph)
         if args.force_mode == "analytic_element_triton_force":
             return model.forward_element_density_triton_force_analytic_forces(graph)
+        if args.force_mode == "analytic_element_triton_descriptor_force":
+            return model.forward_element_density_triton_descriptor_force_analytic_forces(graph)
         if args.force_mode == "analytic_density":
             return model.forward_density_analytic_forces(graph)
         if args.force_mode == "analytic_element_packed":

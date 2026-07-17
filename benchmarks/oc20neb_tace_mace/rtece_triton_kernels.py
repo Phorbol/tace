@@ -118,6 +118,96 @@ def pair_forces_triton(
 
 
 @triton.jit
+def _element_density_descriptor_kernel(
+    pos,
+    src_index,
+    dst_index,
+    node_z,
+    descriptors,
+    num_edges: tl.constexpr,
+    cutoff: tl.constexpr,
+    num_radial: tl.constexpr,
+    block_size: tl.constexpr,
+):
+    offsets = tl.program_id(0) * block_size + tl.arange(0, block_size)
+    mask = offsets < num_edges
+    src = tl.load(src_index + offsets, mask=mask, other=0)
+    dst = tl.load(dst_index + offsets, mask=mask, other=0)
+    src_z = tl.load(node_z + src, mask=mask, other=0.0)
+
+    sx = tl.load(pos + src * 3 + 0, mask=mask, other=0.0)
+    sy = tl.load(pos + src * 3 + 1, mask=mask, other=0.0)
+    sz = tl.load(pos + src * 3 + 2, mask=mask, other=0.0)
+    dx = tl.load(pos + dst * 3 + 0, mask=mask, other=0.0)
+    dy = tl.load(pos + dst * 3 + 1, mask=mask, other=0.0)
+    dz = tl.load(pos + dst * 3 + 2, mask=mask, other=0.0)
+
+    vx = dx - sx
+    vy = dy - sy
+    vz = dz - sz
+    dist = tl.sqrt(vx * vx + vy * vy + vz * vz)
+    dist = tl.maximum(dist, 1.0e-12)
+
+    x = tl.minimum(tl.maximum(dist / cutoff, 0.0), 1.0)
+    x2 = x * x
+    x3 = x2 * x
+    x4 = x3 * x
+    x5 = x4 * x
+    inside = dist < cutoff
+    envelope = tl.where(inside, 1.0 - 10.0 * x3 + 15.0 * x4 - 6.0 * x5, 0.0)
+
+    width = cutoff / (num_radial - 1)
+    inv_width2 = 1.0 / (width * width)
+    descriptor_stride = num_radial * 2
+    for k in range(0, num_radial):
+        center = width * k
+        delta = dist - center
+        gaussian = tl.exp(-0.5 * delta * delta * inv_width2)
+        radial = gaussian * envelope
+        base = descriptors + dst * descriptor_stride + k
+        tl.atomic_add(base, radial, sem="relaxed", mask=mask)
+        tl.atomic_add(base + num_radial, radial * src_z, sem="relaxed", mask=mask)
+
+
+def element_density_descriptors_triton(
+    *,
+    pos: torch.Tensor,
+    edge_index: torch.Tensor,
+    node_z: torch.Tensor,
+    cutoff: float,
+    num_radial: int,
+    block_size: int = 128,
+) -> torch.Tensor:
+    if pos.device.type != "cuda":
+        raise RuntimeError("Triton element-density descriptor path requires a CUDA graph")
+    if pos.dtype != torch.float32:
+        raise RuntimeError("Triton element-density descriptor path currently supports float32 positions only")
+    if node_z.dtype != torch.float32:
+        raise RuntimeError("Triton element-density descriptor path currently supports float32 atomic numbers only")
+    if not pos.is_contiguous():
+        pos = pos.contiguous()
+    src = edge_index[0].contiguous()
+    dst = edge_index[1].contiguous()
+    node_z = node_z.contiguous()
+    descriptors = torch.zeros((int(node_z.numel()), int(num_radial) * 2), device=pos.device, dtype=pos.dtype)
+    num_edges = int(src.numel())
+    grid = (triton.cdiv(num_edges, block_size),)
+    _element_density_descriptor_kernel[grid](
+        pos,
+        src,
+        dst,
+        node_z,
+        descriptors,
+        num_edges,
+        float(cutoff),
+        int(num_radial),
+        block_size,
+        num_warps=4,
+    )
+    return descriptors
+
+
+@triton.jit
 def _element_density_force_kernel(
     pos,
     src_index,
