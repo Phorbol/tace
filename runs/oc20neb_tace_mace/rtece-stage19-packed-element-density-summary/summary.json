@@ -1,0 +1,56 @@
+{
+  "packed_element_density_ablation": [
+    {
+      "label": "element_density_24x24_analytic_density",
+      "path": "runs/oc20neb_tace_mace/rtece-scalar-678773/rtece_element_density/rtece_element_density_dft_benchmark.json",
+      "force_mode": "analytic_density",
+      "num_parameters": 1057,
+      "atoms_per_second": 15920357.685826605,
+      "seconds_per_pass": 0.015725463267881424,
+      "peak_allocated_mb": 1404.93505859375,
+      "peak_reserved_mb": 1716.0,
+      "dft_f_mae_mev_a": 30.1929744058446,
+      "dft_f_rmse_mev_a": 111.49715322053218,
+      "dft_e_mae_mev_atom": 1402.8920906942412
+    },
+    {
+      "label": "element_density_24x24_analytic_element_packed",
+      "path": "runs/oc20neb_tace_mace/rtece-bench-element-density-24-packed-prefix/rtece_element_density_limit4096_benchmark.json",
+      "force_mode": "analytic_element_packed",
+      "num_parameters": 1057,
+      "atoms_per_second": 15416267.648207325,
+      "seconds_per_pass": 0.016239663562737407,
+      "peak_allocated_mb": 1404.93505859375,
+      "peak_reserved_mb": 2032.0,
+      "dft_f_mae_mev_a": 30.192974420198134,
+      "dft_f_rmse_mev_a": 111.49715320789794,
+      "dft_e_mae_mev_atom": 1402.8920896088155
+    },
+    {
+      "label": "element_density_32x32_analytic_density",
+      "path": "runs/oc20neb_tace_mace/rtece-scalar-678749/rtece_element_density/rtece_element_density_dft_benchmark.json",
+      "force_mode": "analytic_density",
+      "num_parameters": 1665,
+      "atoms_per_second": 14696599.227123987,
+      "seconds_per_pass": 0.017034893319942058,
+      "peak_allocated_mb": 1404.93701171875,
+      "peak_reserved_mb": 1716.0,
+      "dft_f_mae_mev_a": 28.14186455538709,
+      "dft_f_rmse_mev_a": 109.92686523694199,
+      "dft_e_mae_mev_atom": 1409.3729917855048
+    },
+    {
+      "label": "element_density_32x32_analytic_element_packed",
+      "path": "runs/oc20neb_tace_mace/rtece-bench-element-density-32-packed-prefix/rtece_element_density_limit4096_benchmark.json",
+      "force_mode": "analytic_element_packed",
+      "num_parameters": 1665,
+      "atoms_per_second": 14325009.287699979,
+      "seconds_per_pass": 0.01747677749954164,
+      "peak_allocated_mb": 1404.93701171875,
+      "peak_reserved_mb": 2032.0,
+      "dft_f_mae_mev_a": 28.14186455086797,
+      "dft_f_rmse_mev_a": 109.92686523271121,
+      "dft_e_mae_mev_atom": 1409.3729911662062
+    }
+  ]
+}

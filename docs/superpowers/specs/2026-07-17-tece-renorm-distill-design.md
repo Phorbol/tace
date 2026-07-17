@@ -577,6 +577,33 @@ Stage-18 interpretation:
 - The next priority is no longer adding semantic descriptors in Python. The front is now good enough to justify implementation work: fuse/export pair and element-density analytic kernels, or otherwise reduce scatter/MLP overhead while preserving the same descriptors and conservative force path.
 
 
+## Stage 19 Smoke: Packed Element-Density Force Path
+
+Stage 18 identified implementation cost as the next priority. Stage 19 tested a narrow PyTorch-level optimization for `rtece_element_density`: compute `[rho, rho_z]` in one packed scatter, take one gradient with respect to the packed descriptor tensor, and combine the edge force scale as `(grad_rho + z_j grad_rho_z) dR/dr`. This preserves the same model architecture, checkpoint, descriptors, and conservative force path.
+
+Implementation gate:
+
+- `RTECEScalarModel.forward_element_density_packed_analytic_forces` matches full autograd forces for element-density descriptors.
+- `benchmark_rtece_scalar.py` exposes `--force-mode analytic_element_packed`, so old and new force paths can be A/B benchmarked on the same checkpoint.
+- Full rTECE test file after the change: 30 passed.
+
+4096-config prefix A/B benchmark:
+
+| checkpoint | force mode | atoms/s | seconds/pass | peak reserved MB | DFT F MAE | interpretation |
+|---|---|---:|---:|---:|---:|---|
+| element-density 24x24 | analytic_density | 15920358 | 0.015725 | 1716 | 30.193 | Stage-18 front point |
+| element-density 24x24 | analytic_element_packed | 15416268 | 0.016240 | 2032 | slower; no accuracy change |
+| element-density 32x32 | analytic_density | 14696599 | 0.017035 | 1716 | 28.142 | Stage-16 lower-error point |
+| element-density 32x32 | analytic_element_packed | 14325009 | 0.017477 | 2032 | slower; no accuracy change |
+
+Stage-19 interpretation:
+
+- The packed force path is a useful negative implementation result. It proves numerical equivalence but does not improve throughput or memory behavior.
+- The bottleneck is not merely the number of Python-level scatter calls; packing creates a wider temporary descriptor tensor and increases reserved memory.
+- The current Pareto front remains the Stage-18 front using `analytic_density`. Do not spend more time on PyTorch-level tensor packing.
+- The next implementation priority should be a real fused/exported evaluator for pair and element-density descriptors, or a lower-level custom kernel that computes density, element-density, MLP input, and edge force scale without materializing avoidable intermediate tensors.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
