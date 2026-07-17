@@ -628,6 +628,39 @@ Stage-20 interpretation:
 - This matches the TECE/TACE document logic: the useful model degradation has already removed persistent equivariant state; the remaining bottleneck is execution of the scalarized renormalized operator, so the next work should be a fused low-level evaluator for the current Pareto front rather than adding more semantic descriptors.
 
 
+## Stage 21 Smoke: Triton Pair Force Evaluator
+
+Stage 20 made the next priority explicit: after the TECE/TACE projection removes persistent equivariant state, the remaining high-throughput bottleneck is the scalarized radial/scatter/force evaluator. Stage 21 therefore did not change the trained model architecture or checkpoint. It added an optional Triton force-accumulation path for the pure pair rTECE endpoint, fusing radial derivatives and edge force accumulation while keeping the same density descriptor, scalar MLP head, conservative chain rule, and labels.
+
+Implementation gate:
+
+- `RTECEScalarModel.forward_pair_triton_force_analytic_forces` supports only pure `rtece_pair` descriptors and rejects CPU graphs before importing Triton.
+- `benchmark_rtece_scalar.py` and `profile_rtece_scalar.py` expose `--force-mode analytic_pair_triton_force`.
+- The Triton path keeps descriptor/MLP gradients in PyTorch and replaces only the edge force kernel, making it an evaluator optimization rather than an architecture change.
+- Full rTECE scalar test file after the change: 32 passed.
+
+4096-config prefix A/B benchmark on the same pair-32 checkpoint:
+
+| checkpoint | force mode | params | atoms/s | seconds/pass | peak alloc MB | peak reserved MB | DFT F MAE | DFT F RMSE | interpretation |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---|
+| pair-32 | analytic_pair | 1409 | 18622904 | 0.013443 | 1405.4 | 1716 | 39.42031 | 114.50856 | previous maximum-throughput front point |
+| pair-32 | analytic_pair_triton_force | 1409 | 31097432 | 0.008051 | 675.2 | 1084 | 39.42031 | 114.50856 | same error, 1.67x throughput, lower memory |
+
+Profiler evidence, inclusive device time over 5 profiled passes:
+
+| point | leading ops | interpretation |
+|---|---|---|
+| pair-32 analytic pair | `aten::mul` 16.75 ms, `aten::linear/addmm` 7.49 ms, `index_add_` 6.23 ms, `div` 5.96 ms | PyTorch radial/force elementwise and scatter dominate the old high-throughput endpoint |
+| pair-32 Triton force | `aten::linear/addmm` 7.50 ms, `_pair_force_kernel` 4.28 ms, `aten::mul` 4.95 ms, `index_add_` 3.33 ms | fused force accumulation removes much of the scalar physics overhead; MLP/density construction is now a leading bottleneck |
+
+Stage-21 interpretation:
+
+- This is the first positive evaluator-level result. It validates the Stage-20 priority: after the TECE/TACE renormalized projection to scalar pair density, low-level force evaluation can move the same model into the NEP/DPA-like high-throughput regime without changing the learned parameters.
+- The current Pareto front changes: pair-32 Triton becomes the maximum-throughput point at about 31.1M atoms/s with the same 39.42 meV/A force MAE; element-density-24 and element-density-32 remain the lower-error scalar rTECE front points.
+- The remaining gap is now architectural and evaluator-coupled. Pair-32 is fast but less accurate; element-density is more accurate but still uses unfused PyTorch scalar density and force paths.
+- Next priority: extend the same fused-evaluator idea to the TECE-positive element-density descriptor, but do it as a clean scalar renormalized operator: compute `rho` and `rho_z`, descriptor gradients, radial derivative, and force accumulation without materializing avoidable edge temporaries. In parallel, test whether smaller readout heads on the now-fast pair endpoint create a useful ultra-fast sub-front, because profiler shows GEMM/MLP is now the largest remaining pair cost.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
