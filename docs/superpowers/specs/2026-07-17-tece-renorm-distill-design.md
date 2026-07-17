@@ -336,6 +336,34 @@ Stage-10 interpretation:
 - The current quantitative Pareto anchor is therefore: `rtece_pair`, best-validation checkpoint from job 678603, 47.9-50.9 meV/A DFT force MAE depending on benchmark subset, 6.8-7.4M atoms/s on one V100, prebuilt graph, 0.7-6.2GB peak depending on batch.
 - Next architecture/compiler priority: optimize the rTECE pair force path, or export/fuse scalar descriptor and analytic force kernels. Adding edge sketches is lower priority because `edge_sketch8` was throughput-dominated and not more accurate in early tests.
 
+
+## Stage 11 Smoke: Analytic rTECE Pair Force Path
+
+Stage 10 showed that batching the autograd force path plateaued around 7.4M atoms/s. Stage 11 replaced only the `rtece_pair` inference force path with a semi-analytic chain rule: the MLP gradient with respect to scalar pair densities is still computed by autograd, but the radial-density derivative with respect to distances and positions is evaluated explicitly. Training still uses the original conservative autograd path.
+
+Correctness gate:
+
+- `test_pair_analytic_forces_match_autograd_forces` verifies that analytic-pair energies and forces match the autograd path in double precision.
+- Full rTECE test file after the change: 15 passed.
+
+Throughput comparison for the same job-678603 best checkpoint:
+
+| force mode | configs | atoms | atoms/s | peak alloc MB | DFT F MAE | interpretation |
+|---|---:|---:|---:|---:|---:|---|
+| autograd | 1024 | 59193 | 6809129 | 718.8 | 50.9084 | Stage-10 baseline |
+| analytic_pair | 1024 | 59193 | 14401868 | 350.6 | 50.9084 | >2.1x faster, same forces within benchmark precision |
+| autograd | 4096 | 250355 | 7313717 | 2963.7 | 47.9323 | batch scaling plateau |
+| analytic_pair | 4096 | 250355 | 16091763 | 1405.4 | 47.9323 | reaches NEP/DPA-like throughput class |
+| autograd | 8192 | 525769 | 7442352 | 6193.9 | 49.3271 | memory-heavy plateau |
+| analytic_pair | 8192 | 525769 | 16538878 | 2918.6 | 49.3271 | current best throughput point |
+
+Stage-11 interpretation:
+
+- This is the first closed-loop rTECE point that satisfies the original throughput target: a TECE-grounded scalar-renormalized model reaches >1e7 atoms/s on one V100 while preserving conservative forces.
+- The current Pareto anchor is `rtece_pair` with fitted per-atom energy shift, best-validation checkpoint from job 678603, analytic pair force path, and prebuilt graph benchmark: 14.4-16.5M atoms/s with about 48-51 meV/A DFT force MAE depending on benchmark subset.
+- The result supports the document hypothesis that the key bottleneck was not only representation dimension, but the lifetime of high-rank/autograd state in the force path. Early scalarization plus analytic/fused force propagation is the clean route toward NEP/DPA-class throughput inside the TECE framework.
+- Next priority: make the analytic path production-safe by adding a benchmark summary row and explicit `force_mode` tracking in Pareto summaries, then explore analytic/fused extensions only after pair is fully characterized. Edge sketches remain lower priority because they were accuracy-neutral and throughput-dominated before force-path optimization.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
