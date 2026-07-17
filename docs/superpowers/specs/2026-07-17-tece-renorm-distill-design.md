@@ -791,6 +791,27 @@ Stage-25 interpretation:
 - The next priority should not be another head-width sweep. It should either improve selection robustness, such as longer training or a larger validation/selection window for radial5/16x16, or shift to fused descriptor construction where the architecture is already reliable. For the Pareto curve, report radial5 as a seed-sensitive band until repeated/longer runs narrow the error range.
 
 
+## Stage 26: Radial5/16x16 Longer-Training Robustness
+
+Stage 26 tested the first Stage-25 follow-up directly: keep the candidate architecture fixed but increase training duration and the validation-selection window. The experiment used `rtece_element_density`, `num_radial=5`, `hidden=16x16`, 481 parameters, train=512, valid=512, force weight 30, energy weight 1, `analytic_element_triton_force`, and `MAX_STEPS=3000` for seeds 0, 1, and 2.
+
+4096-config prefix comparison:
+
+| seed | best step | best valid loss | atoms/s | DFT F MAE | DFT F RMSE | teacher F MAE | DFT E MAE |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 0 | 2100 | 4.4110 | 38606435 | 56.03 | 124.13 | 58.99 | 1409.5 |
+| 1 | 600 | 4.4038 | 38660247 | 44.59 | 115.36 | 48.41 | 1403.4 |
+| 2 | 900 | 4.4078 | 38870724 | 38.28 | 112.60 | 42.24 | 1428.1 |
+
+Stage-26 interpretation:
+
+- Longer training plus a 512-config valid selector does not stabilize the radial5/16x16 force-error band. Throughput remains robust at about 38.6-38.9M atoms/s, but DFT force MAE spans 38.28-56.03 meV/A.
+- The best-valid losses are almost tied while DFT force MAE differs by nearly 18 meV/A. This confirms the Stage-25 warning: the current mixed-label train/valid proxy is not a reliable checkpoint selector for the DFT-force Pareto objective.
+- Radial5/16x16 remains TECE-interpretable as a minimal radial-resolution recovery beyond radial4, but it should not be presented as a single deterministic Pareto-front point. It is a seed-sensitive candidate band unless the protocol explicitly uses best-of-N seed selection and reports that cost.
+- The current clean Pareto statement is therefore conservative: radial4/16x16 is the maximum-throughput endpoint; radial5/16x16 is a stochastic candidate band around 38.6-38.9M atoms/s; pair32 remains a more stable comparable-error point; radial8/24x24 and radial8/32x32 remain the lower-error scalar TECE points.
+- The next priority should move away from more radial/head sweeps. Either improve the selection protocol by validating/checkpointing directly on the DFT-force target over a larger slice, or implement fused descriptor construction for the stable element-density family so the lower-error radial8 points can move toward the radial4/radial5 throughput regime without adding semantic complexity.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
