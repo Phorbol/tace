@@ -1,0 +1,22 @@
+{
+  "best_checkpoint": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-scalar-678681/rtece_pair/rtece_scalar_best.pt",
+  "best_step": 1000,
+  "best_valid_loss": 3.4543652324937284,
+  "checkpoint": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-scalar-678681/rtece_pair/rtece_scalar.pt",
+  "default_dtype": "float32",
+  "device": "cuda",
+  "energy_per_atom_shift": -4.614286826395964,
+  "energy_weight": 1.0,
+  "final_loss": 5.864827632904053,
+  "force_weight": 30.0,
+  "hidden_channels": [
+    64,
+    64
+  ],
+  "steps": 1000,
+  "train_configs": 512,
+  "train_file": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/tece-distill-20260717/teacher_train.extxyz",
+  "valid_configs": 256,
+  "valid_file": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/tece-distill-20260717/teacher_valid.extxyz",
+  "variant": "rtece_pair"
+}

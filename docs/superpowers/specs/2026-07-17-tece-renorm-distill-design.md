@@ -426,6 +426,33 @@ Stage-13 interpretation:
 - Teacher-only labels improve over the mixed baseline at the same architecture, so the next label-axis test should compare teacher-only plus `force_weight=30` and possibly mixed tw values after regenerating label mixes.
 - Larger head capacity is not automatically useful; 128x64 is slower and worse here. The next architecture expansion should not be a blind MLP width increase. It should be a TECE-ordered descriptor addition with analytic/fused force path, after the pair branch's label/loss axes plateau.
 
+## Stage 14 Smoke: rTECE Pair Combined Loss/Label Axes
+
+Stage 13 showed two useful axes: `force_weight=30` improves the balanced 64x64 point, while a 32x32 scalar head improves throughput with only moderate force-error cost. Stage 14 combined these axes before adding any richer descriptors. This follows the TECE review rule: exhaust train/distillation axes inside the current projection before changing the architecture projection.
+
+4096-config prefix comparison:
+
+| job | hidden | train labels | force weight | params | atoms/s | DFT F MAE | teacher F MAE | DFT E MAE | interpretation |
+|---:|---|---|---:|---:|---:|---:|---:|---:|---|
+| 678671 | 64x64 | mixed tw0.75 | 30 | 4865 | 16230938 | 36.13 | 40.69 | 1410.6 | best balanced Stage-13 point |
+| 678681 | 64x64 | teacher-only | 30 | 4865 | 16152730 | 36.30 | 40.80 | 1414.7 | teacher-only does not improve over mixed when force weight is already high |
+| 678670 | 32x32 | mixed tw0.75 | 10 | 1409 | 18628337 | 44.30 | 47.49 | 1408.5 | Stage-13 maximum-throughput point |
+| 678682 | 32x32 | mixed tw0.75 | 30 | 1409 | 18623067 | 39.42 | 43.14 | 1407.1 | new maximum-throughput Pareto point |
+
+Offset-window robustness for the new 32x32 force-weight-30 point:
+
+| job | extxyz index | configs | atoms/s | DFT F MAE | DFT F RMSE | DFT E MAE | interpretation |
+|---:|---|---:|---:|---:|---:|---:|---|
+| 678682 | `:4096` | 4096 | 18623067 | 39.42 | 114.51 | 1407.1 | prefix benchmark |
+| 678685 | `4096:8192` | 4096 | 18642930 | 42.27 | 123.65 | 1491.4 | stable high-throughput offset window |
+| 678686 | `8192:12288` | 1808 | 17649690 | 41.53 | 121.27 | 1351.4 | shorter tail window but still stable |
+
+Stage-14 interpretation:
+
+- The current scalarized-pair Pareto front now has two clean points: 64x64/force30 for lower error at about 15.4-16.2M atoms/s, and 32x32/force30 for higher throughput at about 17.6-18.6M atoms/s. Both remain conservative energy models with analytic pair forces.
+- Teacher-only labels do not beat mixed labels once force loss is properly weighted, so the immediate label-axis priority drops. If more label work is needed, regenerate mixed train files at different teacher weights rather than only teacher-only.
+- The next architecture step should be TECE-ordered and analytic/fused from the start: either add the cheapest scalar descriptor that can receive an analytic force path, or formalize the pair model as the T4 endpoint and stop expanding it until the Pareto table needs a middle point between compact TACE and scalar pair.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
