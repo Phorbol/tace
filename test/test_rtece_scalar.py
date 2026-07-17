@@ -199,3 +199,31 @@ def test_rtece_tiny_training_step_reduces_finite_loss(tmp_path):
 
     assert summary["steps"] == 2
     assert torch.isfinite(torch.tensor(summary["final_loss"]))
+
+
+
+def test_rtece_benchmark_row_is_summary_compatible():
+    from benchmarks.oc20neb_tace_mace.summarize_tece_distill import make_student_row
+
+    dft = {
+        "model": "rtece_scalar.pt",
+        "atoms_per_second": 100000.0,
+        "configs_per_second": 1000.0,
+        "seconds_per_pass": 0.1,
+        "peak_allocated_mb": 64.0,
+        "peak_reserved_mb": 80.0,
+        "num_parameters": 1234,
+        "mae_e_mev_atom": 10.0,
+        "rmse_e_mev_atom": 20.0,
+        "mae_f_mev_a": 40.0,
+        "rmse_f_mev_a": 80.0,
+    }
+    teacher = dict(dft)
+    teacher["mae_f_mev_a"] = 39.0
+
+    row = make_student_row("rtece_edge_sketch8", dft_benchmark=dft, teacher_benchmark=teacher)
+
+    assert row["variant"] == "rtece_edge_sketch8"
+    assert row["atoms_per_second"] == 100000.0
+    assert row["dft_f_mae_mev_a"] == 40.0
+    assert row["teacher_f_mae_mev_a"] == 39.0
