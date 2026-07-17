@@ -261,6 +261,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-steps", type=int, default=1000)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--hidden-channels", default="64,64")
+    parser.add_argument("--num-radial", type=int, default=8)
     parser.add_argument("--energy-weight", type=float, default=1.0)
     parser.add_argument("--force-weight", type=float, default=10.0)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
@@ -279,6 +280,7 @@ def main() -> None:
     config = replace(
         build_rtece_config(args.variant),
         hidden_channels=parse_hidden_channels(args.hidden_channels),
+        num_radial=int(args.num_radial),
     )
     samples = load_samples(
         args.train_file,
@@ -322,6 +324,7 @@ def main() -> None:
             "valid_configs": len(valid_samples) if valid_samples is not None else 0,
             "energy_per_atom_shift": config.energy_per_atom_shift,
             "hidden_channels": list(config.hidden_channels),
+            "num_radial": config.num_radial,
             "energy_weight": args.energy_weight,
             "force_weight": args.force_weight,
             "device": str(device),

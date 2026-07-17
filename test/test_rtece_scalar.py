@@ -748,6 +748,20 @@ def test_rtece_benchmark_help_exposes_force_mode():
     assert "analytic_element_packed" in result.stdout
 
 
+def test_rtece_train_help_exposes_num_radial():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "benchmarks/oc20neb_tace_mace/train_rtece_scalar.py", "--help"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--num-radial" in result.stdout
+
+
 def test_summary_extracts_force_throughput_pareto_front():
     from benchmarks.oc20neb_tace_mace.summarize_tece_distill import pareto_front_rows
 
@@ -818,6 +832,15 @@ def test_rtece_matrix_sbatch_forwards_benchmark_force_mode():
 
     assert "FORCE_MODE=${FORCE_MODE:-autograd}" in script
     assert '--force-mode "${FORCE_MODE}"' in script
+
+
+def test_rtece_matrix_sbatch_forwards_num_radial():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
+
+    assert "NUM_RADIAL=${NUM_RADIAL:-8}" in script
+    assert '--num-radial "${NUM_RADIAL}"' in script
+
 
 def test_extxyz_index_supports_offset_windows():
     from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import extxyz_index
