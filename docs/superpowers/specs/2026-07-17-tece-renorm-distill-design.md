@@ -860,6 +860,27 @@ Stage-28 interpretation:
 - The next training-method priority is direct DFT-force validation selection or a reported best-of-N seed protocol for radial5. The next implementation priority is to make the fused descriptor path the default for eligible element-density benchmarks, then profile graph construction/neighbor-list overhead because the model force pass is now extremely fast.
 
 
+## Stage 29: Default Auto Evaluator And Graph-Construction Bottleneck
+
+Stage 29 integrated the fused element-density evaluator into the benchmark/profiler default path. The new `auto` force-mode selector resolves eligible CUDA/float32 scalar element-density models to `analytic_element_triton_descriptor_force`; other variants or devices remain on autograd unless a force mode is explicitly requested. The full rTECE scalar test file after the selector change: 39 passed.
+
+The same radial8/24x24 checkpoint was then benchmarked on the DFT valid `:1024` prefix, 59193 atoms, one V100. Both rows requested `--force-mode auto` and resolved to `analytic_element_triton_descriptor_force`.
+
+| mode | prebuilt graph | includes graph construction | atoms/s | configs/s | seconds/pass | DFT F MAE |
+|---|---:|---:|---:|---:|---:|---:|
+| auto fused evaluator | yes | no | 34203147 | 591692 | 0.001731 | 33.17 |
+| auto fused evaluator | no | yes | 8567 | 148 | 6.909510 | 33.17 |
+
+Profiler top CUDA events for the prebuilt graph path were `_element_density_descriptor_kernel` at 2747.9 us over five passes, `_element_density_force_kernel` at 1084.9 us, then the MLP/autograd head around 436.8 us for `aten::linear`/`addmm` and 382.7 us for `AddmmBackward0`/`aten::mm`.
+
+Stage-29 interpretation:
+
+- The fused evaluator is now the default implementation for the eligible element-density scalar TECE front, so future Pareto measurements no longer require hand-passing the new force mode.
+- Once the batched graph exists, the model pass is extremely fast and still TECE-clean: same descriptors, same scalar head, same conservative force, but hardware-realized with short edge-state lifetime.
+- End-to-end throughput through the current ASE-style path is dominated by graph construction and per-configuration execution. Including graph construction drops the same checkpoint from 34.2M atoms/s to 8.6k atoms/s on the 1024-config window.
+- The next clean priority is therefore not another radial/head sweep. It is batched graph construction, graph/neighbor cache reuse, or direct MD-runtime integration that keeps neighbor lists and edge buffers alive across steps. This is the next system-level renormalization axis required before claiming NEP/DPA-style throughput in an end-to-end setting.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

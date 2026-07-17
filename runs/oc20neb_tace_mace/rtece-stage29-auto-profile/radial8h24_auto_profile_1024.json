@@ -1,0 +1,192 @@
+{
+  "atoms": 59193,
+  "backend": "rtece_scalar",
+  "configs": 1024,
+  "configs_path": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "default_dtype": "float32",
+  "device": "cuda",
+  "force_mode": "analytic_element_triton_descriptor_force",
+  "model": "runs/oc20neb_tace_mace/rtece-scalar-678773/rtece_element_density/rtece_scalar_best.pt",
+  "num_parameters": 1057,
+  "profile_passes": 5,
+  "requested_force_mode": "auto",
+  "start_config": 0,
+  "top_ops": [
+    {
+      "count": 5,
+      "cpu_time_total_us": 0.0,
+      "device_time_total_us": 2747.8959999999997,
+      "name": "_element_density_descriptor_kernel",
+      "self_cpu_time_total_us": 0.0
+    },
+    {
+      "count": 5,
+      "cpu_time_total_us": 0.0,
+      "device_time_total_us": 1084.8600000000006,
+      "name": "_element_density_force_kernel",
+      "self_cpu_time_total_us": 0.0
+    },
+    {
+      "count": 15,
+      "cpu_time_total_us": 823.4550000000045,
+      "device_time_total_us": 436.8299999999972,
+      "name": "aten::linear",
+      "self_cpu_time_total_us": 28.990000000007058
+    },
+    {
+      "count": 15,
+      "cpu_time_total_us": 531.6509999999962,
+      "device_time_total_us": 436.8299999999972,
+      "name": "aten::addmm",
+      "self_cpu_time_total_us": 405.76099999999224
+    },
+    {
+      "count": 15,
+      "cpu_time_total_us": 509.20899999999347,
+      "device_time_total_us": 382.68700000000354,
+      "name": "autograd::engine::evaluate_function: AddmmBackward0",
+      "self_cpu_time_total_us": 80.85199999998622
+    },
+    {
+      "count": 15,
+      "cpu_time_total_us": 428.35700000000725,
+      "device_time_total_us": 382.68700000000354,
+      "name": "AddmmBackward0",
+      "self_cpu_time_total_us": 43.750000000010914
+    },
+    {
+      "count": 15,
+      "cpu_time_total_us": 339.33700000000135,
+      "device_time_total_us": 382.68700000000354,
+      "name": "aten::mm",
+      "self_cpu_time_total_us": 239.89600000000064
+    },
+    {
+      "count": 10,
+      "cpu_time_total_us": 0.0,
+      "device_time_total_us": 349.50400000000445,
+      "name": "void magma_sgemmEx_kernel<float, float, float, false, false, 6, 3, 5, 3, 3>(int, int, int, Tensor, int, Tensor, int, Tensor, int, Tensor, int, int, int, float const*, float const*, float, float, int, cublasLtEpilogue_t, int, void const*, long)",
+      "self_cpu_time_total_us": 0.0
+    },
+    {
+      "count": 10,
+      "cpu_time_total_us": 0.0,
+      "device_time_total_us": 347.0390000000025,
+      "name": "void magma_sgemmEx_kernel<float, float, float, true, false, 6, 4, 6, 3, 4>(int, int, int, Tensor, int, Tensor, int, Tensor, int, Tensor, int, int, int, float const*, float const*, float, float, int, cublasLtEpilogue_t, int, void const*, long)",
+      "self_cpu_time_total_us": 0.0
+    },
+    {
+      "count": 10,
+      "cpu_time_total_us": 223.54299999999785,
+      "device_time_total_us": 233.95099999999002,
+      "name": "autograd::engine::evaluate_function: SiluBackward0",
+      "self_cpu_time_total_us": 55.94999999999527
+    },
+    {
+      "count": 10,
+      "cpu_time_total_us": 167.59300000000258,
+      "device_time_total_us": 233.95099999999002,
+      "name": "SiluBackward0",
+      "self_cpu_time_total_us": 18.34100000000217
+    },
+    {
+      "count": 10,
+      "cpu_time_total_us": 149.2520000000004,
+      "device_time_total_us": 233.95099999999002,
+      "name": "aten::silu_backward",
+      "self_cpu_time_total_us": 91.19199999999546
+    },
+    {
+      "count": 10,
+      "cpu_time_total_us": 0.0,
+      "device_time_total_us": 233.95099999999002,
+      "name": "void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous namespace)::silu_backward_kernel(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float, float)#1}, std::array<char*, 3ul> >(int, at::native::(anonymous namespace)::silu_backward_kernel(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float, float)#1}, std::array<char*, 3ul>)",
+      "self_cpu_time_total_us": 0.0
+    },
+    {
+      "count": 5,
+      "cpu_time_total_us": 118.76200000000063,
+      "device_time_total_us": 120.00000000000273,
+      "name": "aten::cat",
+      "self_cpu_time_total_us": 84.96100000000024
+    },
+    {
+      "count": 5,
+      "cpu_time_total_us": 0.0,
+      "device_time_total_us": 120.00000000000273,
+      "name": "void at::native::(anonymous namespace)::CatArrayBatchedCopy_alignedK_contig<at::native::(anonymous namespace)::OpaqueType<4u>, unsigned int, 2, 128, 1, 16>(at::native::(anonymous namespace)::OpaqueType<4u>*, at::native::(anonymous namespace)::CatArrInputTensorMetadata<at::native::(anonymous namespace)::OpaqueType<4u>, unsigned int, 128, 1>, at::native::(anonymous namespace)::TensorSizeStride<unsigned int, 4u>, int, unsigned int)",
+      "self_cpu_time_total_us": 0.0
+    },
+    {
+      "count": 5,
+      "cpu_time_total_us": 1671.8949999999982,
+      "device_time_total_us": 110.68799999999919,
+      "name": "aten::max",
+      "self_cpu_time_total_us": 688.6299999999951
+    },
+    {
+      "count": 10,
+      "cpu_time_total_us": 145.68299999999545,
+      "device_time_total_us": 109.95199999999477,
+      "name": "aten::silu",
+      "self_cpu_time_total_us": 94.00199999999131
+    },
+    {
+      "count": 10,
+      "cpu_time_total_us": 0.0,
+      "device_time_total_us": 109.95199999999477,
+      "name": "void at::native::vectorized_elementwise_kernel<4, at::native::(anonymous namespace)::silu_kernel(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul> >(int, at::native::(anonymous namespace)::silu_kernel(at::TensorIteratorBase&)::{lambda()#1}::operator()() const::{lambda()#2}::operator()() const::{lambda(float)#1}, std::array<char*, 2ul>)",
+      "self_cpu_time_total_us": 0.0
+    },
+    {
+      "count": 10,
+      "cpu_time_total_us": 158.02399999999398,
+      "device_time_total_us": 102.43199999999524,
+      "name": "aten::index_add_",
+      "self_cpu_time_total_us": 99.72399999998743
+    },
+    {
+      "count": 10,
+      "cpu_time_total_us": 0.0,
+      "device_time_total_us": 102.43199999999524,
+      "name": "void at::native::indexFuncLargeIndex<float, long, unsigned int, 1, 1, -2, true, at::native::(anonymous namespace)::ReduceAdd>(at::cuda::detail::TensorInfo<float, unsigned int>, at::cuda::detail::TensorInfo<float const, unsigned int>, at::cuda::detail::TensorInfo<long const, unsigned int>, int, int, unsigned int, unsigned int, long, long, at::native::(anonymous namespace)::ReduceAdd const&, float)",
+      "self_cpu_time_total_us": 0.0
+    },
+    {
+      "count": 5,
+      "cpu_time_total_us": 0.0,
+      "device_time_total_us": 91.39199999999937,
+      "name": "void at::native::reduce_kernel<512, 1, at::native::ReduceOp<long, at::native::func_wrapper_t<long, at::native::MaxNanFunctor<long> >, unsigned int, long, 4, 4> >(at::native::ReduceOp<long, at::native::func_wrapper_t<long, at::native::MaxNanFunctor<long> >, unsigned int, long, 4, 4>)",
+      "self_cpu_time_total_us": 0.0
+    },
+    {
+      "count": 20,
+      "cpu_time_total_us": 1704.7689999999984,
+      "device_time_total_us": 88.92599999999766,
+      "name": "aten::copy_",
+      "self_cpu_time_total_us": 119.10199999998713
+    },
+    {
+      "count": 5,
+      "cpu_time_total_us": 0.0,
+      "device_time_total_us": 74.55899999999838,
+      "name": "volta_sgemm_128x32_tn",
+      "self_cpu_time_total_us": 0.0
+    },
+    {
+      "count": 15,
+      "cpu_time_total_us": 0.0,
+      "device_time_total_us": 73.88699999999153,
+      "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1} const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1}>(at::TensorIteratorBase&, at::native::direct_copy_kernel_cuda(at::TensorIteratorBase&)::{lambda()#3}::operator()() const::{lambda()#7}::operator()() const::{lambda(float)#1} const&)::{lambda(int)#1})",
+      "self_cpu_time_total_us": 0.0
+    },
+    {
+      "count": 30,
+      "cpu_time_total_us": 272.7240000000047,
+      "device_time_total_us": 66.33500000000186,
+      "name": "aten::fill_",
+      "self_cpu_time_total_us": 112.09099999999671
+    }
+  ],
+  "trace_output": "runs/oc20neb_tace_mace/rtece-stage29-auto-profile/radial8h24_auto_profile_1024_trace.json"
+}

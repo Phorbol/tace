@@ -1,0 +1,40 @@
+{
+  "atoms": 59193,
+  "atoms_per_second": 34203147.088860296,
+  "backend": "rtece_scalar",
+  "configs": 1024,
+  "configs_path": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "configs_per_second": 591691.9672764168,
+  "default_dtype": "float32",
+  "device": "cuda",
+  "extxyz_index": ":1024",
+  "force_mode": "analytic_element_triton_descriptor_force",
+  "hidden_channels": [
+    24,
+    24
+  ],
+  "includes_graph_construction": false,
+  "mae_e_mev_atom": 1638.3741754051728,
+  "mae_f_mev_a": 33.16870757177314,
+  "measure_passes": 5,
+  "model": "runs/oc20neb_tace_mace/rtece-scalar-678773/rtece_element_density/rtece_scalar_best.pt",
+  "model_class": "RTECEScalarModel",
+  "num_parameters": 1057,
+  "num_radial": 8,
+  "pass_times_s": [
+    0.002657799981534481,
+    0.001532064052298665,
+    0.0015056019183248281,
+    0.001461853040382266,
+    0.0014958321116864681
+  ],
+  "peak_allocated_mb": 63.22314453125,
+  "peak_reserved_mb": 124.0,
+  "prebuilt_batched_graph": true,
+  "requested_force_mode": "auto",
+  "rmse_e_mev_atom": 1926.1596784226729,
+  "rmse_f_mev_a": 109.3659605152286,
+  "seconds_per_pass": 0.0017306302208453417,
+  "start_config": 0,
+  "variant": "rtece_element_density"
+}
