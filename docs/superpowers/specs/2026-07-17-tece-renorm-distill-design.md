@@ -361,8 +361,9 @@ Stage-11 interpretation:
 
 - This is the first closed-loop rTECE point that satisfies the original throughput target: a TECE-grounded scalar-renormalized model reaches >1e7 atoms/s on one V100 while preserving conservative forces.
 - The current Pareto anchor is `rtece_pair` with fitted per-atom energy shift, best-validation checkpoint from job 678603, analytic pair force path, and prebuilt graph benchmark: 14.4-16.5M atoms/s with about 48-51 meV/A DFT force MAE depending on benchmark subset.
+- A force-mode-aware summary row now records the 4096-config analytic benchmark as 16.09M atoms/s, 47.93 meV/A DFT force MAE, and 51.22 meV/A teacher force MAE.
 - The result supports the document hypothesis that the key bottleneck was not only representation dimension, but the lifetime of high-rank/autograd state in the force path. Early scalarization plus analytic/fused force propagation is the clean route toward NEP/DPA-class throughput inside the TECE framework.
-- Next priority: make the analytic path production-safe by adding a benchmark summary row and explicit `force_mode` tracking in Pareto summaries, then explore analytic/fused extensions only after pair is fully characterized. Edge sketches remain lower priority because they were accuracy-neutral and throughput-dominated before force-path optimization.
+- Next priority: characterize robustness/transfer of the analytic pair point, then explore analytic/fused extensions only after pair is fully characterized. Edge sketches remain lower priority because they were accuracy-neutral and throughput-dominated before force-path optimization.
 
 ## Stage Review Rule
 
