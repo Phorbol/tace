@@ -823,17 +823,30 @@ def test_batched_graph_construction_requires_graph_construction_timing():
         include_graph_construction=True,
         batch_graph_construction=True,
         replay_cached_graph=False,
+        trajectory_replay_steps=0,
+        trajectory_rebuild_interval=0,
     )
     validate_graph_construction_args(
         include_graph_construction=False,
         batch_graph_construction=False,
         replay_cached_graph=True,
+        trajectory_replay_steps=0,
+        trajectory_rebuild_interval=0,
+    )
+    validate_graph_construction_args(
+        include_graph_construction=False,
+        batch_graph_construction=False,
+        replay_cached_graph=False,
+        trajectory_replay_steps=4,
+        trajectory_rebuild_interval=2,
     )
     try:
         validate_graph_construction_args(
             include_graph_construction=False,
             batch_graph_construction=True,
             replay_cached_graph=False,
+            trajectory_replay_steps=0,
+            trajectory_rebuild_interval=0,
         )
     except ValueError as exc:
         assert "--include-graph-construction" in str(exc)
@@ -844,11 +857,57 @@ def test_batched_graph_construction_requires_graph_construction_timing():
             include_graph_construction=True,
             batch_graph_construction=False,
             replay_cached_graph=True,
+            trajectory_replay_steps=0,
+            trajectory_rebuild_interval=0,
         )
     except ValueError as exc:
         assert "--replay-cached-graph" in str(exc)
     else:
         raise AssertionError("cached graph replay should be separate from graph-construction timing")
+    try:
+        validate_graph_construction_args(
+            include_graph_construction=False,
+            batch_graph_construction=False,
+            replay_cached_graph=True,
+            trajectory_replay_steps=4,
+            trajectory_rebuild_interval=0,
+        )
+    except ValueError as exc:
+        assert "--trajectory-replay-steps" in str(exc)
+    else:
+        raise AssertionError("trajectory replay should be separate from cached graph replay")
+    try:
+        validate_graph_construction_args(
+            include_graph_construction=False,
+            batch_graph_construction=False,
+            replay_cached_graph=False,
+            trajectory_replay_steps=0,
+            trajectory_rebuild_interval=2,
+        )
+    except ValueError as exc:
+        assert "--trajectory-rebuild-interval" in str(exc)
+    else:
+        raise AssertionError("trajectory rebuild interval should require trajectory replay")
+
+
+def test_synthetic_trajectory_positions_keep_initial_frame_exact():
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import synthetic_trajectory_positions
+
+    base = torch.tensor(
+        [[0.0, 0.1, 0.2], [1.0, 1.1, 1.2], [2.0, 2.1, 2.2]],
+        dtype=torch.float64,
+    )
+
+    first = synthetic_trajectory_positions(base, step=0, displacement_std=0.05)
+    moved = synthetic_trajectory_positions(base, step=1, displacement_std=0.05)
+    static = synthetic_trajectory_positions(base, step=3, displacement_std=0.0)
+
+    assert torch.equal(first, base)
+    assert torch.equal(static, base)
+    assert moved.shape == base.shape
+    assert moved.dtype == base.dtype
+    assert moved.device == base.device
+    assert not torch.equal(moved, base)
 
 
 def test_rtece_benchmark_help_exposes_force_mode():
@@ -865,6 +924,9 @@ def test_rtece_benchmark_help_exposes_force_mode():
     assert "--force-mode" in result.stdout
     assert "--batch-graph-construction" in result.stdout
     assert "--replay-cached-graph" in result.stdout
+    assert "--trajectory-replay-steps" in result.stdout
+    assert "--trajectory-rebuild-interval" in result.stdout
+    assert "--trajectory-displacement-std" in result.stdout
     assert "auto" in result.stdout
     assert "analytic_pair" in result.stdout
     assert "analytic_pair_triton_force" in result.stdout
