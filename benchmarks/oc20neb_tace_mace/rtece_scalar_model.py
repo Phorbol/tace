@@ -13,6 +13,7 @@ class RTECEScalarConfig:
     num_radial: int = 8
     hidden_channels: tuple[int, ...] = (64, 64)
     max_atomic_number: int = 100
+    use_density_quadratic: bool = False
     use_atomic_moments: bool = False
     num_edge_sketches: int = 0
     energy_per_atom_shift: float = 0.0
@@ -21,6 +22,8 @@ class RTECEScalarConfig:
 def build_rtece_config(variant: str) -> RTECEScalarConfig:
     if variant == "rtece_pair":
         return RTECEScalarConfig(variant=variant)
+    if variant == "rtece_density_quadratic":
+        return RTECEScalarConfig(variant=variant, use_density_quadratic=True)
     if variant == "rtece_atomic_moments":
         return RTECEScalarConfig(variant=variant, use_atomic_moments=True)
     if variant == "rtece_edge_sketch8":
@@ -32,6 +35,8 @@ def build_rtece_config(variant: str) -> RTECEScalarConfig:
 
 def descriptor_dim(config: RTECEScalarConfig) -> int:
     dim = config.num_radial
+    if config.use_density_quadratic:
+        dim += config.num_radial
     if config.use_atomic_moments:
         dim += 2 * config.num_radial
     dim += config.num_edge_sketches
@@ -140,14 +145,21 @@ def compute_atomic_moments(graph: RTECEGraph, config: RTECEScalarConfig) -> dict
     return {"density": density, "vector": vector, "quadrupole": quadrupole}
 
 
+def density_scalar_descriptors(density: torch.Tensor, config: RTECEScalarConfig) -> torch.Tensor:
+    if config.use_density_quadratic:
+        return torch.cat([density, density.square()], dim=-1)
+    return density
+
+
 def atomic_scalar_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
     moments = compute_atomic_moments(graph, config)
     density = moments["density"]
+    density_desc = density_scalar_descriptors(density, config)
     if not config.use_atomic_moments:
-        return density
+        return density_desc
     vector_norm = (moments["vector"] ** 2).sum(dim=-1)
     quadrupole_norm = (moments["quadrupole"] ** 2).sum(dim=(-1, -2))
-    return torch.cat([density, vector_norm, quadrupole_norm], dim=-1)
+    return torch.cat([density_desc, vector_norm, quadrupole_norm], dim=-1)
 
 
 
@@ -204,9 +216,9 @@ class RTECEScalarModel(torch.nn.Module):
         layers.append(torch.nn.Linear(prev, 1))
         self.energy_head = torch.nn.Sequential(*layers)
 
-    def forward_pair_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+    def forward_density_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
         if self.config.use_atomic_moments or self.config.num_edge_sketches:
-            raise ValueError("forward_pair_analytic_forces only supports rtece_pair descriptors")
+            raise ValueError("forward_density_analytic_forces only supports density-only descriptors")
         pos = graph.pos
         src, dst = graph.edge_index
         num_nodes = graph.z.shape[0]
@@ -217,10 +229,11 @@ class RTECEScalarModel(torch.nn.Module):
         unit = vectors / distances[:, None]
         radial, radial_derivative = radial_features_and_derivatives(distances, self.config)
         density = scatter_sum(radial.detach(), dst, num_nodes).requires_grad_(True)
+        descriptors = density_scalar_descriptors(density, self.config)
 
         z_scaled = graph.z.to(dtype=pos.dtype, device=pos.device).view(-1, 1)
         z_scaled = z_scaled / float(self.config.max_atomic_number)
-        atomic_energy = self.energy_head(torch.cat([z_scaled, density], dim=-1)).squeeze(-1)
+        atomic_energy = self.energy_head(torch.cat([z_scaled, descriptors], dim=-1)).squeeze(-1)
         energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
         if self.config.energy_per_atom_shift:
             atom_counts = scatter_sum(
@@ -243,6 +256,11 @@ class RTECEScalarModel(torch.nn.Module):
         grad_pos.index_add_(0, src, -grad_vectors)
         forces = -grad_pos
         return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
+
+    def forward_pair_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+        if self.config.use_density_quadratic:
+            raise ValueError("forward_pair_analytic_forces only supports pure rtece_pair descriptors")
+        return self.forward_density_analytic_forces(graph)
 
     def forward(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
         pos = graph.pos

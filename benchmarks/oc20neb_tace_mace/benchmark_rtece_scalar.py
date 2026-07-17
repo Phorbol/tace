@@ -35,7 +35,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start-config", type=int, default=0)
     parser.add_argument("--limit-configs", type=int, default=128)
     parser.add_argument("--measure-passes", type=int, default=3)
-    parser.add_argument("--force-mode", choices=("autograd", "analytic_pair"), default="autograd")
+    parser.add_argument(
+        "--force-mode",
+        choices=("autograd", "analytic_pair", "analytic_density"),
+        default="autograd",
+    )
     parser.add_argument(
         "--include-graph-construction",
         action="store_true",
@@ -96,6 +100,8 @@ def main() -> None:
     def run_model(graph):
         if args.force_mode == "analytic_pair":
             return model.forward_pair_analytic_forces(graph)
+        if args.force_mode == "analytic_density":
+            return model.forward_density_analytic_forces(graph)
         return model(graph)
 
     def forward_once(collect: bool):
