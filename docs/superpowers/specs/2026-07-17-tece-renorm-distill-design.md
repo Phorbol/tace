@@ -481,6 +481,45 @@ Stage-15 interpretation:
 - The next architecture step should not be another density polynomial. If an intermediate point is needed, it should add genuinely new geometric information with a planned analytic/fused force path, such as a carefully selected low-order moment norm or a teacher-conditioned scalar sketch, and must be tested first as a small isolated variant.
 - Until that exists, the cleanest deliverable is the pair Pareto front: 32x32/force30 for maximum throughput and 64x64/force30 for lower force MAE.
 
+## Stage 16 Smoke: Element-Conditioned Radial Density
+
+Stage 15 showed that simply increasing scalar polynomial order with `rho_n^2` is dominated. Stage 16 therefore tested a more TECE-semantic descriptor: `rtece_element_density` augments the pure pair density `sum_j R_n(r_ij)` with neighbor-element-conditioned radial density `sum_j (z_j / z_max) R_n(r_ij)`. This restores one deleted chemistry/radial semantic group while still deleting persistent angular state, edge sketches, vector/quadrupole moments, and full force autograd. The force path remains analytic-density: the extra chain-rule term is the same radial derivative weighted by neighbor element.
+
+Implementation gate:
+
+- `RTECEScalarConfig` now has `use_element_density`.
+- `build_rtece_config("rtece_element_density")` creates the new ordered variant.
+- Scalar descriptors are rotation invariant but sensitive to neighbor element changes.
+- `forward_density_analytic_forces` matches full autograd forces for element-density descriptors.
+- Full rTECE test file after the change: 27 passed.
+
+4096-config prefix comparison against the Stage-14/15 front, all with mixed labels and force weight 30:
+
+| job | variant | hidden | params | atoms/s | DFT F MAE | teacher F MAE | DFT E MAE | force mode | interpretation |
+|---:|---|---|---:|---:|---:|---:|---:|---|---|
+| 678682 | `rtece_pair` | 32x32 | 1409 | 18622904 | 39.42 | 43.14 | 1407.1 | analytic_pair | high-throughput pair point |
+| 678671 | `rtece_pair` | 64x64 | 4865 | 16230621 | 36.13 | 40.69 | 1410.6 | analytic_pair | lower-error pair point |
+| 678749 | `rtece_element_density` | 32x32 | 1665 | 14696599 | 28.14 | 33.93 | 1409.4 | analytic_density | new lower-error rTECE Pareto point |
+| 678750 | `rtece_element_density` | 64x64 | 5377 | 13057248 | 35.11 | 39.86 | 1408.6 | analytic_density | dominated by element-density 32x32 |
+| 678709 | `rtece_density_quadratic` | 32x32 | 1665 | 12100417 | 46.39 | 49.33 | 1395.7 | analytic_density | dominated negative result |
+
+Offset-window robustness for the new 32x32 element-density point:
+
+| job | extxyz index | configs | atoms/s | DFT F MAE | DFT F RMSE | DFT E MAE | interpretation |
+|---:|---|---:|---:|---:|---:|---:|---|
+| 678749 | `:4096` | 4096 | 14696599 | 28.14 | 109.93 | 1409.4 | prefix benchmark |
+| 678757 | `4096:8192` | 4096 | 14729932 | 30.75 | 117.55 | 1495.2 | same throughput class and stable force-error regime |
+| 678759 | `8192:12288` | 1808 | 13884471 | 31.18 | 116.16 | 1353.0 | shorter tail window but still stable |
+
+Stage-16 interpretation:
+
+- This is the first positive architecture expansion beyond pure pair. It is not a generic parameter tweak: it restores neighbor chemistry in the radial density while staying inside the early-scalarized TECE/TACE degradation route.
+- The new Pareto front now has three rTECE scalar points: pair-32 for maximum throughput, pair-64 for intermediate error/throughput, and element-density-32 for substantially lower force error at still >1e7 atoms/s.
+- The contrast with Stage 15 is important. A naive scalar polynomial with the same descriptor dimensionality as element-density was slower and worse; the useful axis is TECE semantic content, not descriptor count.
+- The 64x64 element-density result is dominated, so the next architecture step should use 32x32/force30 first. Wider MLPs are lower priority unless a descriptor proves bottlenecked by readout capacity.
+- Next priority: add the cheapest geometric scalar carrying genuinely new information with an analytic force path, most likely vector moment norm before quadrupole norm or edge sketches. If that is dominated, freeze the rTECE scalar Pareto front and move to kernel fusion/export around pair and element-density.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
