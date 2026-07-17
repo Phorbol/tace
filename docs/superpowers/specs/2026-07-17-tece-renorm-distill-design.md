@@ -281,6 +281,23 @@ Stage-7 interpretation:
 - Longer training without checkpoint selection is not reliable: 5000 steps is worse than 2000, and high LR degrades badly.
 - Next priority is not more blind training. Add validation/best-checkpoint support and then rerun `rtece_pair` with LR=1e-4, saving the best model by validation force loss.
 
+
+## Stage 8 Smoke: rTECE Pair Best-Validation Checkpoint
+
+Stage 7 showed that the final checkpoint can be worse than an earlier model. Stage 8 added validation-loss checkpoint selection and reran `rtece_pair` with LR=1e-4, 512 train configs, 64 DFT validation configs, 5000 max steps, and evaluation every 100 steps.
+
+| job | checkpoint rule | best step | atoms/s | peak alloc MB | DFT F MAE | teacher F MAE | DFT E MAE | interpretation |
+|---:|---|---:|---:|---:|---:|---:|---:|---|
+| 678588 | last step | 5000 | 6777603 | 718.8 | 81.78 | 84.03 | 1659.5 | last checkpoint degrades |
+| 678597 | best validation loss | 200 | 6814191 | 718.8 | 56.59 | 60.12 | 1612.1 | current best rTECE point |
+
+Stage-8 interpretation:
+
+- Best-validation checkpointing is necessary for this low-capacity residual scalar model. The useful model appears early; later optimization can reduce the instantaneous training sample loss while degrading validation force MAE.
+- The current best point is `rtece_pair`, best-step 200: 6.81M atoms/s, 718.8 MB peak allocation on 1024-config prebuilt V100 benchmark, 56.59 meV/A DFT force MAE.
+- This is still not the final target of >1e7 atoms step/s, but it establishes a quantitative T3 Pareto anchor that compact TACE could not reach.
+- Next priority: refine early checkpoint resolution (`eval_interval` 20-50) and benchmark batch scaling; do not add heavier edge sketches until pair has been fully characterized.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
