@@ -390,6 +390,42 @@ Stage-12 interpretation:
 - The result strengthens the TECE/TACE document hypothesis: the decisive simplification is progressive deletion of persistent high-rank equivariant state plus analytic/fused force propagation, not another small parameter sweep of the original architecture.
 - Next priority: produce a more systematic Pareto surface around this endpoint by varying only theoretically ordered rTECE axes: validation/training label mix and capacity at fixed scalarized pair physics first, then analytic/fused low-order descriptors if they provide measured force-error reduction without destroying the >1e7 atoms/s regime.
 
+## Stage 13 Smoke: rTECE Pair Training-Axis Pareto Sweep
+
+Stage 12 established that the analytic `rtece_pair` endpoint is robust across valid-file windows. Stage 13 therefore stayed on the same TECE/TACE projection, rather than adding richer descriptors, and varied only ordered training/capacity axes inside the scalarized pair model. This separates projection error from train/distillation error while preserving the high-throughput execution path.
+
+Implementation gate:
+
+- `train_rtece_scalar.py` now exposes `--hidden-channels`, `--energy-weight`, and `--force-weight`, and records them in `train_summary.json`.
+- `rtece_scalar_matrix.sbatch` forwards these axes and `FORCE_MODE`, and separates `TRAIN_VALID_FILE` from DFT/teacher benchmark validation files. This allows teacher-only training while still evaluating against DFT and teacher validation.
+- Full rTECE test file after the change: 22 passed.
+
+4096-config prefix benchmark comparison, all using `rtece_pair` and analytic-pair force mode:
+
+| job | hidden | train labels | force weight | params | atoms/s | DFT F MAE | teacher F MAE | DFT E MAE | interpretation |
+|---:|---|---|---:|---:|---:|---:|---:|---:|---|
+| 678603/678636 | 64x64 | mixed tw0.75 | 10 | 4865 | 16091763 | 47.93 | 51.22 | 1408.5 | Stage-11 baseline |
+| 678668 | 128x64 | mixed tw0.75 | 10 | 9601 | 15370207 | 54.22 | 57.01 | 1410.0 | larger head is slower and less accurate in this run |
+| 678669 | 64x64 | teacher-only | 10 | 4865 | 16064967 | 43.89 | 47.37 | 1404.5 | teacher labels help versus mixed baseline |
+| 678670 | 32x32 | mixed tw0.75 | 10 | 1409 | 18628337 | 44.30 | 47.49 | 1408.5 | new maximum-throughput point with modest error cost |
+| 678671 | 64x64 | mixed tw0.75 | 30 | 4865 | 16230938 | 36.13 | 40.69 | 1410.6 | new best error/throughput point in the T3/T4 branch |
+
+Offset-window robustness for the new force-weight-30 checkpoint:
+
+| job | extxyz index | configs | atoms/s | DFT F MAE | DFT F RMSE | DFT E MAE | interpretation |
+|---:|---|---:|---:|---:|---:|---:|---|
+| 678671 | `:4096` | 4096 | 16230938 | 36.13 | 117.60 | 1410.6 | prefix benchmark |
+| 678673 | `4096:8192` | 4096 | 16158452 | 40.83 | 129.30 | 1492.4 | same high-throughput class, still better than Stage-11 baseline |
+| 678675 | `8192:12288` | 1808 | 15423347 | 38.75 | 126.48 | 1352.6 | shorter tail window but stable force-error regime |
+
+Stage-13 interpretation:
+
+- The most important result is methodological: within the same scalarized TECE projection, changing the force loss weight gives a large force-error improvement without sacrificing the >1e7 atoms/s regime. This means the previous 48-51 meV/A point was not purely projection-limited.
+- The current best balanced endpoint is `rtece_pair`, 64x64 scalar head, mixed labels, `force_weight=30`, analytic-pair force path: about 15.4-16.2M atoms/s and 36-41 meV/A DFT force MAE across valid windows.
+- The current maximum-throughput endpoint is `rtece_pair`, 32x32 scalar head, mixed labels, `force_weight=10`: 18.63M atoms/s with 44.30 meV/A DFT force MAE on the 4096-config prefix benchmark. This is a genuine second Pareto point, not only a parameter-count reduction.
+- Teacher-only labels improve over the mixed baseline at the same architecture, so the next label-axis test should compare teacher-only plus `force_weight=30` and possibly mixed tw values after regenerating label mixes.
+- Larger head capacity is not automatically useful; 128x64 is slower and worse here. The next architecture expansion should not be a blind MLP width increase. It should be a TECE-ordered descriptor addition with analytic/fused force path, after the pair branch's label/loss axes plateau.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
