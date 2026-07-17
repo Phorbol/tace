@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 
 import torch
 
@@ -98,3 +99,42 @@ def atomic_scalar_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> t
     vector_norm = (moments["vector"] ** 2).sum(dim=-1)
     quadrupole_norm = (moments["quadrupole"] ** 2).sum(dim=(-1, -2))
     return torch.cat([density, vector_norm, quadrupole_norm], dim=-1)
+
+
+
+def edge_relational_sketches(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
+    if config.num_edge_sketches <= 0:
+        return graph.pos.new_zeros((graph.z.shape[0], 0))
+
+    _, distances, unit = compute_pair_geometry(graph)
+    radial = compute_radial_features(distances, config)
+    moments = compute_atomic_moments(graph, config)
+    src, dst = graph.edge_index
+    vi = moments["vector"][dst].mean(dim=1)
+    vj = moments["vector"][src].mean(dim=1)
+    qi = moments["quadrupole"][dst].mean(dim=1)
+    qj = moments["quadrupole"][src].mean(dim=1)
+    base = torch.stack(
+        [
+            (vi * vj).sum(dim=-1),
+            (qi * qj).sum(dim=(-1, -2)),
+            (unit * vi).sum(dim=-1),
+            (unit * vj).sum(dim=-1),
+            torch.einsum("bi,bij,bj->b", unit, qi, unit),
+            torch.einsum("bi,bij,bj->b", unit, qj, unit),
+            radial[:, 0],
+            radial[:, min(1, radial.shape[1] - 1)],
+        ],
+        dim=-1,
+    )
+    if config.num_edge_sketches > base.shape[1]:
+        repeats = math.ceil(config.num_edge_sketches / base.shape[1])
+        base = base.repeat(1, repeats)
+    edge_values = base[:, : config.num_edge_sketches] * cutoff_envelope(distances, config.cutoff)[:, None]
+    return scatter_sum(edge_values, dst, graph.z.shape[0])
+
+
+def rtece_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
+    atomic = atomic_scalar_descriptors(graph, config)
+    sketches = edge_relational_sketches(graph, config)
+    return torch.cat([atomic, sketches], dim=-1)

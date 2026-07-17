@@ -9,6 +9,8 @@ from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
     atomic_scalar_descriptors,
     build_rtece_config,
     descriptor_dim,
+    edge_relational_sketches,
+    rtece_descriptors,
 )
 
 
@@ -66,3 +68,36 @@ def test_atomic_scalar_descriptors_are_rotation_invariant():
     desc_rot = atomic_scalar_descriptors(rotated, config)
 
     assert torch.allclose(desc, desc_rot, atol=1e-10, rtol=1e-10)
+
+
+
+def test_edge_relational_sketches_are_rotation_invariant():
+    config = build_rtece_config("rtece_edge_sketch8")
+    z = torch.tensor([6, 8, 1, 1], dtype=torch.long)
+    pos = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [0.7, 0.2, 0.1],
+            [-0.3, 0.6, -0.2],
+            [0.4, -0.5, 0.3],
+        ],
+        dtype=torch.float64,
+    )
+    edge_index = complete_directed_edges(4)
+    batch = torch.zeros(4, dtype=torch.long)
+    graph = RTECEGraph(z=z, pos=pos, edge_index=edge_index, batch=batch)
+    rotated = RTECEGraph(
+        z=z,
+        pos=pos @ rotation_z(1.11).T,
+        edge_index=edge_index,
+        batch=batch,
+    )
+
+    sketches = edge_relational_sketches(graph, config)
+    sketches_rot = edge_relational_sketches(rotated, config)
+    full = rtece_descriptors(graph, config)
+    full_rot = rtece_descriptors(rotated, config)
+
+    assert sketches.shape == (4, config.num_edge_sketches)
+    assert torch.allclose(sketches, sketches_rot, atol=1e-10, rtol=1e-10)
+    assert torch.allclose(full, full_rot, atol=1e-10, rtol=1e-10)
