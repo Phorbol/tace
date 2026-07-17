@@ -461,6 +461,14 @@ def test_rtece_benchmark_row_preserves_force_mode():
     assert row["force_mode"] == "analytic_pair"
 
 
+def test_rtece_matrix_sbatch_separates_training_and_benchmark_validation_files():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
+
+    assert "TRAIN_VALID_FILE=${TRAIN_VALID_FILE:-${DFT_VALID_FILE}}" in script
+    assert '--valid-file "${TRAIN_VALID_FILE}"' in script
+    assert '--configs "${DFT_VALID_FILE}"' in script
+
 def test_rtece_matrix_sbatch_forwards_benchmark_force_mode():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()

@@ -19,6 +19,7 @@ TACE_PYTHON=${TACE_PYTHON:-${ENV_DIR}/bin/python}
 RUN_ROOT=${RUN_ROOT:-${TACE_ROOT}/runs/oc20neb_tace_mace/rtece-scalar-${SLURM_JOB_ID}}
 TRAIN_FILE=${TRAIN_FILE:-${TACE_ROOT}/runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz}
 DFT_VALID_FILE=${DFT_VALID_FILE:-/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz}
+TRAIN_VALID_FILE=${TRAIN_VALID_FILE:-${DFT_VALID_FILE}}
 TEACHER_VALID_FILE=${TEACHER_VALID_FILE:-${TACE_ROOT}/runs/oc20neb_tace_mace/tece-distill-20260717/teacher_valid.extxyz}
 VARIANTS=${VARIANTS:-rtece_pair rtece_atomic_moments rtece_edge_sketch8}
 LIMIT_CONFIGS=${LIMIT_CONFIGS:-128}
@@ -44,6 +45,10 @@ export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 
 echo "host=$(hostname)"
 echo "run_root=${RUN_ROOT}"
+echo "train_file=${TRAIN_FILE}"
+echo "train_valid_file=${TRAIN_VALID_FILE}"
+echo "dft_valid_file=${DFT_VALID_FILE}"
+echo "teacher_valid_file=${TEACHER_VALID_FILE}"
 echo "hidden_channels=${HIDDEN_CHANNELS}"
 echo "energy_weight=${ENERGY_WEIGHT}"
 echo "force_weight=${FORCE_WEIGHT}"
@@ -63,7 +68,7 @@ for variant in "${variant_args[@]}"; do
   "${TACE_PYTHON}" "${TACE_ROOT}/benchmarks/oc20neb_tace_mace/train_rtece_scalar.py" \
     --variant "${variant}" \
     --train-file "${TRAIN_FILE}" \
-    --valid-file "${DFT_VALID_FILE}" \
+    --valid-file "${TRAIN_VALID_FILE}" \
     --output-dir "${out_dir}" \
     --limit-configs "${LIMIT_CONFIGS}" \
     --valid-limit-configs "${VALID_LIMIT_CONFIGS}" \
