@@ -1,0 +1,11 @@
+{
+  "checkpoint": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-scalar-678575/rtece_atomic_moments/rtece_scalar.pt",
+  "default_dtype": "float32",
+  "device": "cuda",
+  "final_loss": 2.8838372230529785,
+  "steps": 100,
+  "train_configs": 64,
+  "train_file": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz",
+  "valid_file": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "variant": "rtece_atomic_moments"
+}

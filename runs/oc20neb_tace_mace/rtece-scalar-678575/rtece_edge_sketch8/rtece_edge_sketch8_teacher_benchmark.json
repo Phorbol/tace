@@ -1,0 +1,31 @@
+{
+  "atoms": 12770,
+  "atoms_per_second": 648754.9615077433,
+  "backend": "rtece_scalar",
+  "configs": 256,
+  "configs_path": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/tece-distill-20260717/teacher_valid.extxyz",
+  "configs_per_second": 13005.581060766037,
+  "default_dtype": "float32",
+  "device": "cuda",
+  "includes_graph_construction": false,
+  "mae_e_mev_atom": 1326.7090301809812,
+  "mae_f_mev_a": 322.93609858851687,
+  "measure_passes": 5,
+  "model": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-scalar-678575/rtece_edge_sketch8/rtece_scalar.pt",
+  "model_class": "RTECEScalarModel",
+  "num_parameters": 6401,
+  "pass_times_s": [
+    0.019992789020761847,
+    0.01952318986877799,
+    0.01977226510643959,
+    0.01964025292545557,
+    0.019490788923576474
+  ],
+  "peak_allocated_mb": 686.99951171875,
+  "peak_reserved_mb": 776.0,
+  "prebuilt_batched_graph": true,
+  "rmse_e_mev_atom": 1653.237239967701,
+  "rmse_f_mev_a": 465.70789113138983,
+  "seconds_per_pass": 0.019683857169002294,
+  "variant": "rtece_edge_sketch8"
+}
