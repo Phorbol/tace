@@ -171,6 +171,8 @@ def main() -> None:
         "default_dtype": args.default_dtype,
         "model_class": model.__class__.__name__,
         "force_mode": args.force_mode,
+        "hidden_channels": list(model.config.hidden_channels),
+        "num_radial": int(model.config.num_radial),
         "num_parameters": int(sum(p.numel() for p in model.parameters())),
         "includes_graph_construction": bool(args.include_graph_construction),
         "prebuilt_batched_graph": prebuilt_graph is not None,

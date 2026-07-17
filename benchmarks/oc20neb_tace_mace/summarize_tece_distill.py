@@ -24,6 +24,8 @@ def make_student_row(
         "atoms_per_second": dft_benchmark.get("atoms_per_second"),
         "configs_per_second": dft_benchmark.get("configs_per_second"),
         "force_mode": dft_benchmark.get("force_mode", "autograd"),
+        "hidden_channels": dft_benchmark.get("hidden_channels"),
+        "num_radial": dft_benchmark.get("num_radial"),
         "seconds_per_pass": dft_benchmark.get("seconds_per_pass"),
         "peak_allocated_mb": dft_benchmark.get("peak_allocated_mb"),
         "peak_reserved_mb": dft_benchmark.get("peak_reserved_mb"),

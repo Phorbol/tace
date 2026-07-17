@@ -800,6 +800,8 @@ def test_rtece_benchmark_row_preserves_force_mode():
     dft = {
         "model": "rtece_scalar.pt",
         "force_mode": "analytic_pair",
+        "hidden_channels": [16, 16],
+        "num_radial": 4,
         "atoms_per_second": 100000.0,
         "configs_per_second": 1000.0,
         "seconds_per_pass": 0.1,
@@ -816,6 +818,8 @@ def test_rtece_benchmark_row_preserves_force_mode():
     row = make_student_row("rtece_pair", dft_benchmark=dft, teacher_benchmark=teacher)
 
     assert row["force_mode"] == "analytic_pair"
+    assert row["hidden_channels"] == [16, 16]
+    assert row["num_radial"] == 4
 
 
 def test_rtece_matrix_sbatch_separates_training_and_benchmark_validation_files():
