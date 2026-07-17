@@ -508,6 +508,19 @@ def test_rtece_benchmark_help_exposes_force_mode():
     assert "analytic_density" in result.stdout
 
 
+def test_summary_extracts_force_throughput_pareto_front():
+    from benchmarks.oc20neb_tace_mace.summarize_tece_distill import pareto_front_rows
+
+    rows = [
+        {"variant": "fast", "atoms_per_second": 18.0, "dft_f_mae_mev_a": 42.0},
+        {"variant": "accurate", "atoms_per_second": 16.0, "dft_f_mae_mev_a": 36.0},
+        {"variant": "dominated", "atoms_per_second": 12.0, "dft_f_mae_mev_a": 46.0},
+        {"variant": "missing", "atoms_per_second": None, "dft_f_mae_mev_a": 10.0},
+    ]
+
+    front = pareto_front_rows(rows, error_key="dft_f_mae_mev_a")
+
+    assert [row["variant"] for row in front] == ["fast", "accurate"]
 
 def test_rtece_benchmark_row_preserves_force_mode():
     from benchmarks.oc20neb_tace_mace.summarize_tece_distill import make_student_row

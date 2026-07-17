@@ -1,5 +1,39 @@
 {
   "baselines": [],
+  "dft_force_pareto_front": [
+    {
+      "atoms_per_second": 18622904.49947055,
+      "configs_per_second": 304685.0145985955,
+      "dft_benchmark": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-scalar-678682/rtece_pair/rtece_scalar_best.pt",
+      "dft_e_mae_mev_atom": 1407.1227486172215,
+      "dft_f_mae_mev_a": 39.42031394293003,
+      "force_mode": "analytic_pair",
+      "num_parameters": 1409,
+      "peak_allocated_mb": 1405.40673828125,
+      "peak_reserved_mb": 1716.0,
+      "seconds_per_pass": 0.013443391711916775,
+      "teacher_benchmark": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-scalar-678682/rtece_pair/rtece_scalar_best.pt",
+      "teacher_e_mae_mev_atom": 1402.619052483937,
+      "teacher_f_mae_mev_a": 43.1419156191114,
+      "variant": "rtece_pair_32x32_force30_mixed"
+    },
+    {
+      "atoms_per_second": 16230621.22239118,
+      "configs_per_second": 265545.4236061364,
+      "dft_benchmark": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-scalar-678671/rtece_pair/rtece_scalar_best.pt",
+      "dft_e_mae_mev_atom": 1410.5560588095589,
+      "dft_f_mae_mev_a": 36.12656413013222,
+      "force_mode": "analytic_pair",
+      "num_parameters": 4865,
+      "peak_allocated_mb": 1405.41943359375,
+      "peak_reserved_mb": 1716.0,
+      "seconds_per_pass": 0.015424856299068779,
+      "teacher_benchmark": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-scalar-678671/rtece_pair/rtece_scalar_best.pt",
+      "teacher_e_mae_mev_atom": 1406.0523622999524,
+      "teacher_f_mae_mev_a": 40.694466880115485,
+      "variant": "rtece_pair_64x64_force30_mixed"
+    }
+  ],
   "students": [
     {
       "atoms_per_second": 18622904.49947055,
@@ -64,6 +98,40 @@
       "teacher_e_mae_mev_atom": 1391.1339990740848,
       "teacher_f_mae_mev_a": 53.14384085990353,
       "variant": "rtece_density_quadratic_64x64_force30"
+    }
+  ],
+  "teacher_force_pareto_front": [
+    {
+      "atoms_per_second": 18622904.49947055,
+      "configs_per_second": 304685.0145985955,
+      "dft_benchmark": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-scalar-678682/rtece_pair/rtece_scalar_best.pt",
+      "dft_e_mae_mev_atom": 1407.1227486172215,
+      "dft_f_mae_mev_a": 39.42031394293003,
+      "force_mode": "analytic_pair",
+      "num_parameters": 1409,
+      "peak_allocated_mb": 1405.40673828125,
+      "peak_reserved_mb": 1716.0,
+      "seconds_per_pass": 0.013443391711916775,
+      "teacher_benchmark": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-scalar-678682/rtece_pair/rtece_scalar_best.pt",
+      "teacher_e_mae_mev_atom": 1402.619052483937,
+      "teacher_f_mae_mev_a": 43.1419156191114,
+      "variant": "rtece_pair_32x32_force30_mixed"
+    },
+    {
+      "atoms_per_second": 16230621.22239118,
+      "configs_per_second": 265545.4236061364,
+      "dft_benchmark": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-scalar-678671/rtece_pair/rtece_scalar_best.pt",
+      "dft_e_mae_mev_atom": 1410.5560588095589,
+      "dft_f_mae_mev_a": 36.12656413013222,
+      "force_mode": "analytic_pair",
+      "num_parameters": 4865,
+      "peak_allocated_mb": 1405.41943359375,
+      "peak_reserved_mb": 1716.0,
+      "seconds_per_pass": 0.015424856299068779,
+      "teacher_benchmark": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-scalar-678671/rtece_pair/rtece_scalar_best.pt",
+      "teacher_e_mae_mev_atom": 1406.0523622999524,
+      "teacher_f_mae_mev_a": 40.694466880115485,
+      "variant": "rtece_pair_64x64_force30_mixed"
     }
   ]
 }

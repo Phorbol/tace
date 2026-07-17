@@ -37,6 +37,43 @@ def make_student_row(
     }
 
 
+def pareto_front_rows(
+    rows: list[dict[str, Any]],
+    *,
+    error_key: str,
+    throughput_key: str = "atoms_per_second",
+) -> list[dict[str, Any]]:
+    valid = [
+        row
+        for row in rows
+        if row.get(throughput_key) is not None and row.get(error_key) is not None
+    ]
+    front = []
+    for row in valid:
+        row_speed = float(row[throughput_key])
+        row_error = float(row[error_key])
+        dominated = False
+        for other in valid:
+            if other is row:
+                continue
+            other_speed = float(other[throughput_key])
+            other_error = float(other[error_key])
+            no_worse = other_speed >= row_speed and other_error <= row_error
+            strictly_better = other_speed > row_speed or other_error < row_error
+            if no_worse and strictly_better:
+                dominated = True
+                break
+        if not dominated:
+            front.append(row)
+    return sorted(
+        front,
+        key=lambda row: (
+            -float(row.get(throughput_key) or 0.0),
+            float(row.get(error_key) or 1.0e30),
+        ),
+    )
+
+
 def rank_student_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return sorted(
         rows,
@@ -56,6 +93,30 @@ def fmt(value: Any, digits: int = 3) -> str:
     if isinstance(value, float):
         return f"{value:.{digits}f}"
     return str(value)
+
+
+def append_front_section(lines: list[str], title: str, rows: list[dict[str, Any]], error_key: str) -> None:
+    front = pareto_front_rows(rows, error_key=error_key)
+    if not front:
+        return
+    lines.extend([
+        "",
+        title,
+        "",
+        "| variant | force mode | atoms/s | DFT F MAE | teacher F MAE | params |",
+        "|---|---|---:|---:|---:|---:|",
+    ])
+    for row in front:
+        lines.append(
+            "| {variant} | {force_mode} | {atoms} | {df} | {tf} | {params} |".format(
+                variant=row["variant"],
+                force_mode=fmt(row.get("force_mode")),
+                atoms=fmt(row.get("atoms_per_second")),
+                df=fmt(row.get("dft_f_mae_mev_a")),
+                tf=fmt(row.get("teacher_f_mae_mev_a")),
+                params=fmt(row.get("num_parameters"), digits=0),
+            )
+        )
 
 
 def format_markdown(rows: list[dict[str, Any]], *, baselines: list[dict[str, Any]]) -> str:
@@ -82,6 +143,8 @@ def format_markdown(rows: list[dict[str, Any]], *, baselines: list[dict[str, Any
                 df=fmt(row.get("dft_f_mae_mev_a")),
             )
         )
+    append_front_section(lines, "## DFT Force Pareto Front", rows, "dft_f_mae_mev_a")
+    append_front_section(lines, "## Teacher Force Pareto Front", rows, "teacher_f_mae_mev_a")
     if baselines:
         lines.extend([
             "",
@@ -152,7 +215,12 @@ def main() -> None:
         item = load_json(path)
         item["name"] = name
         baselines.append(item)
-    payload = {"students": rows, "baselines": baselines}
+    payload = {
+        "students": rows,
+        "dft_force_pareto_front": pareto_front_rows(rows, error_key="dft_f_mae_mev_a"),
+        "teacher_force_pareto_front": pareto_front_rows(rows, error_key="teacher_f_mae_mev_a"),
+        "baselines": baselines,
+    }
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
     args.output_md.parent.mkdir(parents=True, exist_ok=True)
     args.output_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
