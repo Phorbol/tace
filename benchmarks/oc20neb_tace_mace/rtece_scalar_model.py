@@ -13,6 +13,7 @@ class RTECEScalarConfig:
     num_radial: int = 8
     hidden_channels: tuple[int, ...] = (64, 64)
     max_atomic_number: int = 100
+    use_element_density: bool = False
     use_density_quadratic: bool = False
     use_atomic_moments: bool = False
     num_edge_sketches: int = 0
@@ -22,6 +23,8 @@ class RTECEScalarConfig:
 def build_rtece_config(variant: str) -> RTECEScalarConfig:
     if variant == "rtece_pair":
         return RTECEScalarConfig(variant=variant)
+    if variant == "rtece_element_density":
+        return RTECEScalarConfig(variant=variant, use_element_density=True)
     if variant == "rtece_density_quadratic":
         return RTECEScalarConfig(variant=variant, use_density_quadratic=True)
     if variant == "rtece_atomic_moments":
@@ -35,6 +38,8 @@ def build_rtece_config(variant: str) -> RTECEScalarConfig:
 
 def descriptor_dim(config: RTECEScalarConfig) -> int:
     dim = config.num_radial
+    if config.use_element_density:
+        dim += config.num_radial
     if config.use_density_quadratic:
         dim += config.num_radial
     if config.use_atomic_moments:
@@ -135,26 +140,42 @@ def scatter_sum(values: torch.Tensor, index: torch.Tensor, dim_size: int) -> tor
 def compute_atomic_moments(graph: RTECEGraph, config: RTECEScalarConfig) -> dict[str, torch.Tensor]:
     _, distances, unit = compute_pair_geometry(graph)
     radial = compute_radial_features(distances, config)
-    _, dst = graph.edge_index
+    src, dst = graph.edge_index
     num_nodes = graph.z.shape[0]
     density = scatter_sum(radial, dst, num_nodes)
+    neighbor_z = graph.z[src].to(dtype=graph.pos.dtype, device=graph.pos.device) / float(config.max_atomic_number)
+    element_density = scatter_sum(radial * neighbor_z[:, None], dst, num_nodes)
     vector = scatter_sum(radial[:, :, None] * unit[:, None, :], dst, num_nodes)
     eye = torch.eye(3, device=graph.pos.device, dtype=graph.pos.dtype)
     quad_unit = unit[:, :, None] * unit[:, None, :] - eye[None, :, :] / 3.0
     quadrupole = scatter_sum(radial[:, :, None, None] * quad_unit[:, None, :, :], dst, num_nodes)
-    return {"density": density, "vector": vector, "quadrupole": quadrupole}
+    return {
+        "density": density,
+        "element_density": element_density,
+        "vector": vector,
+        "quadrupole": quadrupole,
+    }
 
 
-def density_scalar_descriptors(density: torch.Tensor, config: RTECEScalarConfig) -> torch.Tensor:
+def density_scalar_descriptors(
+    density: torch.Tensor,
+    config: RTECEScalarConfig,
+    element_density: torch.Tensor | None = None,
+) -> torch.Tensor:
+    parts = [density]
+    if config.use_element_density:
+        if element_density is None:
+            raise ValueError("element_density is required when use_element_density=True")
+        parts.append(element_density)
     if config.use_density_quadratic:
-        return torch.cat([density, density.square()], dim=-1)
-    return density
+        parts.append(density.square())
+    return torch.cat(parts, dim=-1) if len(parts) > 1 else density
 
 
 def atomic_scalar_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
     moments = compute_atomic_moments(graph, config)
     density = moments["density"]
-    density_desc = density_scalar_descriptors(density, config)
+    density_desc = density_scalar_descriptors(density, config, moments["element_density"])
     if not config.use_atomic_moments:
         return density_desc
     vector_norm = (moments["vector"] ** 2).sum(dim=-1)
@@ -228,8 +249,13 @@ class RTECEScalarModel(torch.nn.Module):
         distances = vectors.norm(dim=-1).clamp_min(1e-12)
         unit = vectors / distances[:, None]
         radial, radial_derivative = radial_features_and_derivatives(distances, self.config)
-        density = scatter_sum(radial.detach(), dst, num_nodes).requires_grad_(True)
-        descriptors = density_scalar_descriptors(density, self.config)
+        radial_detached = radial.detach()
+        density = scatter_sum(radial_detached, dst, num_nodes).requires_grad_(True)
+        neighbor_z = graph.z[src].to(dtype=pos.dtype, device=pos.device) / float(self.config.max_atomic_number)
+        element_density = None
+        if self.config.use_element_density:
+            element_density = scatter_sum(radial_detached * neighbor_z[:, None], dst, num_nodes).requires_grad_(True)
+        descriptors = density_scalar_descriptors(density, self.config, element_density)
 
         z_scaled = graph.z.to(dtype=pos.dtype, device=pos.device).view(-1, 1)
         z_scaled = z_scaled / float(self.config.max_atomic_number)
@@ -243,13 +269,20 @@ class RTECEScalarModel(torch.nn.Module):
             ).squeeze(-1)
             energy = energy + atom_counts * pos.new_tensor(float(self.config.energy_per_atom_shift))
 
-        density_grad = torch.autograd.grad(
+        grad_targets = [density]
+        if element_density is not None:
+            grad_targets.append(element_density)
+        grads = torch.autograd.grad(
             energy.sum(),
-            density,
+            grad_targets,
             create_graph=False,
             retain_graph=False,
-        )[0]
+        )
+        density_grad = grads[0]
         edge_scale = (density_grad[dst] * radial_derivative).sum(dim=-1)
+        if element_density is not None:
+            element_density_grad = grads[1]
+            edge_scale = edge_scale + (element_density_grad[dst] * neighbor_z[:, None] * radial_derivative).sum(dim=-1)
         grad_vectors = edge_scale[:, None] * unit
         grad_pos = pos.new_zeros(pos.shape)
         grad_pos.index_add_(0, dst, grad_vectors)

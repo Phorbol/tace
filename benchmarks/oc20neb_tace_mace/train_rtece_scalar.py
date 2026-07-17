@@ -245,6 +245,7 @@ def parse_args() -> argparse.Namespace:
         required=True,
         choices=(
             "rtece_pair",
+            "rtece_element_density",
             "rtece_density_quadratic",
             "rtece_atomic_moments",
             "rtece_edge_sketch8",
