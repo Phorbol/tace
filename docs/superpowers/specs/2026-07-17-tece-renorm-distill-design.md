@@ -935,6 +935,34 @@ Next priority:
 3. Keep the current scalar Pareto front fixed for now: radial4/16x16, radial5 band, radial8/24x24, radial8/32x32 under the fused evaluator. Reopen architecture sweeps only after the graph-lifetime bottleneck is reduced or quantified in an MD-style loop.
 
 
+## Stage 32: Synthetic Trajectory Replay Benchmark
+
+Stage 32 turned the Stage-31 amortized cached-graph estimate into a measured MD-style trajectory benchmark. The code adds `--trajectory-replay-steps`, `--trajectory-rebuild-interval`, and `--trajectory-displacement-std` to the rTECE scalar benchmark. This mode keeps graph topology and edge buffers persistent, updates positions with a deterministic small displacement, and optionally rebuilds the batched ASE graph every `K` force steps. In this mode, `atoms_per_second` is atom-step/s.
+
+The benchmark keeps the same radial8/24x24 `rtece_element_density` checkpoint, DFT valid `:1024` prefix, 59193 atoms, float32, one V100, and `--force-mode auto`, resolving to `analytic_element_triton_descriptor_force`.
+
+| mode | force steps/pass | graph rebuild interval K | atom-step/s | seconds/pass | peak alloc MB | DFT F MAE at first frame |
+|---|---:|---:|---:|---:|---:|---:|
+| cached trajectory | 2000 | 0 | 39909204 | 2.966383 | 69.1 | 33.17 |
+| trajectory + rebuild | 2001 | 2000 | 13329198 | 8.886145 | 105.0 | 33.17 |
+| trajectory + rebuild | 1001 | 1000 | 7906961 | 7.493674 | 105.0 | 33.17 |
+| trajectory + rebuild | 1001 | 500 | 4444052 | 13.332921 | 125.2 | 33.17 |
+| trajectory + rebuild | 501 | 100 | 977274 | 30.345312 | 125.2 | 33.17 |
+
+Stage-32 interpretation against TECE/TACE:
+
+- The measured trajectory rows validate the Stage-31 cost model. The cached model force step is about 1.48 ms for 59193 atoms, while one full ASE graph rebuild for the 1024-config window costs about 5.92-6.01 s.
+- The 1e7 atom-step/s target is now quantitative rather than aspirational: K=1000 is insufficient at 7.91M atom-step/s, while K=2000 crosses the target at 13.33M atom-step/s under this synthetic displacement benchmark.
+- This does not mean a production MD loop should blindly rebuild every 2000 steps. It means the next layer must expose a displacement/skin-validity criterion and a faster neighbor update provider so edge-state lifetime becomes controlled, not guessed.
+- In TECE/TACE compiler terms, the current high-throughput branch has three distinct axes: semantic projection into scalar element-density descriptors, hardware downfolding into fused descriptor/force kernels, and system-level renormalization of graph/edge-buffer lifetime. The third axis is now the limiting one for end-to-end throughput.
+
+Next priority:
+
+1. Add a displacement-aware graph-cache validity probe: track max displacement since rebuild, skin margin, and estimated rebuild necessity for trajectory replay.
+2. Prototype a faster neighbor-provider boundary that can feed persistent `edge_index`/edge buffers without going through full ASE reconstruction every rebuild.
+3. Defer more scalar architecture sweeps until graph lifetime/update cost is either reduced or built into the Pareto table as a first-class deployment parameter.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
