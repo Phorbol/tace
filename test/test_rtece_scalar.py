@@ -562,6 +562,30 @@ def test_triton_pair_force_path_requires_cuda_graph():
         raise AssertionError("Triton pair force path should reject CPU graphs")
 
 
+def test_triton_element_density_force_path_requires_cuda_graph():
+    config = RTECEScalarConfig(
+        variant="rtece_element_density",
+        use_element_density=True,
+        use_atomic_moments=False,
+        num_edge_sketches=0,
+        energy_per_atom_shift=-0.25,
+    )
+    model = RTECEScalarModel(config).double().eval()
+    graph = RTECEGraph(
+        z=torch.tensor([6, 8], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.7, 0.2, 0.1]], dtype=torch.float64),
+        edge_index=complete_directed_edges(2),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+
+    try:
+        model.forward_element_density_triton_force_analytic_forces(graph)
+    except RuntimeError as exc:
+        assert "CUDA" in str(exc) or "Triton" in str(exc)
+    else:
+        raise AssertionError("Triton element-density force path should reject CPU graphs")
+
+
 def test_density_analytic_forces_match_autograd_forces_for_element_descriptors():
     config = RTECEScalarConfig(
         variant="rtece_element_density",
@@ -719,6 +743,7 @@ def test_rtece_benchmark_help_exposes_force_mode():
     assert "--force-mode" in result.stdout
     assert "analytic_pair" in result.stdout
     assert "analytic_pair_triton_force" in result.stdout
+    assert "analytic_element_triton_force" in result.stdout
     assert "analytic_density" in result.stdout
     assert "analytic_element_packed" in result.stdout
 

@@ -34,7 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--top-ops", type=int, default=20)
     parser.add_argument(
         "--force-mode",
-        choices=("autograd", "analytic_pair", "analytic_pair_triton_force", "analytic_density", "analytic_element_packed"),
+        choices=("autograd", "analytic_pair", "analytic_pair_triton_force", "analytic_element_triton_force", "analytic_density", "analytic_element_packed"),
         default="analytic_pair",
     )
     return parser.parse_args()
@@ -72,6 +72,8 @@ def run_model(model, graph, force_mode: str):
         return model.forward_pair_analytic_forces(graph)
     if force_mode == "analytic_pair_triton_force":
         return model.forward_pair_triton_force_analytic_forces(graph)
+    if force_mode == "analytic_element_triton_force":
+        return model.forward_element_density_triton_force_analytic_forces(graph)
     if force_mode == "analytic_density":
         return model.forward_density_analytic_forces(graph)
     if force_mode == "analytic_element_packed":
