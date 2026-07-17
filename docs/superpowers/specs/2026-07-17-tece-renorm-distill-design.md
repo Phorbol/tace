@@ -549,6 +549,34 @@ Stage-17 interpretation:
 - The clean current rTECE Pareto front remains pair-32, pair-64, and element-density-32. The next priority shifts from adding descriptor semantics to reducing implementation cost: fusion/export of pair and element-density analytic kernels, or a cheaper element-conditioned scalar formulation.
 
 
+## Stage 18 Smoke: Element-Density Head-Capacity Pareto Refinement
+
+Stage 17 showed that adding vector moments is dominated by element-conditioned density under the current unfused implementation. Stage 18 therefore did not add another descriptor. It kept the successful Stage-16 semantic projection fixed and varied only the scalar head capacity. This is a parameter-axis refinement around a validated TECE semantic block, not a return to arbitrary architecture search.
+
+4096-config prefix comparison, all with `rtece_element_density`, mixed labels, force weight 30, and analytic-density forces:
+
+| job | hidden | params | atoms/s | DFT F MAE | teacher F MAE | DFT E MAE | interpretation |
+|---:|---|---:|---:|---:|---:|---:|---|
+| 678774 | 16x16 | 577 | 16019208 | 38.69 | 42.98 | 1412.5 | dominated by pair-64 |
+| 678773 | 24x24 | 1057 | 15920358 | 30.19 | 35.83 | 1402.9 | new intermediate rTECE front point |
+| 678749 | 32x32 | 1665 | 14696599 | 28.14 | 33.93 | 1409.4 | lower-error element-density front point |
+
+Offset-window robustness for the new 24x24 point:
+
+| job | extxyz index | configs | atoms/s | DFT F MAE | DFT F RMSE | DFT E MAE | interpretation |
+|---:|---|---:|---:|---:|---:|---:|---|
+| 678773 | `:4096` | 4096 | 15920358 | 30.19 | 111.50 | 1402.9 | prefix benchmark |
+| 678777 | `4096:8192` | 4096 | 15990835 | 33.42 | 120.71 | 1486.8 | same throughput class and stable force-error regime |
+| 678778 | `8192:12288` | 1808 | 15018695 | 32.85 | 118.97 | 1371.8 | shorter tail window but still stable |
+
+Stage-18 interpretation:
+
+- The current rTECE scalar Pareto front has four useful points: pair-32 for maximum throughput, pair-64, element-density-24, and element-density-32 for the lowest force MAE in this branch.
+- Element-density 24x24 is the best new compromise: it recovers most of the 32x32 element-density accuracy gain while regaining about 1.2M atoms/s.
+- Element-density 16x16 crosses the projection/capacity limit: it loses the chemistry benefit and is dominated by pair-64.
+- The next priority is no longer adding semantic descriptors in Python. The front is now good enough to justify implementation work: fuse/export pair and element-density analytic kernels, or otherwise reduce scatter/MLP overhead while preserving the same descriptors and conservative force path.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
