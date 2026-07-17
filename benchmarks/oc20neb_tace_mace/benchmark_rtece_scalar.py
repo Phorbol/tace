@@ -34,6 +34,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--default-dtype", choices=("float32", "float64"), default="float32")
     parser.add_argument("--limit-configs", type=int, default=128)
     parser.add_argument("--measure-passes", type=int, default=3)
+    parser.add_argument("--force-mode", choices=("autograd", "analytic_pair"), default="autograd")
     parser.add_argument(
         "--include-graph-construction",
         action="store_true",
@@ -62,9 +63,14 @@ def main() -> None:
             ]
         )
 
+    def run_model(graph):
+        if args.force_mode == "analytic_pair":
+            return model.forward_pair_analytic_forces(graph)
+        return model(graph)
+
     def forward_once(collect: bool):
         if prebuilt_graph is not None:
-            out = model(prebuilt_graph)
+            out = run_model(prebuilt_graph)
             if not collect:
                 return []
             return [
@@ -77,7 +83,7 @@ def main() -> None:
         outputs = []
         for atoms in atoms_list:
             graph, _, _ = atoms_to_graph(atoms, cutoff=config.cutoff, device=device, dtype=dtype)
-            out = model(graph)
+            out = run_model(graph)
             if collect:
                 outputs.append(
                     {
@@ -117,6 +123,7 @@ def main() -> None:
         "device": str(device),
         "default_dtype": args.default_dtype,
         "model_class": model.__class__.__name__,
+        "force_mode": args.force_mode,
         "num_parameters": int(sum(p.numel() for p in model.parameters())),
         "includes_graph_construction": bool(args.include_graph_construction),
         "prebuilt_batched_graph": prebuilt_graph is not None,

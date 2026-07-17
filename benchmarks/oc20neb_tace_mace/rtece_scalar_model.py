@@ -88,7 +88,10 @@ def cutoff_envelope(distances: torch.Tensor, cutoff: float) -> torch.Tensor:
     return torch.where(distances < cutoff, envelope, torch.zeros_like(envelope))
 
 
-def compute_radial_features(distances: torch.Tensor, config: RTECEScalarConfig) -> torch.Tensor:
+def radial_features_and_derivatives(
+    distances: torch.Tensor,
+    config: RTECEScalarConfig,
+) -> tuple[torch.Tensor, torch.Tensor]:
     centers = torch.linspace(
         0.0,
         config.cutoff,
@@ -97,8 +100,25 @@ def compute_radial_features(distances: torch.Tensor, config: RTECEScalarConfig) 
         dtype=distances.dtype,
     )
     width = config.cutoff / max(config.num_radial - 1, 1)
-    features = torch.exp(-0.5 * ((distances[:, None] - centers[None, :]) / width) ** 2)
-    return features * cutoff_envelope(distances, config.cutoff)[:, None]
+    delta = distances[:, None] - centers[None, :]
+    gaussian = torch.exp(-0.5 * (delta / width) ** 2)
+    envelope = cutoff_envelope(distances, config.cutoff)
+    gaussian_derivative = gaussian * (-delta / (width**2))
+    x = (distances / config.cutoff).clamp(min=0.0, max=1.0)
+    envelope_derivative = (-30.0 * x**2 + 60.0 * x**3 - 30.0 * x**4) / config.cutoff
+    envelope_derivative = torch.where(
+        distances < config.cutoff,
+        envelope_derivative,
+        torch.zeros_like(envelope_derivative),
+    )
+    features = gaussian * envelope[:, None]
+    derivatives = gaussian_derivative * envelope[:, None] + gaussian * envelope_derivative[:, None]
+    return features, derivatives
+
+
+def compute_radial_features(distances: torch.Tensor, config: RTECEScalarConfig) -> torch.Tensor:
+    features, _ = radial_features_and_derivatives(distances, config)
+    return features
 
 
 def scatter_sum(values: torch.Tensor, index: torch.Tensor, dim_size: int) -> torch.Tensor:
@@ -183,6 +203,46 @@ class RTECEScalarModel(torch.nn.Module):
             prev = hidden
         layers.append(torch.nn.Linear(prev, 1))
         self.energy_head = torch.nn.Sequential(*layers)
+
+    def forward_pair_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+        if self.config.use_atomic_moments or self.config.num_edge_sketches:
+            raise ValueError("forward_pair_analytic_forces only supports rtece_pair descriptors")
+        pos = graph.pos
+        src, dst = graph.edge_index
+        num_nodes = graph.z.shape[0]
+        num_graphs = int(graph.batch.max().item()) + 1 if graph.batch.numel() else 1
+
+        vectors = pos[dst] - pos[src]
+        distances = vectors.norm(dim=-1).clamp_min(1e-12)
+        unit = vectors / distances[:, None]
+        radial, radial_derivative = radial_features_and_derivatives(distances, self.config)
+        density = scatter_sum(radial.detach(), dst, num_nodes).requires_grad_(True)
+
+        z_scaled = graph.z.to(dtype=pos.dtype, device=pos.device).view(-1, 1)
+        z_scaled = z_scaled / float(self.config.max_atomic_number)
+        atomic_energy = self.energy_head(torch.cat([z_scaled, density], dim=-1)).squeeze(-1)
+        energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
+        if self.config.energy_per_atom_shift:
+            atom_counts = scatter_sum(
+                torch.ones_like(atomic_energy[:, None]),
+                graph.batch,
+                num_graphs,
+            ).squeeze(-1)
+            energy = energy + atom_counts * pos.new_tensor(float(self.config.energy_per_atom_shift))
+
+        density_grad = torch.autograd.grad(
+            energy.sum(),
+            density,
+            create_graph=False,
+            retain_graph=False,
+        )[0]
+        edge_scale = (density_grad[dst] * radial_derivative).sum(dim=-1)
+        grad_vectors = edge_scale[:, None] * unit
+        grad_pos = pos.new_zeros(pos.shape)
+        grad_pos.index_add_(0, dst, grad_vectors)
+        grad_pos.index_add_(0, src, -grad_vectors)
+        forces = -grad_pos
+        return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
 
     def forward(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
         pos = graph.pos

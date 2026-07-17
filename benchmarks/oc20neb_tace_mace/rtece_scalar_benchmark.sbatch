@@ -23,6 +23,7 @@ OUT_DIR=${OUT_DIR:-${TACE_ROOT}/runs/oc20neb_tace_mace/rtece-bench-${SLURM_JOB_I
 LIMIT_CONFIGS_LIST=${LIMIT_CONFIGS_LIST:-1024 2048 4096}
 MEASURE_PASSES=${MEASURE_PASSES:-10}
 DEFAULT_DTYPE=${DEFAULT_DTYPE:-float32}
+FORCE_MODE=${FORCE_MODE:-autograd}
 
 mkdir -p /home/gengjianrui/bin/logs "${OUT_DIR}"
 cd "${TACE_ROOT}"
@@ -34,6 +35,7 @@ export TORCH_FORCE_NO_WEIGHTS_ONLY_LOAD=1
 echo "host=$(hostname)"
 echo "out_dir=${OUT_DIR}"
 echo "model=${MODEL}"
+echo "force_mode=${FORCE_MODE}"
 "${TACE_PYTHON}" -V
 nvidia-smi -L
 
@@ -47,6 +49,7 @@ for limit in "${limit_args[@]}"; do
     --variant "${VARIANT}" \
     --limit-configs "${limit}" \
     --measure-passes "${MEASURE_PASSES}" \
+    --force-mode "${FORCE_MODE}" \
     --device cuda \
     --default-dtype "${DEFAULT_DTYPE}"
 done

@@ -353,3 +353,51 @@ def test_train_steps_saves_best_validation_checkpoint(tmp_path):
     assert isinstance(loaded_model, RTECEScalarModel)
     assert summary["best_step"] in (1, 2)
     assert torch.isfinite(torch.tensor(summary["best_valid_loss"]))
+
+def test_pair_analytic_forces_match_autograd_forces():
+    config = RTECEScalarConfig(
+        variant="rtece_pair",
+        use_atomic_moments=False,
+        num_edge_sketches=0,
+        energy_per_atom_shift=-0.25,
+    )
+    model = RTECEScalarModel(config).double().eval()
+    graph = RTECEGraph(
+        z=torch.tensor([6, 8, 1, 1], dtype=torch.long),
+        pos=torch.tensor(
+            [
+                [0.0, 0.0, 0.0],
+                [0.7, 0.2, 0.1],
+                [-0.3, 0.6, -0.2],
+                [0.4, -0.5, 0.3],
+            ],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(4),
+        batch=torch.zeros(4, dtype=torch.long),
+    )
+
+    autograd_out = model(graph)
+    analytic_out = model.forward_pair_analytic_forces(graph)
+
+    assert torch.allclose(analytic_out["energy"], autograd_out["energy"], atol=1e-10, rtol=1e-10)
+    assert torch.allclose(
+        analytic_out["forces"],
+        autograd_out["forces"],
+        atol=1e-8,
+        rtol=1e-8,
+    )
+
+def test_rtece_benchmark_help_exposes_force_mode():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "benchmarks/oc20neb_tace_mace/benchmark_rtece_scalar.py", "--help"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--force-mode" in result.stdout
+    assert "analytic_pair" in result.stdout
