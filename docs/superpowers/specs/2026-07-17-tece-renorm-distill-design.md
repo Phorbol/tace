@@ -453,6 +453,34 @@ Stage-14 interpretation:
 - Teacher-only labels do not beat mixed labels once force loss is properly weighted, so the immediate label-axis priority drops. If more label work is needed, regenerate mixed train files at different teacher weights rather than only teacher-only.
 - The next architecture step should be TECE-ordered and analytic/fused from the start: either add the cheapest scalar descriptor that can receive an analytic force path, or formalize the pair model as the T4 endpoint and stop expanding it until the Pareto table needs a middle point between compact TACE and scalar pair.
 
+## Stage 15 Smoke: Density-Quadratic Scalar Contraction
+
+Stage 14 left one open architecture question: whether the next useful point between pure pair and heavier moments could be a very cheap scalar contraction with the same analytic force path. Stage 15 added `rtece_density_quadratic`, which augments pair density descriptors `rho_n` with `rho_n^2`. This is a TECE-ordered scalar contraction: it increases local scalar correlation order without introducing vector/quadrupole moments, edge sketches, persistent high-rank state, or autograd force propagation.
+
+Implementation gate:
+
+- `RTECEScalarConfig` now has `use_density_quadratic`.
+- `build_rtece_config("rtece_density_quadratic")` creates the new variant.
+- `forward_density_analytic_forces` matches autograd forces for density-only descriptors, including `rho^2`.
+- `benchmark_rtece_scalar.py` exposes `--force-mode analytic_density`.
+- Full rTECE test file after the change: 24 passed.
+
+4096-config prefix comparison against the Stage-14 pair front, all with force weight 30:
+
+| job | variant | hidden | params | atoms/s | DFT F MAE | teacher F MAE | DFT E MAE | force mode | interpretation |
+|---:|---|---|---:|---:|---:|---:|---:|---|---|
+| 678682 | `rtece_pair` | 32x32 | 1409 | 18623067 | 39.42 | 43.14 | 1407.1 | analytic_pair | current high-throughput point |
+| 678671 | `rtece_pair` | 64x64 | 4865 | 16230938 | 36.13 | 40.69 | 1410.6 | analytic_pair | current lower-error point |
+| 678709 | `rtece_density_quadratic` | 32x32 | 1665 | 12099993 | 46.39 | 49.33 | 1395.7 | analytic_density | dominated: slower and worse force MAE |
+| 678708 | `rtece_density_quadratic` | 64x64 | 5377 | 11041542 | 50.56 | 53.14 | 1395.2 | analytic_density | dominated: slower and worse force MAE |
+
+Stage-15 interpretation:
+
+- This is a useful negative result. A TECE-ordered scalar contraction is not automatically Pareto-improving; `rho^2` increases descriptor/head work enough to lose throughput and does not improve force error under the current training setup.
+- The pure pair model remains the current T4 endpoint and is not improved by naive scalar polynomial enrichment.
+- The next architecture step should not be another density polynomial. If an intermediate point is needed, it should add genuinely new geometric information with a planned analytic/fused force path, such as a carefully selected low-order moment norm or a teacher-conditioned scalar sketch, and must be tested first as a small isolated variant.
+- Until that exists, the cleanest deliverable is the pair Pareto front: 32x32/force30 for maximum throughput and 64x64/force30 for lower force MAE.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
