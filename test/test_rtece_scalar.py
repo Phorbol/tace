@@ -933,6 +933,70 @@ def test_trajectory_cache_displacement_probe_uses_half_skin_margin():
     assert disabled["threshold"] is None
 
 
+def test_trajectory_graph_cache_provider_tracks_rebuild_state():
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import TrajectoryGraphCacheProvider
+
+    reference = torch.zeros((2, 3), dtype=torch.float64)
+    provider = TrajectoryGraphCacheProvider(reference, skin_margin=0.4)
+
+    inside = reference.clone()
+    inside[0, 0] = 0.19
+    outside = reference.clone()
+    outside[0, 0] = 0.21
+
+    valid = provider.check(inside)
+    invalid = provider.check(outside)
+
+    assert valid["needs_rebuild"] is False
+    assert valid["threshold"] == 0.2
+    assert invalid["needs_rebuild"] is True
+    assert invalid["max_displacement"] == torch.tensor(0.21, dtype=torch.float64)
+
+    provider.mark_rebuilt(outside)
+    assert provider.rebuild_count == 1
+    assert provider.last_rebuild_step is None
+    assert provider.check(outside)["needs_rebuild"] is False
+
+    outside[1, 1] = 0.22
+    provider.mark_rebuilt(outside, step=7, cause="skin")
+    assert provider.rebuild_count == 2
+    assert provider.last_rebuild_step == 7
+    assert provider.rebuild_steps == [7]
+    assert provider.rebuild_causes == ["skin"]
+
+
+def test_prediction_error_payload_marks_missing_predictions_as_null():
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import prediction_error_payload
+
+    ref_e = __import__("numpy").array([1.0])
+    ref_f = __import__("numpy").zeros((2, 3))
+    natoms = __import__("numpy").array([2])
+
+    payload = prediction_error_payload([], ref_e, ref_f, natoms)
+
+    assert payload["prediction_errors_available"] is False
+    assert payload["mae_e_mev_atom"] is None
+    assert payload["mae_f_mev_a"] is None
+    assert payload["rmse_e_mev_atom"] is None
+    assert payload["rmse_f_mev_a"] is None
+
+
+def test_prediction_error_payload_summarizes_available_predictions():
+    import numpy as np
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import prediction_error_payload
+
+    ref_e = np.array([1.0])
+    ref_f = np.zeros((2, 3))
+    natoms = np.array([2])
+    outputs = [{"energy": ref_e.copy(), "forces": ref_f.copy()}]
+
+    payload = prediction_error_payload(outputs, ref_e, ref_f, natoms)
+
+    assert payload["prediction_errors_available"] is True
+    assert payload["mae_e_mev_atom"] == 0.0
+    assert payload["mae_f_mev_a"] == 0.0
+
+
 def test_rtece_benchmark_help_exposes_force_mode():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     result = subprocess.run(
@@ -951,6 +1015,7 @@ def test_rtece_benchmark_help_exposes_force_mode():
     assert "--trajectory-rebuild-interval" in result.stdout
     assert "--trajectory-displacement-std" in result.stdout
     assert "--trajectory-skin-margin" in result.stdout
+    assert "--trajectory-validity-only" in result.stdout
     assert "auto" in result.stdout
     assert "analytic_pair" in result.stdout
     assert "analytic_pair_triton_force" in result.stdout

@@ -79,6 +79,11 @@ def parse_args() -> argparse.Namespace:
         default=0.0,
         help="In trajectory replay mode, rebuild when max displacement since graph build exceeds half this skin margin.",
     )
+    parser.add_argument(
+        "--trajectory-validity-only",
+        action="store_true",
+        help="In trajectory replay mode, time only position generation plus graph-cache validity checks, without model evaluation or graph rebuilds.",
+    )
     return parser.parse_args()
 
 
@@ -124,6 +129,7 @@ def validate_graph_construction_args(
     trajectory_replay_steps: int = 0,
     trajectory_rebuild_interval: int = 0,
     trajectory_skin_margin: float = 0.0,
+    trajectory_validity_only: bool = False,
 ) -> None:
     if trajectory_replay_steps < 0:
         raise ValueError(f"--trajectory-replay-steps must be non-negative, got {trajectory_replay_steps}")
@@ -140,6 +146,8 @@ def validate_graph_construction_args(
     if trajectory_replay_steps > 0:
         if include_graph_construction or batch_graph_construction or replay_cached_graph:
             raise ValueError("--trajectory-replay-steps is separate from graph-construction and cached-graph replay modes")
+        if trajectory_validity_only and trajectory_rebuild_interval:
+            raise ValueError("--trajectory-validity-only cannot be combined with --trajectory-rebuild-interval")
         if trajectory_rebuild_interval == 0:
             return
         if trajectory_rebuild_interval < 1:
@@ -148,6 +156,38 @@ def validate_graph_construction_args(
         raise ValueError("--trajectory-rebuild-interval requires --trajectory-replay-steps")
     elif trajectory_skin_margin > 0.0:
         raise ValueError("--trajectory-skin-margin requires --trajectory-replay-steps")
+    elif trajectory_validity_only:
+        raise ValueError("--trajectory-validity-only requires --trajectory-replay-steps")
+
+
+class TrajectoryGraphCacheProvider:
+    def __init__(self, reference_positions: torch.Tensor, *, skin_margin: float):
+        self.reference_positions = reference_positions.detach().clone()
+        self.skin_margin = float(skin_margin)
+        self.rebuild_count = 0
+        self.last_rebuild_step: int | None = None
+        self.rebuild_steps: list[int] = []
+        self.rebuild_causes: list[str] = []
+
+    def check(self, positions: torch.Tensor) -> dict[str, object]:
+        probe = graph_cache_displacement_probe(
+            self.reference_positions,
+            positions,
+            skin_margin=self.skin_margin,
+        )
+        return {
+            "max_displacement": probe["max_displacement"],
+            "threshold": probe["threshold"],
+            "needs_rebuild": probe["rebuild_required"],
+        }
+
+    def mark_rebuilt(self, positions: torch.Tensor, *, step: int | None = None, cause: str | None = None) -> None:
+        self.reference_positions = positions.detach().clone()
+        self.rebuild_count += 1
+        self.last_rebuild_step = step
+        if step is not None:
+            self.rebuild_steps.append(int(step))
+            self.rebuild_causes.append(str(cause or "unspecified"))
 
 
 def graph_cache_displacement_probe(
@@ -223,6 +263,23 @@ def replay_graph_positions(template: RTECEGraph, positions: torch.Tensor) -> RTE
     )
 
 
+def prediction_error_payload(first_outputs: list[dict[str, np.ndarray]], ref_e, ref_f, natoms) -> dict[str, object]:
+    if not first_outputs:
+        return {
+            "prediction_errors_available": False,
+            "mae_e_mev_atom": None,
+            "rmse_e_mev_atom": None,
+            "mae_f_mev_a": None,
+            "rmse_f_mev_a": None,
+        }
+    pred_e = np.concatenate([item["energy"].reshape(-1) for item in first_outputs], axis=0)
+    pred_f = np.concatenate([item["forces"].reshape(-1, 3) for item in first_outputs], axis=0)
+    return {
+        "prediction_errors_available": True,
+        **summarize_errors(pred_e, pred_f, ref_e, ref_f, natoms),
+    }
+
+
 def load_atoms_window(configs: Path, *, start_config: int, limit_configs: int | None):
     import ase.io
 
@@ -246,6 +303,7 @@ def main() -> None:
         trajectory_replay_steps=int(args.trajectory_replay_steps),
         trajectory_rebuild_interval=int(args.trajectory_rebuild_interval),
         trajectory_skin_margin=float(args.trajectory_skin_margin),
+        trajectory_validity_only=bool(args.trajectory_validity_only),
     )
     dtype = torch.float64 if args.default_dtype == "float64" else torch.float32
     requested = torch.device(args.device)
@@ -266,7 +324,7 @@ def main() -> None:
     replay_positions = None
     trajectory_template = None
     trajectory_base_positions = None
-    trajectory_reference_positions = None
+    trajectory_provider = None
     trajectory_report_rebuild_steps: list[int] = []
     trajectory_report_rebuild_causes: list[str] = []
     trajectory_report_max_displacement = 0.0
@@ -280,7 +338,10 @@ def main() -> None:
         if args.trajectory_replay_steps > 0:
             trajectory_template = prebuilt_graph
             trajectory_base_positions = prebuilt_graph.pos.detach().clone()
-            trajectory_reference_positions = trajectory_base_positions.clone()
+            trajectory_provider = TrajectoryGraphCacheProvider(
+                trajectory_base_positions,
+                skin_margin=float(args.trajectory_skin_margin),
+            )
             prebuilt_graph = None
         elif args.replay_cached_graph:
             replay_template = prebuilt_graph
@@ -341,11 +402,10 @@ def main() -> None:
             ]
 
         if trajectory_template is not None:
-            nonlocal trajectory_reference_positions, trajectory_report_rebuild_steps, trajectory_report_rebuild_causes, trajectory_report_max_displacement
-            if trajectory_base_positions is None or trajectory_reference_positions is None:
+            nonlocal trajectory_provider, trajectory_report_rebuild_steps, trajectory_report_rebuild_causes, trajectory_report_max_displacement
+            if trajectory_base_positions is None or trajectory_provider is None:
                 raise RuntimeError("trajectory replay positions were not initialized")
             graph_template = trajectory_template
-            reference_positions = trajectory_reference_positions
             pass_rebuild_steps: list[int] = []
             pass_rebuild_causes: list[str] = []
             pass_max_displacement = 0.0
@@ -356,11 +416,7 @@ def main() -> None:
                     step=step,
                     displacement_std=float(args.trajectory_displacement_std),
                 )
-                probe = graph_cache_displacement_probe(
-                    reference_positions,
-                    positions,
-                    skin_margin=float(args.trajectory_skin_margin),
-                )
+                probe = trajectory_provider.check(positions)
                 pass_max_displacement = max(
                     pass_max_displacement,
                     float(probe["max_displacement"].detach().cpu()),
@@ -368,16 +424,21 @@ def main() -> None:
                 rebuild_cause = None
                 if step > 0 and args.trajectory_rebuild_interval and step % int(args.trajectory_rebuild_interval) == 0:
                     rebuild_cause = "interval"
-                if step > 0 and bool(probe["rebuild_required"]):
+                if step > 0 and bool(probe["needs_rebuild"]):
                     rebuild_cause = "skin" if rebuild_cause is None else f"{rebuild_cause}+skin"
                 if rebuild_cause is not None:
-                    graph_template = rebuild_batched_graph_from_positions(positions)
-                    reference_positions = positions.detach().clone()
+                    if args.trajectory_validity_only:
+                        trajectory_provider.mark_rebuilt(positions, step=step, cause=rebuild_cause)
+                    else:
+                        graph_template = rebuild_batched_graph_from_positions(positions)
+                        trajectory_provider.mark_rebuilt(positions, step=step, cause=rebuild_cause)
+                        graph = graph_template
                     pass_rebuild_steps.append(step)
                     pass_rebuild_causes.append(rebuild_cause)
-                    graph = graph_template
-                else:
+                elif not args.trajectory_validity_only:
                     graph = replay_graph_positions(graph_template, positions)
+                if args.trajectory_validity_only:
+                    continue
                 out = run_model(graph)
                 if collect and step == 0:
                     collected.append(
@@ -386,7 +447,6 @@ def main() -> None:
                             "forces": out["forces"].detach().cpu().numpy(),
                         }
                     )
-            trajectory_reference_positions = reference_positions
             if collect:
                 trajectory_report_rebuild_steps = pass_rebuild_steps
                 trajectory_report_rebuild_causes = pass_rebuild_causes
@@ -439,8 +499,7 @@ def main() -> None:
         if pass_idx == 0:
             first_outputs = outputs
 
-    pred_e = np.concatenate([item["energy"].reshape(-1) for item in first_outputs], axis=0)
-    pred_f = np.concatenate([item["forces"].reshape(-1, 3) for item in first_outputs], axis=0)
+    error_payload = prediction_error_payload(first_outputs, ref_e, ref_f, natoms)
     seconds_per_pass = float(np.mean(pass_times))
     atoms = int(natoms.sum())
     force_steps_per_pass = int(args.trajectory_replay_steps) if int(args.trajectory_replay_steps) > 0 else 1
@@ -473,6 +532,7 @@ def main() -> None:
         "trajectory_replay_steps": int(args.trajectory_replay_steps),
         "trajectory_rebuild_interval": int(args.trajectory_rebuild_interval),
         "trajectory_displacement_std": float(args.trajectory_displacement_std),
+        "trajectory_validity_only": bool(args.trajectory_validity_only),
         "trajectory_skin_margin": float(args.trajectory_skin_margin),
         "trajectory_skin_threshold": 0.5 * float(args.trajectory_skin_margin) if float(args.trajectory_skin_margin) > 0.0 else None,
         "trajectory_rebuild_count": len(trajectory_report_rebuild_steps),
@@ -487,7 +547,7 @@ def main() -> None:
         "seconds_per_pass": seconds_per_pass,
         "atoms_per_second": atom_steps_per_pass / seconds_per_pass,
         "configs_per_second": config_steps_per_pass / seconds_per_pass,
-        **summarize_errors(pred_e, pred_f, ref_e, ref_f, natoms),
+        **error_payload,
         **cuda_memory(torch),
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)
