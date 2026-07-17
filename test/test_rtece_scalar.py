@@ -387,6 +387,7 @@ def test_rtece_scripts_are_directly_executable():
     for script in (
         "benchmarks/oc20neb_tace_mace/train_rtece_scalar.py",
         "benchmarks/oc20neb_tace_mace/benchmark_rtece_scalar.py",
+        "benchmarks/oc20neb_tace_mace/profile_rtece_scalar.py",
     ):
         result = subprocess.run(
             [sys.executable, script, "--help"],
@@ -711,6 +712,24 @@ def test_summary_extracts_force_throughput_pareto_front():
     front = pareto_front_rows(rows, error_key="dft_f_mae_mev_a")
 
     assert [row["variant"] for row in front] == ["fast", "accurate"]
+
+
+def test_profile_rows_from_events_sorts_by_device_then_cpu_time():
+    from types import SimpleNamespace
+    from benchmarks.oc20neb_tace_mace.profile_rtece_scalar import profile_rows_from_events
+
+    events = [
+        SimpleNamespace(key="cpu_heavy", cpu_time_total=100.0, self_cpu_time_total=60.0, count=2),
+        SimpleNamespace(key="cuda_heavy", cpu_time_total=10.0, self_cpu_time_total=5.0, count=1, device_time_total=300.0),
+        SimpleNamespace(key="cuda_light", cpu_time_total=20.0, self_cpu_time_total=10.0, count=4, device_time_total=30.0),
+    ]
+
+    rows = profile_rows_from_events(events, limit=2)
+
+    assert [row["name"] for row in rows] == ["cuda_heavy", "cuda_light"]
+    assert rows[0]["device_time_total_us"] == 300.0
+    assert rows[0]["cpu_time_total_us"] == 10.0
+    assert rows[0]["count"] == 1
 
 def test_rtece_benchmark_row_preserves_force_mode():
     from benchmarks.oc20neb_tace_mace.summarize_tece_distill import make_student_row
