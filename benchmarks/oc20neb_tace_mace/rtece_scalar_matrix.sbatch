@@ -22,11 +22,14 @@ DFT_VALID_FILE=${DFT_VALID_FILE:-/home/gengjianrui/workdir_sjtu-caoxiaoming/geng
 TEACHER_VALID_FILE=${TEACHER_VALID_FILE:-${TACE_ROOT}/runs/oc20neb_tace_mace/tece-distill-20260717/teacher_valid.extxyz}
 VARIANTS=${VARIANTS:-rtece_pair rtece_atomic_moments rtece_edge_sketch8}
 LIMIT_CONFIGS=${LIMIT_CONFIGS:-128}
+VALID_LIMIT_CONFIGS=${VALID_LIMIT_CONFIGS:-64}
 BENCH_LIMIT_CONFIGS=${BENCH_LIMIT_CONFIGS:-1024}
 MAX_STEPS=${MAX_STEPS:-200}
 LR=${LR:-1e-3}
 MEASURE_PASSES=${MEASURE_PASSES:-5}
 DEFAULT_DTYPE=${DEFAULT_DTYPE:-float32}
+EVAL_INTERVAL=${EVAL_INTERVAL:-100}
+CHECKPOINT_NAME=${CHECKPOINT_NAME:-rtece_scalar_best.pt}
 
 mkdir -p /home/gengjianrui/bin/logs "${RUN_ROOT}"
 cd "${TACE_ROOT}"
@@ -55,13 +58,15 @@ for variant in "${variant_args[@]}"; do
     --valid-file "${DFT_VALID_FILE}" \
     --output-dir "${out_dir}" \
     --limit-configs "${LIMIT_CONFIGS}" \
+    --valid-limit-configs "${VALID_LIMIT_CONFIGS}" \
     --max-steps "${MAX_STEPS}" \
     --lr "${LR}" \
     --device cuda \
-    --default-dtype "${DEFAULT_DTYPE}"
+    --default-dtype "${DEFAULT_DTYPE}" \
+    --eval-interval "${EVAL_INTERVAL}"
 
   "${TACE_PYTHON}" "${TACE_ROOT}/benchmarks/oc20neb_tace_mace/benchmark_rtece_scalar.py" \
-    --model "${out_dir}/rtece_scalar.pt" \
+    --model "${out_dir}/${CHECKPOINT_NAME}" \
     --configs "${DFT_VALID_FILE}" \
     --output "${out_dir}/${variant}_dft_benchmark.json" \
     --variant "${variant}" \
@@ -71,7 +76,7 @@ for variant in "${variant_args[@]}"; do
     --default-dtype "${DEFAULT_DTYPE}"
 
   "${TACE_PYTHON}" "${TACE_ROOT}/benchmarks/oc20neb_tace_mace/benchmark_rtece_scalar.py" \
-    --model "${out_dir}/rtece_scalar.pt" \
+    --model "${out_dir}/${CHECKPOINT_NAME}" \
     --configs "${TEACHER_VALID_FILE}" \
     --output "${out_dir}/${variant}_teacher_benchmark.json" \
     --variant "${variant}" \

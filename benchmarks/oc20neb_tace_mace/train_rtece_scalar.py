@@ -110,18 +110,42 @@ def loss_for_batch(
     return e_loss + 10.0 * f_loss
 
 
+def evaluate_loss(
+    model: RTECEScalarModel,
+    samples: list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]],
+) -> float:
+    if not samples:
+        raise ValueError("evaluate_loss requires at least one sample")
+    was_training = model.training
+    model.eval()
+    losses = []
+    for graph, energy, forces in samples:
+        losses.append(float(loss_for_batch(model, graph, energy, forces).detach().cpu()))
+    if was_training:
+        model.train()
+    return float(sum(losses) / len(losses))
+
+
 def train_steps(
     model: RTECEScalarModel,
     samples: list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]],
     *,
     max_steps: int,
     lr: float,
+    valid_samples: list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]] | None = None,
+    eval_interval: int = 0,
+    best_checkpoint_path: Path | None = None,
+    config: RTECEScalarConfig | None = None,
 ) -> dict[str, float | int | None]:
     if not samples:
         raise ValueError("train_steps requires at least one sample")
+    if best_checkpoint_path is not None and config is None:
+        raise ValueError("config is required when best_checkpoint_path is set")
     model.train()
     opt = torch.optim.AdamW(model.parameters(), lr=lr)
     final_loss: float | None = None
+    best_valid_loss: float | None = None
+    best_step: int | None = None
     for step in range(max_steps):
         graph, energy, forces = samples[step % len(samples)]
         opt.zero_grad(set_to_none=True)
@@ -129,7 +153,25 @@ def train_steps(
         loss.backward()
         opt.step()
         final_loss = float(loss.detach().cpu())
-    return {"steps": max_steps, "final_loss": final_loss}
+        step_num = step + 1
+        if valid_samples is not None and eval_interval > 0 and step_num % eval_interval == 0:
+            valid_loss = evaluate_loss(model, valid_samples)
+            if best_valid_loss is None or valid_loss < best_valid_loss:
+                best_valid_loss = valid_loss
+                best_step = step_num
+                if best_checkpoint_path is not None:
+                    save_checkpoint(best_checkpoint_path, model, config)
+    if valid_samples is not None and best_valid_loss is None:
+        best_valid_loss = evaluate_loss(model, valid_samples)
+        best_step = max_steps
+        if best_checkpoint_path is not None:
+            save_checkpoint(best_checkpoint_path, model, config)
+    return {
+        "steps": max_steps,
+        "final_loss": final_loss,
+        "best_valid_loss": best_valid_loss,
+        "best_step": best_step,
+    }
 
 
 def load_samples(
@@ -165,11 +207,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--valid-file", type=Path, required=True)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--limit-configs", type=int, default=None)
+    parser.add_argument("--valid-limit-configs", type=int, default=64)
     parser.add_argument("--max-steps", type=int, default=1000)
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
     parser.add_argument("--default-dtype", choices=("float32", "float64"), default="float32")
     parser.add_argument("--no-fit-energy-shift", action="store_true")
+    parser.add_argument("--eval-interval", type=int, default=100)
+    parser.add_argument("--disable-best-checkpoint", action="store_true")
     return parser.parse_args()
 
 
@@ -189,17 +234,39 @@ def main() -> None:
     if not args.no_fit_energy_shift:
         config = replace(config, energy_per_atom_shift=fit_energy_per_atom_shift(samples))
     model = RTECEScalarModel(config).to(device=device, dtype=dtype)
-    summary = train_steps(model, samples, max_steps=args.max_steps, lr=args.lr)
+    valid_samples = None
+    best_checkpoint_path = None
+    if not args.disable_best_checkpoint and args.eval_interval > 0:
+        valid_samples = load_samples(
+            args.valid_file,
+            cutoff=config.cutoff,
+            device=device,
+            dtype=dtype,
+            limit_configs=args.valid_limit_configs,
+        )
+        best_checkpoint_path = args.output_dir / "rtece_scalar_best.pt"
+    summary = train_steps(
+        model,
+        samples,
+        max_steps=args.max_steps,
+        lr=args.lr,
+        valid_samples=valid_samples,
+        eval_interval=args.eval_interval,
+        best_checkpoint_path=best_checkpoint_path,
+        config=config,
+    )
     summary.update(
         {
             "variant": args.variant,
             "train_file": str(args.train_file),
             "valid_file": str(args.valid_file),
             "train_configs": len(samples),
+            "valid_configs": len(valid_samples) if valid_samples is not None else 0,
             "energy_per_atom_shift": config.energy_per_atom_shift,
             "device": str(device),
             "default_dtype": args.default_dtype,
             "checkpoint": str(args.output_dir / "rtece_scalar.pt"),
+            "best_checkpoint": str(best_checkpoint_path) if best_checkpoint_path is not None else None,
         }
     )
     save_checkpoint(args.output_dir / "rtece_scalar.pt", model, config)

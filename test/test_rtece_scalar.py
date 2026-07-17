@@ -321,3 +321,35 @@ def test_fit_energy_per_atom_shift_uses_total_energy_per_total_atom():
     ]
 
     assert fit_energy_per_atom_shift(samples) == 1.6
+
+
+
+def test_train_steps_saves_best_validation_checkpoint(tmp_path):
+    from ase import Atoms
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import atoms_to_graph, load_checkpoint, train_steps
+
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]])
+    atoms.info["energy"] = -0.5
+    atoms.arrays["forces"] = torch.zeros((2, 3), dtype=torch.float64).numpy()
+    config = build_rtece_config("rtece_pair")
+    model = RTECEScalarModel(config).double()
+    sample = atoms_to_graph(atoms, cutoff=config.cutoff, device=torch.device("cpu"), dtype=torch.float64)
+    best_path = tmp_path / "rtece_scalar_best.pt"
+
+    summary = train_steps(
+        model,
+        [sample],
+        max_steps=2,
+        lr=1e-3,
+        valid_samples=[sample],
+        eval_interval=1,
+        best_checkpoint_path=best_path,
+        config=config,
+    )
+    loaded_model, loaded_config = load_checkpoint(best_path, dtype=torch.float64)
+
+    assert best_path.exists()
+    assert loaded_config.variant == "rtece_pair"
+    assert isinstance(loaded_model, RTECEScalarModel)
+    assert summary["best_step"] in (1, 2)
+    assert torch.isfinite(torch.tensor(summary["best_valid_loss"]))
