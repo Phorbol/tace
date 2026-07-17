@@ -765,6 +765,32 @@ Stage-24 interpretation:
 - The current scalar rTECE Pareto front is now cleaner: radial4/16x16 for maximum throughput, radial5/16x16 as the useful fast middle point near pair-level accuracy, radial8/24x24 for much lower force error, and radial8/32x32 for the current lowest scalar force error. The next priority should shift from head-width sweeps to either fused descriptor construction or a radial5 training robustness repeat with a different seed/longer training, because the non-monotonic head behavior suggests training variance or optimization stability matters.
 
 
+## Stage 25 Smoke: Radial5/16x16 Seed Robustness
+
+Stage 24 found radial5/16x16 as a promising middle Pareto point. Stage 25 tested whether that conclusion is stable to initialization. The experiment added explicit seed plumbing and repeated the same architecture with `SEED=1` and `SEED=2`, keeping `rtece_element_density`, `num_radial=5`, `hidden=16x16`, train=512, valid=256, force weight 30, and `analytic_element_triton_force` fixed.
+
+Implementation gate:
+
+- `train_rtece_scalar.py` now exposes `--seed`, sets NumPy/Torch/CUDA seeds before model initialization, and records `seed` in `train_summary.json`.
+- `rtece_scalar_matrix.sbatch` forwards and logs `SEED`.
+- Full rTECE scalar test file after the change: 36 passed.
+
+4096-config prefix seed comparison:
+
+| seed | best valid loss | atoms/s | DFT F MAE | teacher F MAE | DFT E MAE | interpretation |
+|---:|---:|---:|---:|---:|---:|---|
+| pre-seed plumbing | 3.4773 | 38825023 | 39.02 | 43.07 | 1449.6 | optimistic Stage-24 point |
+| 1 | 3.4156 | 38876690 | 42.48 | 46.52 | 1430.1 | same throughput, worse force MAE |
+| 2 | 3.4345 | 38774313 | 45.78 | 49.21 | 1429.4 | same throughput, much worse force MAE |
+
+Stage-25 interpretation:
+
+- Throughput is robust because it is determined by architecture and evaluator: all radial5/16x16 seeds stay near 38.8M atoms/s with 481 parameters and the same memory class.
+- Accuracy is not robust under the current 512-config, 1000-step distillation setup. The seed0/pre-plumbing point weakly dominates pair32 on the prefix window, but seed1 and seed2 do not. Therefore radial5/16x16 should be treated as a promising candidate band, not a proven stable Pareto point.
+- The best-valid loss does not rank the DFT force MAE reliably across seeds: seed1/2 have better validation loss than seed0 but worse DFT force MAE. This implies the small train/valid proxy is not sufficient for selecting a robust low-precision endpoint.
+- The next priority should not be another head-width sweep. It should either improve selection robustness, such as longer training or a larger validation/selection window for radial5/16x16, or shift to fused descriptor construction where the architecture is already reliable. For the Pareto curve, report radial5 as a seed-sensitive band until repeated/longer runs narrow the error range.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
