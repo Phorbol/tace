@@ -20,7 +20,7 @@ from benchmarks.oc20neb_tace_mace.benchmark_models import (
     reference_arrays,
     summarize_errors,
 )
-from benchmarks.oc20neb_tace_mace.rtece_scalar_model import RTECEScalarConfig, collate_graphs
+from benchmarks.oc20neb_tace_mace.rtece_scalar_model import RTECEGraph, RTECEScalarConfig, collate_graphs
 from benchmarks.oc20neb_tace_mace.train_rtece_scalar import atoms_to_graph, load_checkpoint
 
 
@@ -49,6 +49,11 @@ def parse_args() -> argparse.Namespace:
         "--batch-graph-construction",
         action="store_true",
         help="When graph construction is timed, rebuild all graphs and collate before one batched model pass.",
+    )
+    parser.add_argument(
+        "--replay-cached-graph",
+        action="store_true",
+        help="Prebuild the graph once, then time position refresh plus one batched model pass.",
     )
     return parser.parse_args()
 
@@ -87,9 +92,29 @@ def choose_rtece_force_mode(
     return "autograd"
 
 
-def validate_graph_construction_args(*, include_graph_construction: bool, batch_graph_construction: bool) -> None:
+def validate_graph_construction_args(
+    *,
+    include_graph_construction: bool,
+    batch_graph_construction: bool,
+    replay_cached_graph: bool,
+) -> None:
     if batch_graph_construction and not include_graph_construction:
         raise ValueError("--batch-graph-construction requires --include-graph-construction")
+    if replay_cached_graph and include_graph_construction:
+        raise ValueError("--replay-cached-graph is separate from --include-graph-construction timing")
+    if replay_cached_graph and batch_graph_construction:
+        raise ValueError("--replay-cached-graph cannot be combined with --batch-graph-construction")
+
+
+def replay_graph_positions(template: RTECEGraph, positions: torch.Tensor) -> RTECEGraph:
+    if tuple(positions.shape) != tuple(template.pos.shape):
+        raise ValueError(f"cached positions shape {tuple(positions.shape)} does not match graph shape {tuple(template.pos.shape)}")
+    return RTECEGraph(
+        z=template.z,
+        pos=positions.to(device=template.pos.device, dtype=template.pos.dtype),
+        edge_index=template.edge_index,
+        batch=template.batch,
+    )
 
 
 def load_atoms_window(configs: Path, *, start_config: int, limit_configs: int | None):
@@ -111,6 +136,7 @@ def main() -> None:
     validate_graph_construction_args(
         include_graph_construction=bool(args.include_graph_construction),
         batch_graph_construction=bool(args.batch_graph_construction),
+        replay_cached_graph=bool(args.replay_cached_graph),
     )
     dtype = torch.float64 if args.default_dtype == "float64" else torch.float32
     requested = torch.device(args.device)
@@ -127,6 +153,8 @@ def main() -> None:
     )
     ref_e, ref_f, natoms = reference_arrays(atoms_list, "energy", "forces")
     prebuilt_graph = None
+    replay_template = None
+    replay_positions = None
     if not args.include_graph_construction:
         prebuilt_graph = collate_graphs(
             [
@@ -134,6 +162,10 @@ def main() -> None:
                 for atoms in atoms_list
             ]
         )
+        if args.replay_cached_graph:
+            replay_template = prebuilt_graph
+            replay_positions = prebuilt_graph.pos.detach().clone()
+            prebuilt_graph = None
 
     def run_model(graph):
         if force_mode == "analytic_pair":
@@ -153,6 +185,20 @@ def main() -> None:
     def forward_once(collect: bool):
         if prebuilt_graph is not None:
             out = run_model(prebuilt_graph)
+            if not collect:
+                return []
+            return [
+                {
+                    "energy": out["energy"].detach().cpu().numpy(),
+                    "forces": out["forces"].detach().cpu().numpy(),
+                }
+            ]
+
+        if replay_template is not None:
+            if replay_positions is None:
+                raise RuntimeError("cached replay positions were not initialized")
+            graph = replay_graph_positions(replay_template, replay_positions.clone())
+            out = run_model(graph)
             if not collect:
                 return []
             return [
@@ -234,6 +280,7 @@ def main() -> None:
         "num_parameters": int(sum(p.numel() for p in model.parameters())),
         "includes_graph_construction": bool(args.include_graph_construction),
         "batched_graph_construction": bool(args.batch_graph_construction),
+        "replay_cached_graph": bool(args.replay_cached_graph),
         "prebuilt_batched_graph": prebuilt_graph is not None,
         "measure_passes": args.measure_passes,
         "pass_times_s": pass_times,
