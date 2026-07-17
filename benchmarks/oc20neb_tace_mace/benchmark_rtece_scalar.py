@@ -89,6 +89,12 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="In trajectory replay mode, time validity checks plus provider graph updates/rebuilds, without model evaluation.",
     )
+    parser.add_argument(
+        "--graph-update-backend",
+        choices=("ase_neighborlist", "cached_topology"),
+        default="ase_neighborlist",
+        help="Graph update backend used when trajectory replay invalidates the cached graph.",
+    )
     return parser.parse_args()
 
 
@@ -186,6 +192,24 @@ class GraphUpdateBackend:
         self.rebuild_times_s.append(float(elapsed))
         self.total_rebuild_time_s += float(elapsed)
         return result
+
+
+def make_graph_update_backend(
+    *,
+    backend_name: str,
+    rebuild_fn,
+    template_graph: RTECEGraph | None = None,
+) -> GraphUpdateBackend:
+    if backend_name == "ase_neighborlist":
+        return GraphUpdateBackend("ase_neighborlist", rebuild_fn)
+    if backend_name == "cached_topology":
+        if template_graph is None:
+            raise ValueError("cached_topology graph update backend requires a template graph")
+        return GraphUpdateBackend(
+            "cached_topology",
+            lambda positions: replay_graph_positions(template_graph, positions),
+        )
+    raise ValueError(f"unknown graph update backend: {backend_name}")
 
 
 class TrajectoryGraphCacheProvider:
@@ -390,7 +414,11 @@ def main() -> None:
             offset += count_int
         return collate_graphs(rebuilt)
 
-    graph_update_backend = GraphUpdateBackend("ase_neighborlist", rebuild_batched_graph_from_positions)
+    graph_update_backend = make_graph_update_backend(
+        backend_name=args.graph_update_backend,
+        rebuild_fn=rebuild_batched_graph_from_positions,
+        template_graph=trajectory_template,
+    )
 
     def reset_trajectory_runtime_state() -> None:
         nonlocal trajectory_provider, graph_update_backend
@@ -400,7 +428,11 @@ def main() -> None:
             trajectory_base_positions,
             skin_margin=float(args.trajectory_skin_margin),
         )
-        graph_update_backend = GraphUpdateBackend("ase_neighborlist", rebuild_batched_graph_from_positions)
+        graph_update_backend = make_graph_update_backend(
+            backend_name=args.graph_update_backend,
+            rebuild_fn=rebuild_batched_graph_from_positions,
+            template_graph=trajectory_template,
+        )
 
     def run_model(graph):
         if force_mode == "analytic_pair":

@@ -965,6 +965,34 @@ def test_trajectory_graph_cache_provider_tracks_rebuild_state():
     assert provider.rebuild_causes == ["skin"]
 
 
+def test_cached_topology_update_backend_reuses_edges_and_updates_positions():
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import make_graph_update_backend
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import RTECEGraph
+
+    template = RTECEGraph(
+        z=torch.tensor([6, 8], dtype=torch.long),
+        pos=torch.zeros((2, 3), dtype=torch.float64),
+        edge_index=torch.tensor([[0, 1], [1, 0]], dtype=torch.long),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+    new_positions = torch.tensor([[0.1, 0.2, 0.3], [1.0, 1.1, 1.2]], dtype=torch.float64)
+
+    backend = make_graph_update_backend(
+        backend_name="cached_topology",
+        rebuild_fn=lambda positions: (_ for _ in ()).throw(AssertionError("ASE rebuild should not run")),
+        template_graph=template,
+    )
+    graph = backend.rebuild(new_positions)
+
+    assert graph.z is template.z
+    assert graph.edge_index is template.edge_index
+    assert graph.batch is template.batch
+    assert torch.equal(graph.pos, new_positions)
+    assert graph.pos is not template.pos
+    assert backend.name == "cached_topology"
+    assert backend.rebuild_count == 1
+
+
 def test_graph_update_backend_records_rebuild_timing():
     from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import GraphUpdateBackend
 
@@ -1039,6 +1067,7 @@ def test_rtece_benchmark_help_exposes_force_mode():
     assert "--trajectory-skin-margin" in result.stdout
     assert "--trajectory-validity-only" in result.stdout
     assert "--trajectory-update-only" in result.stdout
+    assert "--graph-update-backend" in result.stdout
     assert "auto" in result.stdout
     assert "analytic_pair" in result.stdout
     assert "analytic_pair_triton_force" in result.stdout
