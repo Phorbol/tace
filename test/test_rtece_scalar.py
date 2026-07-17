@@ -37,6 +37,7 @@ def test_build_rtece_config_defines_ordered_variants():
     pair = build_rtece_config("rtece_pair")
     element = build_rtece_config("rtece_element_density")
     quadratic = build_rtece_config("rtece_density_quadratic")
+    vector = build_rtece_config("rtece_vector_moments")
     atomic = build_rtece_config("rtece_atomic_moments")
     sketch8 = build_rtece_config("rtece_edge_sketch8")
     sketch16 = build_rtece_config("rtece_edge_sketch16")
@@ -53,6 +54,10 @@ def test_build_rtece_config_defines_ordered_variants():
     assert quadratic.use_density_quadratic is True
     assert quadratic.use_atomic_moments is False
     assert quadratic.num_edge_sketches == 0
+    assert vector.variant == "rtece_vector_moments"
+    assert vector.use_vector_moments is True
+    assert vector.use_atomic_moments is False
+    assert vector.num_edge_sketches == 0
     assert atomic.use_atomic_moments is True
     assert atomic.num_edge_sketches == 0
     assert sketch8.use_atomic_moments is True
@@ -63,6 +68,7 @@ def test_build_rtece_config_defines_ordered_variants():
         descriptor_dim(pair)
         < descriptor_dim(element)
         == descriptor_dim(quadratic)
+        == descriptor_dim(vector)
         < descriptor_dim(atomic)
         < descriptor_dim(sketch8)
         < descriptor_dim(sketch16)
@@ -124,6 +130,42 @@ def test_density_quadratic_descriptors_are_rotation_invariant():
 
     assert desc.shape[-1] == 2 * config.num_radial
     assert torch.allclose(desc, desc_rot, atol=1e-10, rtol=1e-10)
+
+
+def test_vector_moment_descriptors_are_rotation_invariant_and_geometry_sensitive():
+    config = build_rtece_config("rtece_vector_moments")
+    z = torch.tensor([6, 8, 1, 1], dtype=torch.long)
+    pos = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [0.7, 0.2, 0.1],
+            [-0.3, 0.6, -0.2],
+            [0.4, -0.5, 0.3],
+        ],
+        dtype=torch.float64,
+    )
+    bent = pos.clone()
+    bent[2] = torch.tensor([-0.1, 0.8, -0.4], dtype=torch.float64)
+    edge_index = complete_directed_edges(4)
+    batch = torch.zeros(4, dtype=torch.long)
+
+    graph = RTECEGraph(z=z, pos=pos, edge_index=edge_index, batch=batch)
+    rotated = RTECEGraph(
+        z=z,
+        pos=pos @ rotation_z(0.73).T,
+        edge_index=edge_index,
+        batch=batch,
+    )
+    geometry_changed = RTECEGraph(z=z, pos=bent, edge_index=edge_index, batch=batch)
+
+    desc = atomic_scalar_descriptors(graph, config)
+    desc_rot = atomic_scalar_descriptors(rotated, config)
+    desc_changed = atomic_scalar_descriptors(geometry_changed, config)
+
+    assert desc.shape[-1] == 2 * config.num_radial
+    assert torch.allclose(desc, desc_rot, atol=1e-10, rtol=1e-10)
+    assert not torch.allclose(desc, desc_changed, atol=1e-10, rtol=1e-10)
+
 
 def test_atomic_scalar_descriptors_are_rotation_invariant():
     config = build_rtece_config("rtece_atomic_moments")
@@ -530,6 +572,43 @@ def test_density_analytic_forces_match_autograd_forces_for_element_descriptors()
         atol=1e-8,
         rtol=1e-8,
     )
+
+
+def test_density_analytic_forces_match_autograd_forces_for_vector_moments():
+    config = RTECEScalarConfig(
+        variant="rtece_vector_moments",
+        use_vector_moments=True,
+        use_atomic_moments=False,
+        num_edge_sketches=0,
+        energy_per_atom_shift=-0.25,
+    )
+    model = RTECEScalarModel(config).double().eval()
+    graph = RTECEGraph(
+        z=torch.tensor([6, 8, 1, 1], dtype=torch.long),
+        pos=torch.tensor(
+            [
+                [0.0, 0.0, 0.0],
+                [0.7, 0.2, 0.1],
+                [-0.3, 0.6, -0.2],
+                [0.4, -0.5, 0.3],
+            ],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(4),
+        batch=torch.zeros(4, dtype=torch.long),
+    )
+
+    autograd_out = model(graph)
+    analytic_out = model.forward_density_analytic_forces(graph)
+
+    assert torch.allclose(analytic_out["energy"], autograd_out["energy"], atol=1e-10, rtol=1e-10)
+    assert torch.allclose(
+        analytic_out["forces"],
+        autograd_out["forces"],
+        atol=1e-8,
+        rtol=1e-8,
+    )
+
 
 def test_density_analytic_forces_match_autograd_forces_for_quadratic_descriptors():
     config = RTECEScalarConfig(
