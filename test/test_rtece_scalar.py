@@ -158,3 +158,18 @@ def test_rtece_scalar_model_energy_is_permutation_invariant_for_complete_graph()
     e_perm = model(graph_perm)["energy"]
 
     assert torch.allclose(e, e_perm, atol=1e-10, rtol=1e-10)
+
+
+
+def test_rtece_checkpoint_roundtrip(tmp_path):
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import save_checkpoint, load_checkpoint
+
+    config = build_rtece_config("rtece_pair")
+    model = RTECEScalarModel(config).double()
+    path = tmp_path / "rtece_scalar.pt"
+
+    save_checkpoint(path, model, config)
+    loaded_model, loaded_config = load_checkpoint(path, dtype=torch.float64)
+
+    assert loaded_config.variant == "rtece_pair"
+    assert isinstance(loaded_model, RTECEScalarModel)
