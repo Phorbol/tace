@@ -317,6 +317,25 @@ Stage-9 interpretation:
 - The useful low-capacity pair model is still early-training limited. Longer runs can degrade even with validation selection, so future training should emphasize validation design, LR schedule, and possibly force/energy loss weighting before adding architecture complexity.
 - Next throughput priority is benchmark batch scaling for the 678603 checkpoint to check whether the same model can approach the 1e7 atoms step/s class at larger prebuilt batches.
 
+
+## Stage 10 Smoke: rTECE Pair Batch-Scaling Throughput
+
+Stage 10 benchmarked the current best checkpoint from job 678603 at larger prebuilt batches. This isolates model forward/force-autograd throughput from ASE graph construction and tests whether the T3 pair point can approach the >1e7 atoms step/s target by batching alone.
+
+| job | limit configs | atoms | atoms/s | configs/s | peak alloc MB | DFT F MAE | interpretation |
+|---:|---:|---:|---:|---:|---:|---:|---|
+| 678615 | 1024 | 59193 | 6809129 | 117793 | 718.8 | 50.91 | baseline 1024-config batch |
+| 678615 | 2048 | 119271 | 7094841 | 121825 | 1406.3 | 49.64 | modest throughput gain |
+| 678615 | 4096 | 250355 | 7313717 | 119658 | 2963.7 | 47.93 | best accuracy estimate on larger subset |
+| 678618 | 8192 | 525769 | 7442352 | 115959 | 6193.9 | 49.33 | throughput nearly plateaus before V100 memory limit |
+
+Stage-10 interpretation:
+
+- Batching alone raises the current best rTECE pair point from 6.8M to 7.44M atoms/s, but it does not reach 1e7. The curve is flattening by 4096-8192 configs.
+- The remaining gap is likely implementation/kernel overhead in PyTorch scatter/autograd force evaluation, not insufficient batch size.
+- The current quantitative Pareto anchor is therefore: `rtece_pair`, best-validation checkpoint from job 678603, 47.9-50.9 meV/A DFT force MAE depending on benchmark subset, 6.8-7.4M atoms/s on one V100, prebuilt graph, 0.7-6.2GB peak depending on batch.
+- Next architecture/compiler priority: optimize the rTECE pair force path, or export/fuse scalar descriptor and analytic force kernels. Adding edge sketches is lower priority because `edge_sketch8` was throughput-dominated and not more accurate in early tests.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
