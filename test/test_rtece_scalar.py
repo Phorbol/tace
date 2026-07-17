@@ -461,6 +461,13 @@ def test_rtece_benchmark_row_preserves_force_mode():
     assert row["force_mode"] == "analytic_pair"
 
 
+def test_rtece_matrix_sbatch_forwards_benchmark_force_mode():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
+
+    assert "FORCE_MODE=${FORCE_MODE:-autograd}" in script
+    assert '--force-mode "${FORCE_MODE}"' in script
+
 def test_extxyz_index_supports_offset_windows():
     from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import extxyz_index
 

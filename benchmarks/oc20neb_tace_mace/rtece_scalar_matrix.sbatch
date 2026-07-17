@@ -31,6 +31,7 @@ ENERGY_WEIGHT=${ENERGY_WEIGHT:-1.0}
 FORCE_WEIGHT=${FORCE_WEIGHT:-10.0}
 MEASURE_PASSES=${MEASURE_PASSES:-5}
 DEFAULT_DTYPE=${DEFAULT_DTYPE:-float32}
+FORCE_MODE=${FORCE_MODE:-autograd}
 EVAL_INTERVAL=${EVAL_INTERVAL:-100}
 CHECKPOINT_NAME=${CHECKPOINT_NAME:-rtece_scalar_best.pt}
 
@@ -46,6 +47,7 @@ echo "run_root=${RUN_ROOT}"
 echo "hidden_channels=${HIDDEN_CHANNELS}"
 echo "energy_weight=${ENERGY_WEIGHT}"
 echo "force_weight=${FORCE_WEIGHT}"
+echo "force_mode=${FORCE_MODE}"
 "${TACE_PYTHON}" -V
 nvidia-smi -L
 
@@ -81,6 +83,7 @@ for variant in "${variant_args[@]}"; do
     --variant "${variant}" \
     --limit-configs "${BENCH_LIMIT_CONFIGS}" \
     --measure-passes "${MEASURE_PASSES}" \
+    --force-mode "${FORCE_MODE}" \
     --device cuda \
     --default-dtype "${DEFAULT_DTYPE}"
 
@@ -91,6 +94,7 @@ for variant in "${variant_args[@]}"; do
     --variant "${variant}" \
     --limit-configs "${BENCH_LIMIT_CONFIGS}" \
     --measure-passes "${MEASURE_PASSES}" \
+    --force-mode "${FORCE_MODE}" \
     --device cuda \
     --default-dtype "${DEFAULT_DTYPE}"
 done
