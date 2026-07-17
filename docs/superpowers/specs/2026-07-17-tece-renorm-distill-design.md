@@ -520,6 +520,35 @@ Stage-16 interpretation:
 - Next priority: add the cheapest geometric scalar carrying genuinely new information with an analytic force path, most likely vector moment norm before quadrupole norm or edge sketches. If that is dominated, freeze the rTECE scalar Pareto front and move to kernel fusion/export around pair and element-density.
 
 
+## Stage 17 Smoke: Vector Moment Norm
+
+Stage 16 showed that restoring neighbor-element-conditioned radial density is Pareto-positive. Stage 17 tested the next geometric semantic block, `rtece_vector_moments`, which augments density descriptors with the rotational invariant `||sum_j R_n(r_ij) u_ij||^2`. This is theoretically cleaner than jumping to full atomic moments because it adds only vector-norm information and still omits quadrupole norms and edge sketches. The implementation uses an analytic chain-rule force path: density and MLP gradients are still differentiated with respect to scalar descriptors, while the radial/unit-vector derivative of the vector moment is evaluated explicitly.
+
+Implementation gate:
+
+- `RTECEScalarConfig` now has `use_vector_moments`.
+- `build_rtece_config("rtece_vector_moments")` creates the new ordered variant.
+- Vector-moment descriptors are rotation invariant and geometry sensitive.
+- `forward_density_analytic_forces` matches full autograd forces for vector-moment descriptors.
+- Full rTECE test file after the change: 29 passed.
+
+4096-config prefix comparison, all with mixed labels and force weight 30:
+
+| job | variant | hidden | params | atoms/s | peak alloc MB | DFT F MAE | teacher F MAE | force mode | interpretation |
+|---:|---|---|---:|---:|---:|---:|---:|---|---|
+| 678682 | `rtece_pair` | 32x32 | 1409 | 18622904 | 1405.4 | 39.42 | 43.14 | analytic_pair | maximum-throughput front point |
+| 678671 | `rtece_pair` | 64x64 | 4865 | 16230621 | 1405.4 | 36.13 | 40.69 | analytic_pair | intermediate pair front point |
+| 678749 | `rtece_element_density` | 32x32 | 1665 | 14696599 | 1404.9 | 28.14 | 33.93 | analytic_density | current lower-error rTECE front point |
+| 678770 | `rtece_vector_moments` | 32x32 | 1665 | 6673068 | 3401.9 | 34.41 | 38.83 | analytic_density | dominated; too slow and less accurate than element-density |
+
+Stage-17 interpretation:
+
+- This is a useful negative result. The vector-moment semantic block is theoretically meaningful, but the current unfused PyTorch scatter/analytic-force implementation makes it too expensive.
+- The comparison isolates hardware cost from parameter count: vector moments and element density both have 1665 parameters, but vector moments are about 2.2x slower and use about 2.4x more peak allocation.
+- Because vector moments are dominated by element-density 32x32, do not run vector 64x64, quadrupole-only, or full atomic moments as the next priority in this implementation.
+- The clean current rTECE Pareto front remains pair-32, pair-64, and element-density-32. The next priority shifts from adding descriptor semantics to reducing implementation cost: fusion/export of pair and element-density analytic kernels, or a cheaper element-conditioned scalar formulation.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
