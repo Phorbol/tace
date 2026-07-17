@@ -298,6 +298,25 @@ Stage-8 interpretation:
 - This is still not the final target of >1e7 atoms step/s, but it establishes a quantitative T3 Pareto anchor that compact TACE could not reach.
 - Next priority: refine early checkpoint resolution (`eval_interval` 20-50) and benchmark batch scaling; do not add heavier edge sketches until pair has been fully characterized.
 
+
+## Stage 9 Smoke: rTECE Validation-Subset Selection
+
+Stage 8 established best-checkpoint selection, but the validation subset matters. Stage 9 compared a finer early checkpoint interval against a larger validation subset.
+
+| job | validation configs | eval interval | max steps | best step | atoms/s | peak alloc MB | DFT F MAE | teacher F MAE | interpretation |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---|
+| 678597 | 64 | 100 | 5000 | 200 | 6814191 | 718.8 | 56.59 | 60.12 | useful best-checkpoint baseline |
+| 678600 | 64 | 20 | 1000 | 140 | 6829702 | 718.8 | 71.82 | 74.39 | finer interval overfits noisy 64-config validation |
+| 678603 | 256 | 100 | 1000 | 1000 | 6742026 | 718.8 | 50.91 | 54.56 | current best rTECE point |
+| 678606 | 256 | 100 | 2000 | 1700 | 6827578 | 718.8 | 66.50 | 69.13 | longer run degrades despite validation selection |
+
+Stage-9 interpretation:
+
+- The current best point is `rtece_pair` from job 678603: 6.74M atoms/s, 50.91 meV/A DFT force MAE, 54.56 meV/A teacher force MAE.
+- A larger validation subset is more important than a finer interval; 64-config validation picked a worse checkpoint when evaluated on 1024 configs.
+- The useful low-capacity pair model is still early-training limited. Longer runs can degrade even with validation selection, so future training should emphasize validation design, LR schedule, and possibly force/energy loss weighting before adding architecture complexity.
+- Next throughput priority is benchmark batch scaling for the 678603 checkpoint to check whether the same model can approach the 1e7 atoms step/s class at larger prebuilt batches.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
