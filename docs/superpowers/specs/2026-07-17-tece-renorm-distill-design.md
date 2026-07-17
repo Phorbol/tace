@@ -604,6 +604,30 @@ Stage-19 interpretation:
 - The next implementation priority should be a real fused/exported evaluator for pair and element-density descriptors, or a lower-level custom kernel that computes density, element-density, MLP input, and edge force scale without materializing avoidable intermediate tensors.
 
 
+## Stage 20 Smoke: rTECE Scalar Profiler
+
+Stage 19 rejected PyTorch-level descriptor packing. Stage 20 added a reusable `profile_rtece_scalar.py` profiler and profiled representative front points: pair-32 with `analytic_pair` and element-density-24 with `analytic_density`, each on the same 4096-config prebuilt V100 benchmark window.
+
+Implementation gate:
+
+- `profile_rtece_scalar.py` loads an rTECE checkpoint, builds a prebuilt batched graph, profiles selected force mode passes with `torch.profiler`, exports JSON top ops, and can optionally export a Chrome trace.
+- `rtece_scalar_profile.sbatch` runs the profiler on the cluster.
+- Full rTECE test file after the change: 31 passed.
+
+Profiler evidence, inclusive device time over 5 profiled passes:
+
+| point | leading ops | interpretation |
+|---|---|---|
+| pair-32 analytic pair | `aten::mul` 16.75 ms, `aten::linear/addmm` 7.49 ms, `index_add_` 6.23 ms, `div` 5.96 ms, `index` 4.95 ms | radial/force elementwise and scatter/gather are at least as important as MLP work |
+| element-density-24 analytic density | `aten::mul` 24.01 ms, `index_add_` 9.32 ms, `index` 7.51 ms, `div` 5.96 ms, `sum` 5.18 ms | extra chemistry descriptor mainly adds elementwise/scatter/gather cost |
+
+Stage-20 interpretation:
+
+- The fusion target is now concrete: radial basis plus cutoff, density/element-density accumulation, descriptor-gradient edge scale, and force accumulation should be fused or exported together.
+- MLP-only fusion is not enough, because GEMM is visible but not the dominant exclusive story; the scalar physics path launches many small elementwise, gather, and scatter kernels.
+- This matches the TECE/TACE document logic: the useful model degradation has already removed persistent equivariant state; the remaining bottleneck is execution of the scalarized renormalized operator, so the next work should be a fused low-level evaluator for the current Pareto front rather than adding more semantic descriptors.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

@@ -1,0 +1,160 @@
+{
+  "profiles": [
+    {
+      "label": "pair32_analytic_pair",
+      "path": "runs/oc20neb_tace_mace/rtece-prof-pair32-analytic/analytic_pair_profile.json",
+      "force_mode": "analytic_pair",
+      "atoms": 250355,
+      "configs": 4096,
+      "profile_passes": 5,
+      "num_parameters": 1409,
+      "selected_top_ops": [
+        {
+          "count": 70,
+          "cpu_time_total_us": 735.5580000000118,
+          "device_time_total_us": 16751.411999999997,
+          "name": "aten::mul",
+          "self_cpu_time_total_us": 443.7940000000599,
+          "short_name": "aten::mul"
+        },
+        {
+          "count": 15,
+          "cpu_time_total_us": 827.0829999999842,
+          "device_time_total_us": 7490.920999999966,
+          "name": "aten::linear",
+          "self_cpu_time_total_us": 26.110000000018772,
+          "short_name": "aten::linear"
+        },
+        {
+          "count": 15,
+          "cpu_time_total_us": 528.4789999999703,
+          "device_time_total_us": 7490.920999999966,
+          "name": "aten::addmm",
+          "self_cpu_time_total_us": 394.8969999999608,
+          "short_name": "aten::addmm"
+        },
+        {
+          "count": 25,
+          "cpu_time_total_us": 0.0,
+          "device_time_total_us": 7352.9940000000315,
+          "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1})",
+          "self_cpu_time_total_us": 0.0,
+          "short_name": "cuda mul elementwise kernel"
+        },
+        {
+          "count": 10,
+          "cpu_time_total_us": 0.0,
+          "device_time_total_us": 7125.382999999976,
+          "name": "volta_sgemm_32x128_tn",
+          "self_cpu_time_total_us": 0.0,
+          "short_name": "volta_sgemm"
+        },
+        {
+          "count": 25,
+          "cpu_time_total_us": 304.9650000000147,
+          "device_time_total_us": 6226.729999999963,
+          "name": "aten::index_add_",
+          "self_cpu_time_total_us": 199.5909999999967,
+          "short_name": "aten::index_add_"
+        },
+        {
+          "count": 15,
+          "cpu_time_total_us": 0.0,
+          "device_time_total_us": 5985.743999999959,
+          "name": "void at::native::indexFuncLargeIndex<float, long, unsigned int, 2, 2, -2, true, at::native::(anonymous namespace)::ReduceAdd>(at::cuda::detail::TensorInfo<float, unsigned int>, at::cuda::detail::TensorInfo<float const, unsigned int>, at::cuda::detail::TensorInfo<long const, unsigned int>, int, int, unsigned int, unsigned int, long, long, at::native::(anonymous namespace)::ReduceAdd const&, float)",
+          "self_cpu_time_total_us": 0.0,
+          "short_name": "cuda index_add reduce kernel"
+        },
+        {
+          "count": 40,
+          "cpu_time_total_us": 426.07600000000093,
+          "device_time_total_us": 5957.659999999982,
+          "name": "aten::div",
+          "self_cpu_time_total_us": 264.7839999999742,
+          "short_name": "aten::div"
+        }
+      ]
+    },
+    {
+      "label": "element_density24_analytic_density",
+      "path": "runs/oc20neb_tace_mace/rtece-prof-element24-density/analytic_density_profile.json",
+      "force_mode": "analytic_density",
+      "atoms": 250355,
+      "configs": 4096,
+      "profile_passes": 5,
+      "num_parameters": 1057,
+      "selected_top_ops": [
+        {
+          "count": 85,
+          "cpu_time_total_us": 881.6749999999665,
+          "device_time_total_us": 24006.176,
+          "name": "aten::mul",
+          "self_cpu_time_total_us": 521.984000000034,
+          "short_name": "aten::mul"
+        },
+        {
+          "count": 35,
+          "cpu_time_total_us": 0.0,
+          "device_time_total_us": 11690.43099999999,
+          "name": "void at::native::elementwise_kernel<128, 2, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1}>(int, at::native::gpu_kernel_impl_nocast<at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > >(at::TensorIteratorBase&, at::native::BinaryFunctor<float, float, float, at::native::binary_internal::MulFunctor<float> > const&)::{lambda(int)#1})",
+          "self_cpu_time_total_us": 0.0,
+          "short_name": "cuda mul elementwise kernel"
+        },
+        {
+          "count": 30,
+          "cpu_time_total_us": 333.3549999999632,
+          "device_time_total_us": 9321.102000000024,
+          "name": "aten::index_add_",
+          "self_cpu_time_total_us": 213.78199999996832,
+          "short_name": "aten::index_add_"
+        },
+        {
+          "count": 20,
+          "cpu_time_total_us": 0.0,
+          "device_time_total_us": 9083.596999999998,
+          "name": "void at::native::indexFuncLargeIndex<float, long, unsigned int, 2, 2, -2, true, at::native::(anonymous namespace)::ReduceAdd>(at::cuda::detail::TensorInfo<float, unsigned int>, at::cuda::detail::TensorInfo<float const, unsigned int>, at::cuda::detail::TensorInfo<long const, unsigned int>, int, int, unsigned int, unsigned int, long, long, at::native::(anonymous namespace)::ReduceAdd const&, float)",
+          "self_cpu_time_total_us": 0.0,
+          "short_name": "cuda index_add reduce kernel"
+        },
+        {
+          "count": 25,
+          "cpu_time_total_us": 789.1670000000163,
+          "device_time_total_us": 7513.099999999961,
+          "name": "aten::index",
+          "self_cpu_time_total_us": 586.7440000000556,
+          "short_name": "aten::index"
+        },
+        {
+          "count": 40,
+          "cpu_time_total_us": 440.09999999996853,
+          "device_time_total_us": 5957.134000000041,
+          "name": "aten::div",
+          "self_cpu_time_total_us": 270.1699999999764,
+          "short_name": "aten::div"
+        },
+        {
+          "count": 15,
+          "cpu_time_total_us": 414.24500000002445,
+          "device_time_total_us": 5176.017000000038,
+          "name": "aten::sum",
+          "self_cpu_time_total_us": 335.35400000004665,
+          "short_name": "aten::sum"
+        },
+        {
+          "count": 35,
+          "cpu_time_total_us": 702.7760000000098,
+          "device_time_total_us": 3648.338999999997,
+          "name": "aten::pow",
+          "self_cpu_time_total_us": 547.5049999999674,
+          "short_name": "aten::pow"
+        }
+      ]
+    }
+  ],
+  "interpretation": {
+    "profiling_scope": "4096-config prebuilt batched graph, 250355 atoms, 5 profiled passes on V100",
+    "main_bottleneck": "radial/force elementwise kernels plus scatter/gather dominate before MLP-only work",
+    "fusion_target": "fuse radial basis, cutoff, density/element-density scatter, descriptor-gradient edge scale, and force index_add where possible",
+    "non_target": "MLP-only fusion is not sufficient; PyTorch-level descriptor packing was already negative in Stage 19"
+  }
+}
