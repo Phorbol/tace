@@ -84,6 +84,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="In trajectory replay mode, time only position generation plus graph-cache validity checks, without model evaluation or graph rebuilds.",
     )
+    parser.add_argument(
+        "--trajectory-update-only",
+        action="store_true",
+        help="In trajectory replay mode, time validity checks plus provider graph updates/rebuilds, without model evaluation.",
+    )
     return parser.parse_args()
 
 
@@ -130,6 +135,7 @@ def validate_graph_construction_args(
     trajectory_rebuild_interval: int = 0,
     trajectory_skin_margin: float = 0.0,
     trajectory_validity_only: bool = False,
+    trajectory_update_only: bool = False,
 ) -> None:
     if trajectory_replay_steps < 0:
         raise ValueError(f"--trajectory-replay-steps must be non-negative, got {trajectory_replay_steps}")
@@ -148,6 +154,8 @@ def validate_graph_construction_args(
             raise ValueError("--trajectory-replay-steps is separate from graph-construction and cached-graph replay modes")
         if trajectory_validity_only and trajectory_rebuild_interval:
             raise ValueError("--trajectory-validity-only cannot be combined with --trajectory-rebuild-interval")
+        if trajectory_validity_only and trajectory_update_only:
+            raise ValueError("--trajectory-validity-only cannot be combined with --trajectory-update-only")
         if trajectory_rebuild_interval == 0:
             return
         if trajectory_rebuild_interval < 1:
@@ -158,6 +166,26 @@ def validate_graph_construction_args(
         raise ValueError("--trajectory-skin-margin requires --trajectory-replay-steps")
     elif trajectory_validity_only:
         raise ValueError("--trajectory-validity-only requires --trajectory-replay-steps")
+    elif trajectory_update_only:
+        raise ValueError("--trajectory-update-only requires --trajectory-replay-steps")
+
+
+class GraphUpdateBackend:
+    def __init__(self, name: str, rebuild_fn):
+        self.name = str(name)
+        self._rebuild_fn = rebuild_fn
+        self.rebuild_count = 0
+        self.rebuild_times_s: list[float] = []
+        self.total_rebuild_time_s = 0.0
+
+    def rebuild(self, positions: torch.Tensor):
+        start = time.perf_counter()
+        result = self._rebuild_fn(positions)
+        elapsed = time.perf_counter() - start
+        self.rebuild_count += 1
+        self.rebuild_times_s.append(float(elapsed))
+        self.total_rebuild_time_s += float(elapsed)
+        return result
 
 
 class TrajectoryGraphCacheProvider:
@@ -304,6 +332,7 @@ def main() -> None:
         trajectory_rebuild_interval=int(args.trajectory_rebuild_interval),
         trajectory_skin_margin=float(args.trajectory_skin_margin),
         trajectory_validity_only=bool(args.trajectory_validity_only),
+        trajectory_update_only=bool(args.trajectory_update_only),
     )
     dtype = torch.float64 if args.default_dtype == "float64" else torch.float32
     requested = torch.device(args.device)
@@ -325,6 +354,7 @@ def main() -> None:
     trajectory_template = None
     trajectory_base_positions = None
     trajectory_provider = None
+    graph_update_backend = None
     trajectory_report_rebuild_steps: list[int] = []
     trajectory_report_rebuild_causes: list[str] = []
     trajectory_report_max_displacement = 0.0
@@ -359,6 +389,18 @@ def main() -> None:
             rebuilt.append(atoms_to_geometry_graph(atoms_copy, cutoff=config.cutoff, device=device, dtype=dtype))
             offset += count_int
         return collate_graphs(rebuilt)
+
+    graph_update_backend = GraphUpdateBackend("ase_neighborlist", rebuild_batched_graph_from_positions)
+
+    def reset_trajectory_runtime_state() -> None:
+        nonlocal trajectory_provider, graph_update_backend
+        if trajectory_template is None or trajectory_base_positions is None:
+            return
+        trajectory_provider = TrajectoryGraphCacheProvider(
+            trajectory_base_positions,
+            skin_margin=float(args.trajectory_skin_margin),
+        )
+        graph_update_backend = GraphUpdateBackend("ase_neighborlist", rebuild_batched_graph_from_positions)
 
     def run_model(graph):
         if force_mode == "analytic_pair":
@@ -430,14 +472,14 @@ def main() -> None:
                     if args.trajectory_validity_only:
                         trajectory_provider.mark_rebuilt(positions, step=step, cause=rebuild_cause)
                     else:
-                        graph_template = rebuild_batched_graph_from_positions(positions)
+                        graph_template = graph_update_backend.rebuild(positions)
                         trajectory_provider.mark_rebuilt(positions, step=step, cause=rebuild_cause)
                         graph = graph_template
                     pass_rebuild_steps.append(step)
                     pass_rebuild_causes.append(rebuild_cause)
                 elif not args.trajectory_validity_only:
                     graph = replay_graph_positions(graph_template, positions)
-                if args.trajectory_validity_only:
+                if args.trajectory_validity_only or args.trajectory_update_only:
                     continue
                 out = run_model(graph)
                 if collect and step == 0:
@@ -483,6 +525,7 @@ def main() -> None:
                 )
         return outputs
 
+    reset_trajectory_runtime_state()
     forward_once(False)
     if device.type == "cuda":
         torch.cuda.synchronize()
@@ -491,6 +534,7 @@ def main() -> None:
     pass_times = []
     first_outputs = []
     for pass_idx in range(max(1, args.measure_passes)):
+        reset_trajectory_runtime_state()
         start = time.perf_counter()
         outputs = forward_once(pass_idx == 0)
         if device.type == "cuda":
@@ -533,12 +577,17 @@ def main() -> None:
         "trajectory_rebuild_interval": int(args.trajectory_rebuild_interval),
         "trajectory_displacement_std": float(args.trajectory_displacement_std),
         "trajectory_validity_only": bool(args.trajectory_validity_only),
+        "trajectory_update_only": bool(args.trajectory_update_only),
         "trajectory_skin_margin": float(args.trajectory_skin_margin),
         "trajectory_skin_threshold": 0.5 * float(args.trajectory_skin_margin) if float(args.trajectory_skin_margin) > 0.0 else None,
         "trajectory_rebuild_count": len(trajectory_report_rebuild_steps),
         "trajectory_rebuild_steps": trajectory_report_rebuild_steps,
         "trajectory_rebuild_causes": trajectory_report_rebuild_causes,
         "trajectory_max_displacement_since_rebuild_a": trajectory_report_max_displacement,
+        "graph_update_backend": graph_update_backend.name if graph_update_backend is not None else None,
+        "graph_update_rebuild_count": graph_update_backend.rebuild_count if graph_update_backend is not None else 0,
+        "graph_update_total_s": graph_update_backend.total_rebuild_time_s if graph_update_backend is not None else 0.0,
+        "graph_update_times_s": graph_update_backend.rebuild_times_s if graph_update_backend is not None else [],
         "prebuilt_batched_graph": prebuilt_graph is not None,
         "measure_passes": args.measure_passes,
         "force_steps_per_pass": force_steps_per_pass,

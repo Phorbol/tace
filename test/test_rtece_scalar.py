@@ -965,6 +965,28 @@ def test_trajectory_graph_cache_provider_tracks_rebuild_state():
     assert provider.rebuild_causes == ["skin"]
 
 
+def test_graph_update_backend_records_rebuild_timing():
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import GraphUpdateBackend
+
+    calls = []
+
+    def rebuild(positions):
+        calls.append(positions.clone())
+        return {"nodes": positions.shape[0]}
+
+    backend = GraphUpdateBackend("fake", rebuild)
+    positions = torch.zeros((3, 3), dtype=torch.float64)
+
+    result = backend.rebuild(positions)
+
+    assert result == {"nodes": 3}
+    assert len(calls) == 1
+    assert backend.name == "fake"
+    assert backend.rebuild_count == 1
+    assert len(backend.rebuild_times_s) == 1
+    assert backend.total_rebuild_time_s >= 0.0
+
+
 def test_prediction_error_payload_marks_missing_predictions_as_null():
     from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import prediction_error_payload
 
@@ -1016,6 +1038,7 @@ def test_rtece_benchmark_help_exposes_force_mode():
     assert "--trajectory-displacement-std" in result.stdout
     assert "--trajectory-skin-margin" in result.stdout
     assert "--trajectory-validity-only" in result.stdout
+    assert "--trajectory-update-only" in result.stdout
     assert "auto" in result.stdout
     assert "analytic_pair" in result.stdout
     assert "analytic_pair_triton_force" in result.stdout
