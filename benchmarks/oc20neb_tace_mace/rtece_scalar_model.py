@@ -131,9 +131,23 @@ def radial_features_and_derivatives(
     return features, derivatives
 
 
+def compute_radial_features_only(distances: torch.Tensor, config: RTECEScalarConfig) -> torch.Tensor:
+    centers = torch.linspace(
+        0.0,
+        config.cutoff,
+        config.num_radial,
+        device=distances.device,
+        dtype=distances.dtype,
+    )
+    width = config.cutoff / max(config.num_radial - 1, 1)
+    delta = distances[:, None] - centers[None, :]
+    gaussian = torch.exp(-0.5 * (delta / width) ** 2)
+    envelope = cutoff_envelope(distances, config.cutoff)
+    return gaussian * envelope[:, None]
+
+
 def compute_radial_features(distances: torch.Tensor, config: RTECEScalarConfig) -> torch.Tensor:
-    features, _ = radial_features_and_derivatives(distances, config)
-    return features
+    return compute_radial_features_only(distances, config)
 
 
 def scatter_sum(values: torch.Tensor, index: torch.Tensor, dim_size: int) -> torch.Tensor:
@@ -333,6 +347,53 @@ class RTECEScalarModel(torch.nn.Module):
         if self.config.use_density_quadratic:
             raise ValueError("forward_pair_analytic_forces only supports pure rtece_pair descriptors")
         return self.forward_density_analytic_forces(graph)
+
+    def forward_pair_triton_force_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+        if self.config.use_element_density or self.config.use_density_quadratic or self.config.use_vector_moments:
+            raise ValueError("forward_pair_triton_force_analytic_forces only supports pure rtece_pair descriptors")
+        if self.config.use_atomic_moments or self.config.num_edge_sketches:
+            raise ValueError("forward_pair_triton_force_analytic_forces only supports scalar pair descriptors")
+        if graph.pos.device.type != "cuda":
+            raise RuntimeError("Triton pair force path requires a CUDA graph")
+        from benchmarks.oc20neb_tace_mace.rtece_triton_kernels import pair_forces_triton
+
+        pos = graph.pos
+        src, dst = graph.edge_index
+        num_nodes = graph.z.shape[0]
+        num_graphs = int(graph.batch.max().item()) + 1 if graph.batch.numel() else 1
+
+        vectors = pos[dst] - pos[src]
+        distances = vectors.norm(dim=-1).clamp_min(1e-12)
+        radial = compute_radial_features_only(distances, self.config).detach()
+        density = scatter_sum(radial, dst, num_nodes).requires_grad_(True)
+        descriptors = density_scalar_descriptors(density, self.config)
+
+        z_scaled = graph.z.to(dtype=pos.dtype, device=pos.device).view(-1, 1)
+        z_scaled = z_scaled / float(self.config.max_atomic_number)
+        atomic_energy = self.energy_head(torch.cat([z_scaled, descriptors], dim=-1)).squeeze(-1)
+        energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
+        if self.config.energy_per_atom_shift:
+            atom_counts = scatter_sum(
+                torch.ones_like(atomic_energy[:, None]),
+                graph.batch,
+                num_graphs,
+            ).squeeze(-1)
+            energy = energy + atom_counts * pos.new_tensor(float(self.config.energy_per_atom_shift))
+
+        density_grad = torch.autograd.grad(
+            energy.sum(),
+            density,
+            create_graph=False,
+            retain_graph=False,
+        )[0]
+        forces = pair_forces_triton(
+            pos=pos,
+            edge_index=graph.edge_index,
+            density_grad=density_grad,
+            cutoff=float(self.config.cutoff),
+            num_radial=int(self.config.num_radial),
+        )
+        return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
 
     def forward_element_density_packed_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
         if not self.config.use_element_density:
