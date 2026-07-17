@@ -6,6 +6,7 @@ import torch
 
 from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
     RTECEGraph,
+    RTECEScalarModel,
     atomic_scalar_descriptors,
     build_rtece_config,
     descriptor_dim,
@@ -101,3 +102,59 @@ def test_edge_relational_sketches_are_rotation_invariant():
     assert sketches.shape == (4, config.num_edge_sketches)
     assert torch.allclose(sketches, sketches_rot, atol=1e-10, rtol=1e-10)
     assert torch.allclose(full, full_rot, atol=1e-10, rtol=1e-10)
+
+
+
+def test_rtece_scalar_model_returns_conservative_forces():
+    config = build_rtece_config("rtece_edge_sketch8")
+    model = RTECEScalarModel(config).double()
+    z = torch.tensor([6, 8, 1], dtype=torch.long)
+    pos = torch.tensor(
+        [[0.0, 0.0, 0.0], [0.7, 0.2, 0.1], [-0.3, 0.6, -0.2]],
+        dtype=torch.float64,
+    )
+    graph = RTECEGraph(
+        z=z,
+        pos=pos,
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    out = model(graph)
+
+    assert out["energy"].shape == (1,)
+    assert out["atomic_energy"].shape == (3,)
+    assert out["forces"].shape == (3, 3)
+    assert torch.isfinite(out["energy"]).all()
+    assert torch.isfinite(out["forces"]).all()
+
+
+def test_rtece_scalar_model_energy_is_permutation_invariant_for_complete_graph():
+    config = build_rtece_config("rtece_edge_sketch8")
+    model = RTECEScalarModel(config).double()
+    z = torch.tensor([6, 8, 1], dtype=torch.long)
+    pos = torch.tensor(
+        [[0.0, 0.0, 0.0], [0.7, 0.2, 0.1], [-0.3, 0.6, -0.2]],
+        dtype=torch.float64,
+    )
+    graph = RTECEGraph(
+        z=z,
+        pos=pos,
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+    perm = torch.tensor([2, 0, 1], dtype=torch.long)
+    inv = torch.empty_like(perm)
+    inv[perm] = torch.arange(3)
+    edge_index_perm = inv[complete_directed_edges(3)]
+    graph_perm = RTECEGraph(
+        z=z[perm],
+        pos=pos[perm],
+        edge_index=edge_index_perm,
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    e = model(graph)["energy"]
+    e_perm = model(graph_perm)["energy"]
+
+    assert torch.allclose(e, e_perm, atol=1e-10, rtol=1e-10)

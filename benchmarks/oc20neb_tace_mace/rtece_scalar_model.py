@@ -138,3 +138,40 @@ def rtece_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Ten
     atomic = atomic_scalar_descriptors(graph, config)
     sketches = edge_relational_sketches(graph, config)
     return torch.cat([atomic, sketches], dim=-1)
+
+
+
+class RTECEScalarModel(torch.nn.Module):
+    def __init__(self, config: RTECEScalarConfig):
+        super().__init__()
+        self.config = config
+        in_dim = descriptor_dim(config)
+        layers: list[torch.nn.Module] = []
+        prev = in_dim + 1
+        for hidden in config.hidden_channels:
+            layers.append(torch.nn.Linear(prev, hidden))
+            layers.append(torch.nn.SiLU())
+            prev = hidden
+        layers.append(torch.nn.Linear(prev, 1))
+        self.energy_head = torch.nn.Sequential(*layers)
+
+    def forward(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+        pos = graph.pos
+        if not pos.requires_grad:
+            pos = pos.detach().clone().requires_grad_(True)
+            graph = RTECEGraph(z=graph.z, pos=pos, edge_index=graph.edge_index, batch=graph.batch)
+
+        z_scaled = graph.z.to(dtype=pos.dtype, device=pos.device).view(-1, 1)
+        z_scaled = z_scaled / float(self.config.max_atomic_number)
+        descriptors = rtece_descriptors(graph, self.config)
+        atomic_input = torch.cat([z_scaled, descriptors], dim=-1)
+        atomic_energy = self.energy_head(atomic_input).squeeze(-1)
+        num_graphs = int(graph.batch.max().item()) + 1 if graph.batch.numel() else 1
+        energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
+        forces = -torch.autograd.grad(
+            energy.sum(),
+            pos,
+            create_graph=self.training,
+            retain_graph=True,
+        )[0]
+        return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
