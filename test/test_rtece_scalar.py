@@ -401,3 +401,28 @@ def test_rtece_benchmark_help_exposes_force_mode():
     assert result.returncode == 0, result.stderr
     assert "--force-mode" in result.stdout
     assert "analytic_pair" in result.stdout
+
+
+
+def test_rtece_benchmark_row_preserves_force_mode():
+    from benchmarks.oc20neb_tace_mace.summarize_tece_distill import make_student_row
+
+    dft = {
+        "model": "rtece_scalar.pt",
+        "force_mode": "analytic_pair",
+        "atoms_per_second": 100000.0,
+        "configs_per_second": 1000.0,
+        "seconds_per_pass": 0.1,
+        "peak_allocated_mb": 64.0,
+        "peak_reserved_mb": 80.0,
+        "num_parameters": 1234,
+        "mae_e_mev_atom": 10.0,
+        "rmse_e_mev_atom": 20.0,
+        "mae_f_mev_a": 40.0,
+        "rmse_f_mev_a": 80.0,
+    }
+    teacher = dict(dft)
+
+    row = make_student_row("rtece_pair", dft_benchmark=dft, teacher_benchmark=teacher)
+
+    assert row["force_mode"] == "analytic_pair"
