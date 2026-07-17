@@ -16,7 +16,7 @@ import torch
 
 from benchmarks.oc20neb_tace_mace.benchmark_models import (
     cuda_memory,
-    load_atoms,
+    log,
     reference_arrays,
     summarize_errors,
 )
@@ -32,6 +32,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--variant", required=True)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
     parser.add_argument("--default-dtype", choices=("float32", "float64"), default="float32")
+    parser.add_argument("--start-config", type=int, default=0)
     parser.add_argument("--limit-configs", type=int, default=128)
     parser.add_argument("--measure-passes", type=int, default=3)
     parser.add_argument("--force-mode", choices=("autograd", "analytic_pair"), default="autograd")
@@ -43,6 +44,31 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def extxyz_index(*, start_config: int, limit_configs: int | None) -> str:
+    if start_config < 0:
+        raise ValueError(f"start_config must be non-negative, got {start_config}")
+    if limit_configs is not None and limit_configs < 1:
+        raise ValueError(f"limit_configs must be positive when set, got {limit_configs}")
+    if limit_configs is None:
+        return ":" if start_config == 0 else f"{start_config}:"
+    stop_config = start_config + limit_configs
+    return f":{stop_config}" if start_config == 0 else f"{start_config}:{stop_config}"
+
+
+def load_atoms_window(configs: Path, *, start_config: int, limit_configs: int | None):
+    import ase.io
+
+    index = extxyz_index(start_config=start_config, limit_configs=limit_configs)
+    log(f"reading configs {configs} index={index}")
+    atoms_list = ase.io.read(str(configs), index=index)
+    if not isinstance(atoms_list, list):
+        atoms_list = [atoms_list]
+    if not atoms_list:
+        raise ValueError(f"no configurations read from {configs} index={index}")
+    log(f"read {len(atoms_list)} configs")
+    return atoms_list
+
+
 def main() -> None:
     args = parse_args()
     dtype = torch.float64 if args.default_dtype == "float64" else torch.float32
@@ -52,7 +78,11 @@ def main() -> None:
     for param in model.parameters():
         param.requires_grad_(False)
 
-    atoms_list = load_atoms(args.configs, args.limit_configs)
+    atoms_list = load_atoms_window(
+        args.configs,
+        start_config=args.start_config,
+        limit_configs=args.limit_configs,
+    )
     ref_e, ref_f, natoms = reference_arrays(atoms_list, "energy", "forces")
     prebuilt_graph = None
     if not args.include_graph_construction:
@@ -118,6 +148,11 @@ def main() -> None:
         "variant": args.variant,
         "model": str(args.model),
         "configs_path": str(args.configs),
+        "start_config": args.start_config,
+        "extxyz_index": extxyz_index(
+            start_config=args.start_config,
+            limit_configs=args.limit_configs,
+        ),
         "configs": len(atoms_list),
         "atoms": atoms,
         "device": str(device),

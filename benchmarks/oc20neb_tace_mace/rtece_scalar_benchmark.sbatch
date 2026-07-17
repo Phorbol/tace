@@ -21,6 +21,7 @@ VARIANT=${VARIANT:-rtece_pair}
 CONFIGS=${CONFIGS:-/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz}
 OUT_DIR=${OUT_DIR:-${TACE_ROOT}/runs/oc20neb_tace_mace/rtece-bench-${SLURM_JOB_ID}}
 LIMIT_CONFIGS_LIST=${LIMIT_CONFIGS_LIST:-1024 2048 4096}
+START_CONFIG=${START_CONFIG:-0}
 MEASURE_PASSES=${MEASURE_PASSES:-10}
 DEFAULT_DTYPE=${DEFAULT_DTYPE:-float32}
 FORCE_MODE=${FORCE_MODE:-autograd}
@@ -36,6 +37,7 @@ echo "host=$(hostname)"
 echo "out_dir=${OUT_DIR}"
 echo "model=${MODEL}"
 echo "force_mode=${FORCE_MODE}"
+echo "start_config=${START_CONFIG}"
 "${TACE_PYTHON}" -V
 nvidia-smi -L
 
@@ -47,6 +49,7 @@ for limit in "${limit_args[@]}"; do
     --configs "${CONFIGS}" \
     --output "${OUT_DIR}/${VARIANT}_limit${limit}_benchmark.json" \
     --variant "${VARIANT}" \
+    --start-config "${START_CONFIG}" \
     --limit-configs "${limit}" \
     --measure-passes "${MEASURE_PASSES}" \
     --force-mode "${FORCE_MODE}" \

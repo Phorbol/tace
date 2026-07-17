@@ -426,3 +426,25 @@ def test_rtece_benchmark_row_preserves_force_mode():
     row = make_student_row("rtece_pair", dft_benchmark=dft, teacher_benchmark=teacher)
 
     assert row["force_mode"] == "analytic_pair"
+
+
+def test_extxyz_index_supports_offset_windows():
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import extxyz_index
+
+    assert extxyz_index(start_config=0, limit_configs=8) == ":8"
+    assert extxyz_index(start_config=16, limit_configs=8) == "16:24"
+    assert extxyz_index(start_config=16, limit_configs=None) == "16:"
+
+
+def test_rtece_benchmark_help_exposes_start_config():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "benchmarks/oc20neb_tace_mace/benchmark_rtece_scalar.py", "--help"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--start-config" in result.stdout
