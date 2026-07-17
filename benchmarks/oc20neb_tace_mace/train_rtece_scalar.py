@@ -2,12 +2,15 @@
 from __future__ import annotations
 
 import argparse
+import json
 from dataclasses import asdict
 from pathlib import Path
 
+import numpy as np
 import torch
 
 from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
+    RTECEGraph,
     RTECEScalarConfig,
     RTECEScalarModel,
     build_rtece_config,
@@ -31,6 +34,99 @@ def load_checkpoint(
     model.load_state_dict(payload["state_dict"])
     model.eval()
     return model, config
+
+
+def _energy_and_forces(atoms):
+    if "energy" in atoms.info:
+        energy = float(atoms.info["energy"])
+    elif atoms.calc is not None and "energy" in getattr(atoms.calc, "results", {}):
+        energy = float(atoms.calc.results["energy"])
+    else:
+        energy = float(atoms.get_potential_energy())
+
+    if "forces" in atoms.arrays:
+        forces = np.asarray(atoms.arrays["forces"], dtype=np.float64)
+    elif atoms.calc is not None and "forces" in getattr(atoms.calc, "results", {}):
+        forces = np.asarray(atoms.calc.results["forces"], dtype=np.float64)
+    else:
+        forces = np.asarray(atoms.get_forces(), dtype=np.float64)
+    return energy, forces
+
+
+def atoms_to_graph(
+    atoms,
+    *,
+    cutoff: float,
+    device: torch.device,
+    dtype: torch.dtype,
+) -> tuple[RTECEGraph, torch.Tensor, torch.Tensor]:
+    from ase.neighborlist import neighbor_list
+
+    src, dst = neighbor_list("ij", atoms, cutoff)
+    if len(src) == 0:
+        edge_index_np = np.zeros((2, 0), dtype=np.int64)
+    else:
+        edge_index_np = np.stack([src, dst], axis=0)
+    edge_index = torch.tensor(edge_index_np, dtype=torch.long, device=device)
+    z = torch.tensor(atoms.numbers, dtype=torch.long, device=device)
+    pos = torch.tensor(atoms.positions, dtype=dtype, device=device)
+    batch = torch.zeros(len(atoms), dtype=torch.long, device=device)
+    energy_value, forces_value = _energy_and_forces(atoms)
+    energy = torch.tensor([energy_value], dtype=dtype, device=device)
+    forces = torch.tensor(forces_value, dtype=dtype, device=device)
+    return RTECEGraph(z=z, pos=pos, edge_index=edge_index, batch=batch), energy, forces
+
+
+def loss_for_batch(
+    model: RTECEScalarModel,
+    graph: RTECEGraph,
+    ref_energy: torch.Tensor,
+    ref_forces: torch.Tensor,
+) -> torch.Tensor:
+    out = model(graph)
+    natoms = graph.z.numel()
+    e_loss = ((out["energy"] - ref_energy) / natoms).pow(2).mean()
+    f_loss = (out["forces"] - ref_forces).pow(2).mean()
+    return e_loss + 10.0 * f_loss
+
+
+def train_steps(
+    model: RTECEScalarModel,
+    samples: list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]],
+    *,
+    max_steps: int,
+    lr: float,
+) -> dict[str, float | int | None]:
+    if not samples:
+        raise ValueError("train_steps requires at least one sample")
+    model.train()
+    opt = torch.optim.AdamW(model.parameters(), lr=lr)
+    final_loss: float | None = None
+    for step in range(max_steps):
+        graph, energy, forces = samples[step % len(samples)]
+        opt.zero_grad(set_to_none=True)
+        loss = loss_for_batch(model, graph, energy, forces)
+        loss.backward()
+        opt.step()
+        final_loss = float(loss.detach().cpu())
+    return {"steps": max_steps, "final_loss": final_loss}
+
+
+def load_samples(
+    configs: Path,
+    *,
+    cutoff: float,
+    device: torch.device,
+    dtype: torch.dtype,
+    limit_configs: int | None,
+) -> list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]]:
+    import ase.io
+
+    index = ":" if limit_configs is None else f":{int(limit_configs)}"
+    atoms_list = ase.io.read(str(configs), index=index)
+    if not isinstance(atoms_list, list):
+        atoms_list = [atoms_list]
+    return [atoms_to_graph(atoms, cutoff=cutoff, device=device, dtype=dtype) for atoms in atoms_list]
 
 
 def parse_args() -> argparse.Namespace:
@@ -58,8 +154,37 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
-    _ = build_rtece_config(args.variant)
-    raise SystemExit("training body is added in Task 6")
+    dtype = torch.float64 if args.default_dtype == "float64" else torch.float32
+    requested = torch.device(args.device)
+    device = requested if requested.type == "cpu" or torch.cuda.is_available() else torch.device("cpu")
+    config = build_rtece_config(args.variant)
+    model = RTECEScalarModel(config).to(device=device, dtype=dtype)
+    samples = load_samples(
+        args.train_file,
+        cutoff=config.cutoff,
+        device=device,
+        dtype=dtype,
+        limit_configs=args.limit_configs,
+    )
+    summary = train_steps(model, samples, max_steps=args.max_steps, lr=args.lr)
+    summary.update(
+        {
+            "variant": args.variant,
+            "train_file": str(args.train_file),
+            "valid_file": str(args.valid_file),
+            "train_configs": len(samples),
+            "device": str(device),
+            "default_dtype": args.default_dtype,
+            "checkpoint": str(args.output_dir / "rtece_scalar.pt"),
+        }
+    )
+    save_checkpoint(args.output_dir / "rtece_scalar.pt", model, config)
+    args.output_dir.mkdir(parents=True, exist_ok=True)
+    (args.output_dir / "train_summary.json").write_text(
+        json.dumps(summary, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps(summary, indent=2, sort_keys=True))
 
 
 if __name__ == "__main__":

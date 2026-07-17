@@ -173,3 +173,29 @@ def test_rtece_checkpoint_roundtrip(tmp_path):
 
     assert loaded_config.variant == "rtece_pair"
     assert isinstance(loaded_model, RTECEScalarModel)
+
+
+
+def test_rtece_tiny_training_step_reduces_finite_loss(tmp_path):
+    from ase import Atoms
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import atoms_to_graph, train_steps
+
+    atoms = Atoms(
+        "H2O",
+        positions=[[0.0, 0.0, 0.0], [0.75, 0.0, 0.0], [-0.25, 0.65, 0.0]],
+    )
+    atoms.info["energy"] = -1.0
+    atoms.arrays["forces"] = torch.zeros((3, 3), dtype=torch.float64).numpy()
+    config = build_rtece_config("rtece_pair")
+    model = RTECEScalarModel(config).double()
+    graph, energy, forces = atoms_to_graph(
+        atoms,
+        cutoff=config.cutoff,
+        device=torch.device("cpu"),
+        dtype=torch.float64,
+    )
+
+    summary = train_steps(model, [(graph, energy, forces)], max_steps=2, lr=1e-3)
+
+    assert summary["steps"] == 2
+    assert torch.isfinite(torch.tensor(summary["final_loss"]))
