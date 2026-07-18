@@ -2683,6 +2683,58 @@ Next priority after Stage 83:
 3. Only after this score identifies a stable candidate should we implement analytic radial-core force and re-enter the high-throughput fused/backend track.
 4. Do not change low-level graph builders as the next isolated task; when resumed, graph work should be tied to the review P0 PBC edge-vector/force/virial ABI.
 
+# Stage 84: Physical Pareto Scorer
+
+Stage 84 implements the Stage-83 measurement-layer requirement: stop hand-reading separate benchmark, dimer, and rattle tables when deciding the next retained T4 operator. The new scorer combines the existing JSON outputs into explicit physical Pareto rows, while preserving the individual metrics so the score remains auditable.
+
+Implementation gate:
+
+- Added `summarize_rtece_physical_pareto.py`.
+- The script consumes one or more cases, each with DFT benchmark JSON, teacher benchmark JSON, dimer JSON, and rattle+relax JSON.
+- It emits `rtece_physical_pareto_summary.v1` JSON plus Markdown.
+- Each row records DFT/teacher force errors, atoms/s, dimer repulsive fraction, C/N rattle RMSD, rattle max fmax, individual gate booleans, and a lower-is-better `physical_score`.
+- Regression coverage checks that benchmark, dimer, and rattle gates are combined correctly and that physical Pareto dominance drops a slower, worse row.
+
+Stage-84 scorer definition used for the current radial-core comparison:
+
+- Benchmark gate: `DFT F MAE <= 35 meV/A`.
+- Rattle gate: `C/N mean final RMSD <= 0.20 A` and `max fmax <= 0.40 eV/A`.
+- Dimer gate: every dimer pair has finite values and short-distance repulsive force.
+- `physical_score = DFT_F_MAE/35 + C/N_RMSD/0.20 + max_fmax/0.40 + 2*dimer_fail_fraction + nonfinite_pair_count`.
+
+Bounded Stage-84 run over Stage-73 baseline plus Stage-82/83 radial-core checkpoints:
+
+| rank | route | gate | score | atoms/s | DFT F MAE | dimer repulsive | C/N RMSD A | max fmax eV/A |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| 1 | `radial_core_s0p6_r0p75` | 1 | 2.579 | 3.07e6 | 29.08 | 1.00 | 0.180 | 0.339 |
+| 2 | `radial_core_s0p8_r0p85` | 0 | 2.737 | 2.99e6 | 29.02 | 1.00 | 0.214 | 0.334 |
+| 3 | `radial_core_s0p4_r0p85` | 0 | 2.960 | 3.07e6 | 29.00 | 1.00 | 0.222 | 0.409 |
+| 4 | `radial_core_s0p6_r0p85` | 0 | 3.158 | 3.08e6 | 29.00 | 1.00 | 0.257 | 0.417 |
+| 5 | Stage-82 `radial_core_s0p6` r=1.0 | 0 | 3.237 | 2.98e6 | 44.38 | 1.00 | 0.128 | 0.531 |
+| 6 | Stage-73 `radial` baseline | 0 | 4.248 | 2.96e6 | 29.45 | 0.00 | 0.258 | 0.047 |
+| 7 | Stage-82 `radial_core_s1p0` r=1.0 | 0 | 4.557 | 3.07e6 | 61.53 | 1.00 | 0.120 | 0.880 |
+
+Physical Pareto front under score/throughput dominance:
+
+| route | score | atoms/s | gate | interpretation |
+|---|---:|---:|---:|---|
+| `radial_core_s0p6_r0p85` | 3.158 | 3.08e6 | 0 | fastest row but fails rattle gates; useful as throughput tie point only. |
+| `radial_core_s0p6_r0p75` | 2.579 | 3.07e6 | 1 | best current physical candidate; only row passing all configured gates. |
+
+Stage-84 interpretation against TECE/TACE and the review document:
+
+- The scorer makes the current TECE degradation decision explicit: the radial-core axis is not rejected, but only the shorter-support calibrated route currently satisfies all physical gates.
+- The original `radial` baseline is not a physical candidate despite good aggregate MAE and low fmax, because it fails the dimer gate and C/N rattle gate. This directly encodes the Stage-79/80 physical-generalization evidence.
+- Stage-82 large-support cores are not candidates despite strong C/N RMSD because benchmark MAE and force spikes fail. This prevents selecting a model that looks good only on one physical diagnostic.
+- `s0p6_r0p75` is the first clean closed-loop candidate in this branch: it preserves scalar T4 cost, fixes dimer sign, recovers baseline force MAE, improves C/N rattle RMSD, and keeps force spikes under the current 0.40 eV/A threshold. It still needs broader validation before being called a Pareto-front model.
+
+Next priority after Stage 84:
+
+1. Use `s0p6_r0p75` as the local anchor and run a narrow beta/softness grid: keep `radius_scale=0.75`, test `strength=0.6-0.9`, and test lower `beta` values such as 10 and 15 to see whether force spikes smooth without losing dimer repulsion.
+2. Add the physical scorer to future matrix collection so every candidate is scored before any graph/backend optimization work.
+3. If a beta-smoothed candidate improves the score on this bounded window, broaden the rattle window and add a metal/not-CHNO control set before implementing analytic/fused radial-core forces.
+4. Keep graph-provider work tied to the review P0 PBC edge-vector/force/virial ABI; this scorer is now the gate that decides when returning to throughput engineering is justified.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

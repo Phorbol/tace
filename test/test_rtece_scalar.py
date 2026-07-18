@@ -989,6 +989,66 @@ def test_rtece_rattle_relax_summary_tracks_rmsd_and_force_spikes():
     assert groups["not_CHNO"]["converged_fraction"] == pytest.approx(0.0)
 
 
+def test_rtece_physical_pareto_row_combines_benchmark_dimer_and_rattle_gates():
+    from benchmarks.oc20neb_tace_mace.summarize_rtece_physical_pareto import (
+        make_physical_pareto_row,
+        physical_pareto_front_rows,
+    )
+
+    benchmark = {
+        "variant": "radial_core_balanced",
+        "atoms_per_second": 3.1e6,
+        "mae_f_mev_a": 29.0,
+        "rmse_f_mev_a": 101.0,
+        "mae_e_mev_atom": 168.0,
+        "tece_architecture_path_manifest_hash": "abc123",
+    }
+    teacher = {"mae_f_mev_a": 34.0, "rmse_f_mev_a": 102.0}
+    dimer = {
+        "pair_summaries": [
+            {"pair": "C-N", "summary": {"short_force_repulsive": True, "has_nonfinite": False, "short_force_parallel_ev_a": -0.25}},
+            {"pair": "N-H", "summary": {"short_force_repulsive": True, "has_nonfinite": False, "short_force_parallel_ev_a": -0.20}},
+        ]
+    }
+    rattle = {
+        "summary": {
+            "converged_fraction": 0.0,
+            "mean_final_rmsd_a": 0.18,
+            "max_fmax_ev_a": 0.34,
+            "focus_groups": [
+                {"label": "C_or_N", "mean_final_rmsd_a": 0.18, "max_fmax_ev_a": 0.34},
+                {"label": "CHNO_no_CN", "mean_final_rmsd_a": 0.17, "max_fmax_ev_a": 0.06},
+            ],
+        }
+    }
+
+    row = make_physical_pareto_row(
+        "radial_core_balanced",
+        dft_benchmark=benchmark,
+        teacher_benchmark=teacher,
+        dimer_scan=dimer,
+        rattle_relax=rattle,
+        max_dft_f_mae_mev_a=35.0,
+        max_cn_rattle_rmsd_a=0.20,
+        max_rattle_fmax_ev_a=0.40,
+    )
+
+    assert row["schema_version"] == "rtece_physical_pareto_row.v1"
+    assert row["dimer_short_repulsive_fraction"] == pytest.approx(1.0)
+    assert row["dimer_gate_pass"] is True
+    assert row["cn_rattle_final_rmsd_a"] == pytest.approx(0.18)
+    assert row["rattle_gate_pass"] is True
+    assert row["benchmark_gate_pass"] is True
+    assert row["physical_gate_pass"] is True
+    assert row["tece_path_manifest_hash"] == "abc123"
+    assert row["physical_score"] < 3.0
+
+    dominated = dict(row, variant="dominated", atoms_per_second=2.0e6, physical_score=row["physical_score"] + 0.5)
+    fast_tradeoff = dict(row, variant="fast_tradeoff", atoms_per_second=4.0e6, physical_score=row["physical_score"] + 0.2)
+    front = physical_pareto_front_rows([row, dominated, fast_tradeoff])
+    assert [item["variant"] for item in front] == ["fast_tradeoff", "radial_core_balanced"]
+
+
 def test_rtece_force_error_stratification_reports_element_and_focus_groups():
     from benchmarks.oc20neb_tace_mace.stratify_rtece_force_errors import stratify_symbol_force_errors
 
