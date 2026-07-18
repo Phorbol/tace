@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Mapping
+from typing import Any, Mapping
+import hashlib
+import json
 import math
 
 import torch
@@ -223,6 +225,239 @@ def rtece_route_contract(
         "energy_reference": "per_element_atomic_energies" if config.atomic_energies else ("global_per_atom_shift" if config.energy_per_atom_shift else "none"),
         "pareto_axes": pareto_axes,
     }
+
+
+def _moment_spec(moment_id: str, *, ell: int, radial_projection: str, chemistry_basis: str = "none") -> dict[str, object]:
+    return {
+        "id": moment_id,
+        "ell": int(ell),
+        "radial_projection": radial_projection,
+        "chemistry_basis": chemistry_basis,
+    }
+
+
+def _scalar_path_spec(
+    path_id: str,
+    *,
+    placement: str,
+    inputs: list[str],
+    contraction: str,
+    radial_projection: str,
+    cavity: bool = False,
+    cost_group: str,
+) -> dict[str, object]:
+    return {
+        "id": path_id,
+        "placement": placement,
+        "inputs": inputs,
+        "contraction": contraction,
+        "radial_projection": radial_projection,
+        "cavity": bool(cavity),
+        "cost_group": cost_group,
+    }
+
+
+def _config_manifest_payload(config: RTECEScalarConfig) -> dict[str, object]:
+    return {
+        "variant": config.variant,
+        "cutoff": float(config.cutoff),
+        "num_radial": int(config.num_radial),
+        "hidden_channels": list(config.hidden_channels),
+        "max_atomic_number": int(config.max_atomic_number),
+        "use_element_density": bool(config.use_element_density),
+        "use_density_quadratic": bool(config.use_density_quadratic),
+        "use_vector_moments": bool(config.use_vector_moments),
+        "use_atomic_moments": bool(config.use_atomic_moments),
+        "species_basis_channels": int(config.species_basis_channels),
+        "num_edge_sketches": int(config.num_edge_sketches),
+        "use_cavity_edge_sketches": bool(config.use_cavity_edge_sketches),
+        "radial_edge_sketch_channels": int(config.radial_edge_sketch_channels),
+        "energy_reference": "per_element_atomic_energies" if config.atomic_energies else ("global_per_atom_shift" if config.energy_per_atom_shift else "none"),
+    }
+
+
+def rtece_path_manifest(
+    config: RTECEScalarConfig,
+    *,
+    force_mode: str = "autograd",
+    graph_construction_backend: str | None = None,
+    graph_update_backend: str | None = None,
+) -> dict[str, object]:
+    route = rtece_route_contract(
+        config,
+        force_mode=force_mode,
+        graph_construction_backend=graph_construction_backend,
+        graph_update_backend=graph_update_backend,
+    )
+    radial_projection = "fixed_two_shell_mean" if config.radial_edge_sketch_channels else "full_radial_mean"
+    moments = [_moment_spec("moment.l0.radial_density", ell=0, radial_projection="identity")]
+    if config.use_element_density:
+        moments.append(_moment_spec("moment.l0.element_density", ell=0, radial_projection="identity", chemistry_basis="atomic_number_first_moment"))
+    if config.species_basis_channels:
+        moments.append(_moment_spec("moment.l0.species_basis_density", ell=0, radial_projection="identity", chemistry_basis=f"fixed_z_power_{int(config.species_basis_channels)}"))
+    if config.use_vector_moments or config.use_atomic_moments or config.num_edge_sketches:
+        moments.append(_moment_spec("moment.l1.vector", ell=1, radial_projection=radial_projection))
+    if config.use_atomic_moments or config.num_edge_sketches:
+        moments.append(_moment_spec("moment.l2.quadrupole", ell=2, radial_projection=radial_projection))
+
+    scalar_paths = [
+        _scalar_path_spec(
+            "atomic.radial_density",
+            placement="atomic",
+            inputs=["moment.l0.radial_density"],
+            contraction="identity",
+            radial_projection="identity",
+            cost_group="atomic_scalar_density",
+        )
+    ]
+    if config.use_element_density:
+        scalar_paths.append(
+            _scalar_path_spec(
+                "atomic.element_density",
+                placement="atomic",
+                inputs=["moment.l0.element_density"],
+                contraction="identity",
+                radial_projection="identity",
+                cost_group="atomic_chemistry_density",
+            )
+        )
+    if config.species_basis_channels:
+        scalar_paths.append(
+            _scalar_path_spec(
+                "atomic.species_basis_density",
+                placement="atomic",
+                inputs=["moment.l0.species_basis_density"],
+                contraction="identity",
+                radial_projection="identity",
+                cost_group="atomic_low_rank_species_density",
+            )
+        )
+    if config.use_density_quadratic:
+        scalar_paths.append(
+            _scalar_path_spec(
+                "atomic.density_square",
+                placement="atomic",
+                inputs=["moment.l0.radial_density", "moment.l0.radial_density"],
+                contraction="square",
+                radial_projection="identity",
+                cost_group="atomic_scalar_polynomial",
+            )
+        )
+    if config.use_vector_moments or config.use_atomic_moments:
+        scalar_paths.append(
+            _scalar_path_spec(
+                "atomic.vector_norm",
+                placement="atomic",
+                inputs=["moment.l1.vector"],
+                contraction="dot_self",
+                radial_projection="diagonal_radial_channels",
+                cost_group="atomic_low_order_moments",
+            )
+        )
+    if config.use_atomic_moments:
+        scalar_paths.append(
+            _scalar_path_spec(
+                "atomic.quadrupole_norm",
+                placement="atomic",
+                inputs=["moment.l2.quadrupole"],
+                contraction="frobenius_self",
+                radial_projection="diagonal_radial_channels",
+                cost_group="atomic_low_order_moments",
+            )
+        )
+    if config.num_edge_sketches:
+        if config.use_cavity_edge_sketches:
+            if config.radial_edge_sketch_channels:
+                scalar_paths.extend(
+                    [
+                        _scalar_path_spec(
+                            "edge.cavity.vector_same_radial_dot",
+                            placement="edge",
+                            inputs=["moment.l1.vector", "moment.l1.vector"],
+                            contraction="dot",
+                            radial_projection="fixed_two_shell_mean",
+                            cavity=True,
+                            cost_group="edge_cavity_radial_relations",
+                        ),
+                        _scalar_path_spec(
+                            "edge.cavity.vector_cross_radial_dot",
+                            placement="edge",
+                            inputs=["moment.l1.vector", "moment.l1.vector"],
+                            contraction="cross_radial_dot",
+                            radial_projection="fixed_two_shell_mean",
+                            cavity=True,
+                            cost_group="edge_cavity_radial_relations",
+                        ),
+                        _scalar_path_spec(
+                            "edge.cavity.quadrupole_cross_radial_frobenius",
+                            placement="edge",
+                            inputs=["moment.l2.quadrupole", "moment.l2.quadrupole"],
+                            contraction="cross_radial_frobenius",
+                            radial_projection="fixed_two_shell_mean",
+                            cavity=True,
+                            cost_group="edge_cavity_radial_relations",
+                        ),
+                    ]
+                )
+            else:
+                scalar_paths.extend(
+                    [
+                        _scalar_path_spec(
+                            "edge.cavity.vector_dot",
+                            placement="edge",
+                            inputs=["moment.l1.vector", "moment.l1.vector"],
+                            contraction="dot",
+                            radial_projection="full_radial_mean",
+                            cavity=True,
+                            cost_group="edge_cavity_relations",
+                        ),
+                        _scalar_path_spec(
+                            "edge.cavity.quadrupole_frobenius",
+                            placement="edge",
+                            inputs=["moment.l2.quadrupole", "moment.l2.quadrupole"],
+                            contraction="frobenius",
+                            radial_projection="full_radial_mean",
+                            cavity=True,
+                            cost_group="edge_cavity_relations",
+                        ),
+                    ]
+                )
+        else:
+            scalar_paths.append(
+                _scalar_path_spec(
+                    "edge.full_moment.vector_dot",
+                    placement="edge",
+                    inputs=["moment.l1.vector", "moment.l1.vector"],
+                    contraction="dot",
+                    radial_projection="full_radial_mean",
+                    cost_group="edge_full_moment_relations",
+                )
+            )
+        scalar_paths.append(
+            _scalar_path_spec(
+                "edge.direct.radial",
+                placement="edge",
+                inputs=["moment.l0.radial_density"],
+                contraction="direct_edge_radial",
+                radial_projection="selected_direct_channels",
+                cost_group="direct_pair_radial",
+            )
+        )
+
+    manifest_core: dict[str, Any] = {
+        "schema_version": "rtece_path_manifest.v1",
+        "config": _config_manifest_payload(config),
+        "route": route,
+        "moments": moments,
+        "scalar_paths": scalar_paths,
+        "retained_tece_groups": route["retained_tece_groups"],
+        "deleted_tece_groups": route["deleted_tece_groups"],
+        "compiler_status": "explicit_manifest_not_full_compiler",
+    }
+    encoded = json.dumps(manifest_core, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    manifest = dict(manifest_core)
+    manifest["manifest_hash"] = hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
+    return manifest
 
 
 @dataclass
@@ -1094,5 +1329,6 @@ __all__ = [
     "_project_radial_edge_channels",
     "edge_relational_sketches",
     "rtece_descriptors",
+    "rtece_path_manifest",
     "rtece_route_contract",
 ]

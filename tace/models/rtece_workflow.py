@@ -10,6 +10,7 @@ from .rtece_scalar import (
     RTECEGraph,
     RTECEScalarConfig,
     RTECEScalarModel,
+    rtece_path_manifest,
     rtece_route_contract,
 )
 
@@ -32,10 +33,17 @@ def save_checkpoint(
         graph_construction_backend=graph_construction_backend,
         graph_update_backend=graph_update_backend,
     )
+    path_manifest = rtece_path_manifest(
+        config,
+        force_mode=force_mode,
+        graph_construction_backend=graph_construction_backend,
+        graph_update_backend=graph_update_backend,
+    )
     payload = {
         "config": asdict(config),
         "state_dict": model.state_dict(),
         "tece_route": route,
+        "tece_path_manifest": path_manifest,
         "metadata": dict(metadata or {}),
     }
     torch.save(payload, target)
@@ -57,6 +65,7 @@ def load_checkpoint(
     model.eval()
     metadata = dict(payload.get("metadata") or {})
     metadata["tece_route"] = payload.get("tece_route") or rtece_route_contract(config)
+    metadata["tece_path_manifest"] = payload.get("tece_path_manifest") or rtece_path_manifest(config)
     return model, config, metadata
 
 

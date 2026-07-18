@@ -1919,6 +1919,28 @@ Stage-63 interpretation against TECE/TACE:
 - It also confirms the hardware warning from the TECE design document: edge/radial relational semantics are not useful for the high-throughput Pareto front unless they are paired with an analytic/fused force path or a route compiler that can keep edge state short-lived. Autograd edge sketches are not a high-throughput endpoint.
 - Next priority should not be a large autograd `cavity_radial_edge_sketch14` sweep. The cleaner next step is either (1) formalize a route/path manifest so these retained groups become explicit compiler objects, or (2) implement an analytic/fused force path for the cheapest chemistry/radial scalar descriptors before scaling benchmark size.
 
+
+# Stage 64: Path Manifest Artifact For Auditable rTECE Routes
+
+Stage 64 addresses the review concern that current rTECE variants are still mostly Boolean feature switches and benchmark labels, not a true renormalization/distillation compiler. The next clean step is to make every student route produce an explicit path manifest that records which TECE groups are retained, how they are projected, where the scalar path is placed, and what implementation cost group it belongs to.
+
+Implementation gate:
+
+- Added `rtece_path_manifest(config, ...)` with schema `rtece_path_manifest.v1`.
+- The manifest records a stable `manifest_hash`, config payload, route contract, moment specs, scalar path specs, retained/deleted TECE groups, and `compiler_status`.
+- Moment specs include `ell`, chemistry basis, and radial projection, for example `moment.l1.vector` with `fixed_two_shell_mean` for `rtece_cavity_radial_edge_sketch14`.
+- Scalar path specs include stable path ids, placement (`atomic` or `edge`), inputs, contraction type, radial projection, cavity flag, and cost group.
+- Checkpoints now save `tece_path_manifest` alongside `tece_route`; load metadata reconstructs it for older checkpoints.
+- Pareto summary rows now include the full manifest plus `tece_path_manifest_hash`; markdown tables print the manifest hash next to the TECE route.
+- `tace.models` formally exports `rtece_path_manifest`, so this is part of the normal model package API rather than a benchmark-local helper.
+
+Stage-64 interpretation against TECE/TACE:
+
+- This is not yet a full compiler: it does not infer teacher path sensitivities, solve projection Gram systems, perform Schur-complement downfolding, or search the route space.
+- It is the necessary compiler substrate. From this point, two students with the same human-readable variant but different radial projection, chemistry basis, force backend, graph semantics, or edge-state lifetime can be distinguished by manifest hash and path ids.
+- The route is now closer to the TECE/TACE design requirement that simplifications be expressed as deleting, projecting, scalarizing, or downfolding explicit semantic groups rather than as loose hyperparameter names.
+- Next priority should use this manifest in one of two concrete ways: (1) a small route registry / path-spec compiler that instantiates configs from manifest-like specs, or (2) a benchmark summarizer that groups and compares Pareto points by manifest hash and retained/deleted path groups, so architecture search is no longer variant-string driven.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

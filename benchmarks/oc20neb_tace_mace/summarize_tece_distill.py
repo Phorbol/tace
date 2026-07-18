@@ -8,7 +8,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from tace.models.rtece_scalar import RTECEScalarConfig, build_rtece_config, rtece_route_contract
+from tace.models.rtece_scalar import RTECEScalarConfig, build_rtece_config, rtece_path_manifest, rtece_route_contract
 
 
 def load_json(path: str | Path) -> dict[str, Any]:
@@ -79,8 +79,15 @@ def make_student_row(
     graph_update_backend = dft_benchmark.get("graph_update_backend")
     config = _rtece_config_from_benchmark(variant, dft_benchmark)
     route = None
+    path_manifest = None
     if config is not None:
         route = rtece_route_contract(
+            config,
+            force_mode=force_mode,
+            graph_construction_backend=graph_construction_backend,
+            graph_update_backend=graph_update_backend,
+        )
+        path_manifest = rtece_path_manifest(
             config,
             force_mode=force_mode,
             graph_construction_backend=graph_construction_backend,
@@ -94,6 +101,8 @@ def make_student_row(
         "graph_construction_backend": graph_construction_backend,
         "graph_update_backend": graph_update_backend,
         "tece_route": route,
+        "tece_path_manifest": path_manifest,
+        "tece_path_manifest_hash": path_manifest.get("manifest_hash") if path_manifest else None,
         "hidden_channels": dft_benchmark.get("hidden_channels"),
         "num_radial": dft_benchmark.get("num_radial"),
         "energy_per_atom_shift": dft_benchmark.get("energy_per_atom_shift"),
@@ -177,14 +186,15 @@ def append_front_section(lines: list[str], title: str, rows: list[dict[str, Any]
         "",
         title,
         "",
-        "| variant | TECE route | graph backend | force mode | atoms/s | DFT F MAE | teacher F MAE | params |",
-        "|---|---|---|---|---:|---:|---:|---:|",
+        "| variant | TECE route | manifest | graph backend | force mode | atoms/s | DFT F MAE | teacher F MAE | params |",
+        "|---|---|---|---|---|---:|---:|---:|---:|",
     ])
     for row in front:
         lines.append(
-            "| {variant} | {route} | {graph_backend} | {force_mode} | {atoms} | {df} | {tf} | {params} |".format(
+            "| {variant} | {route} | {manifest} | {graph_backend} | {force_mode} | {atoms} | {df} | {tf} | {params} |".format(
                 variant=row["variant"],
                 route=fmt((row.get("tece_route") or {}).get("semantic_tier")),
+                manifest=fmt(row.get("tece_path_manifest_hash")),
                 graph_backend=fmt(row.get("graph_construction_backend")),
                 force_mode=fmt(row.get("force_mode")),
                 atoms=fmt(row.get("atoms_per_second")),
@@ -201,14 +211,15 @@ def format_markdown(rows: list[dict[str, Any]], *, baselines: list[dict[str, Any
         "",
         "## Students",
         "",
-        "| variant | TECE route | graph backend | force mode | atoms/s | configs/s | peak alloc MB | params | teacher E MAE | teacher F MAE | DFT E MAE | DFT F MAE |",
-        "|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| variant | TECE route | manifest | graph backend | force mode | atoms/s | configs/s | peak alloc MB | params | teacher E MAE | teacher F MAE | DFT E MAE | DFT F MAE |",
+        "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         lines.append(
-            "| {variant} | {route} | {graph_backend} | {force_mode} | {atoms} | {configs} | {mem} | {params} | {te} | {tf} | {de} | {df} |".format(
+            "| {variant} | {route} | {manifest} | {graph_backend} | {force_mode} | {atoms} | {configs} | {mem} | {params} | {te} | {tf} | {de} | {df} |".format(
                 variant=row["variant"],
                 route=fmt((row.get("tece_route") or {}).get("semantic_tier")),
+                manifest=fmt(row.get("tece_path_manifest_hash")),
                 graph_backend=fmt(row.get("graph_construction_backend")),
                 force_mode=fmt(row.get("force_mode")),
                 atoms=fmt(row.get("atoms_per_second")),

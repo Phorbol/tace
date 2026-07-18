@@ -22,6 +22,7 @@ from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
     _project_radial_edge_channels,
     packed_element_density_descriptors,
     rtece_descriptors,
+    rtece_path_manifest,
     rtece_route_contract,
 )
 
@@ -47,6 +48,7 @@ def test_rtece_scalar_model_has_formal_tace_models_entrypoint():
         RTECEScalarConfig as CoreRTECEScalarConfig,
         RTECEScalarModel as CoreRTECEScalarModel,
         build_rtece_config as core_build_rtece_config,
+        rtece_path_manifest as core_rtece_path_manifest,
     )
     from tace.models.rtece_scalar import packed_element_density_descriptors as core_packed_descriptors
 
@@ -54,6 +56,7 @@ def test_rtece_scalar_model_has_formal_tace_models_entrypoint():
     assert CoreRTECEScalarConfig is benchmark_rtece.RTECEScalarConfig
     assert CoreRTECEScalarModel is benchmark_rtece.RTECEScalarModel
     assert core_build_rtece_config is benchmark_rtece.build_rtece_config
+    assert core_rtece_path_manifest is benchmark_rtece.rtece_path_manifest
     assert core_packed_descriptors is benchmark_rtece.packed_element_density_descriptors
 
 
@@ -436,6 +439,31 @@ def test_species_basis_descriptors_distinguish_equal_z_sum_neighbors():
     assert not torch.allclose(species_cc, species_bn, atol=1e-12, rtol=1e-12)
 
 
+def test_rtece_path_manifest_has_stable_path_ids_and_hash():
+    radial = build_rtece_config("rtece_cavity_radial_edge_sketch14")
+    species = build_rtece_config("rtece_species_basis4")
+
+    manifest = rtece_path_manifest(radial, force_mode="autograd")
+    manifest_again = rtece_path_manifest(radial, force_mode="autograd")
+    species_manifest = rtece_path_manifest(species, force_mode="autograd")
+
+    assert manifest["schema_version"] == "rtece_path_manifest.v1"
+    assert manifest["manifest_hash"] == manifest_again["manifest_hash"]
+    assert manifest["manifest_hash"] != species_manifest["manifest_hash"]
+    assert len(manifest["manifest_hash"]) == 16
+    assert manifest["route"]["semantic_tier"] == "T3_cavity_radial_edge_scalar_sketch"
+    assert any(item["id"] == "moment.l1.vector" for item in manifest["moments"])
+    assert any(
+        item["id"] == "edge.cavity.vector_cross_radial_dot"
+        and item["placement"] == "edge"
+        and item["cavity"] is True
+        and item["radial_projection"] == "fixed_two_shell_mean"
+        for item in manifest["scalar_paths"]
+    )
+    assert any(item["id"] == "edge.direct.radial" for item in manifest["scalar_paths"])
+    assert "persistent_equivariant_edge_state" in manifest["deleted_tece_groups"]
+
+
 def test_rtece_species_basis_variant_has_route_contract():
     config = build_rtece_config("rtece_species_basis4")
     route = rtece_route_contract(config, force_mode="autograd")
@@ -765,6 +793,12 @@ def test_core_rtece_workflow_saves_loads_and_predicts_with_route_metadata(tmp_pa
     assert loaded_config == config
     assert metadata["tece_route"]["semantic_tier"] == "T3_element_conditioned_scalar_density"
     assert metadata["tece_route"]["force_realization"] == "analytic_scalar_chain_rule"
+    assert metadata["tece_path_manifest"]["schema_version"] == "rtece_path_manifest.v1"
+    assert metadata["tece_path_manifest"]["manifest_hash"] == rtece_path_manifest(
+        config,
+        force_mode="analytic_density",
+        graph_construction_backend="torch_radius_nopbc",
+    )["manifest_hash"]
     assert prediction["energy"].shape == (1,)
     assert prediction["forces"].shape == (2, 3)
     assert prediction["tece_route"]["force_realization"] == "autograd_conservative"
@@ -2295,10 +2329,12 @@ def test_rtece_summary_attaches_tece_route_contract():
     markdown = format_markdown([row], baselines=[])
 
     assert row["tece_route"]["semantic_tier"] == "T3_element_conditioned_scalar_density"
+    assert row["tece_path_manifest"]["schema_version"] == "rtece_path_manifest.v1"
+    assert row["tece_path_manifest_hash"] == row["tece_path_manifest"]["manifest_hash"]
     assert row["tece_route"]["force_realization"] == "triton_fused_descriptor_force"
     assert row["tece_route"]["edge_state_lifetime"] == "counted_exact_edge_buffer"
-    assert "| variant | TECE route | graph backend | force mode |" in markdown
-    assert "| radial8h24 | T3_element_conditioned_scalar_density" in markdown
+    assert "| variant | TECE route | manifest | graph backend | force mode |" in markdown
+    assert f"| radial8h24 | T3_element_conditioned_scalar_density | {row['tece_path_manifest_hash']}" in markdown
 
 
 def test_rtece_summary_reconstructs_species_and_cavity_routes():
@@ -2365,8 +2401,8 @@ def test_rtece_summary_preserves_graph_construction_backend():
     markdown = format_markdown([row], baselines=[])
 
     assert row["graph_construction_backend"] == "torch_radius_nopbc"
-    assert "| variant | TECE route | graph backend | force mode |" in markdown
-    assert "| radial4h16 | T3_element_conditioned_scalar_density | torch_radius_nopbc | analytic_element_triton_descriptor_force |" in markdown
+    assert "| variant | TECE route | manifest | graph backend | force mode |" in markdown
+    assert f"| radial4h16 | T3_element_conditioned_scalar_density | {row['tece_path_manifest_hash']} | torch_radius_nopbc | analytic_element_triton_descriptor_force |" in markdown
 
 
 def test_rtece_matrix_sbatch_separates_training_and_benchmark_validation_files():

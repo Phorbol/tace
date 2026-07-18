@@ -33,6 +33,7 @@ from .rtece_scalar import (
     edge_relational_sketches,
     packed_element_density_descriptors,
     rtece_descriptors,
+    rtece_path_manifest,
     rtece_route_contract,
 )
 
@@ -51,6 +52,7 @@ __all__ = [
     "edge_relational_sketches",
     "packed_element_density_descriptors",
     "rtece_descriptors",
+    "rtece_path_manifest",
     "rtece_route_contract",
     "evaluate_rtece_loss",
     "load_rtece_checkpoint",
