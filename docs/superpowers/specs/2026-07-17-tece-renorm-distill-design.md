@@ -1327,6 +1327,40 @@ Stage-44 interpretation against TECE/TACE:
 - The current direct-active invalid-cache provider front is now: `cached_topology` as a topology-reuse upper bound, `torch_radius_nopbc_grouped` for maximum update throughput, `torch_radius_nopbc_grouped_chunked` for lower memory, and `torch_radius_nopbc_grouped_by_size` as a diagnostic negative result.
 - The next clean implementation target remains a fused direct-radius/cell-list provider. Stage 44 suggests that chunk granularity should be a tunable deployment parameter until that lower-level provider exists.
 
+
+# Stage 45: Chunk-Size Sweep For Chunked Direct-Radius Backend
+
+Stage 45 made the Stage-44 chunk granularity explicit through `--graph-update-chunk-configs` and swept chunk sizes for the chunked grouped direct-radius provider. This is not a model-architecture change: the checkpoint, scalar element-density descriptor, direct-active graph semantics, and conservative fused force path stay fixed. The stage tests whether provider chunking is a reproducible deployment axis in the TECE/TACE Pareto table.
+
+Implementation gate:
+
+- `benchmark_rtece_scalar.py` now exposes `--graph-update-chunk-configs`, forwards it into `torch_radius_nopbc_grouped_chunked`, and records it in benchmark JSON.
+- `test_chunked_torch_radius_update_backend_honors_chunk_size` verifies the backend factory passes the chunk-size setting through to the chunked radius updater.
+- The CLI help test now verifies that the chunk-size option is exposed.
+- Full rTECE scalar test file after the change: 55 passed.
+
+GPU setup: radial8h24 `rtece_element_density`, direct-active initial graph, DFT valid `:1024`, 59193 atoms, one V100, float32, `--force-mode auto`, forced invalid cache with `trajectory_skin_margin=0.002`, `trajectory_displacement_std=0.001`, 20 force steps and 10 update events.
+
+| update backend | chunk configs | mode | update total s | seconds/pass | atom-step/s | peak alloc MB | DFT F MAE |
+|---|---:|---|---:|---:|---:|---:|---:|
+| `torch_radius_nopbc_grouped` | all | update-only | 0.011970 | 0.017392 | 68,070,707 | 241.3 | n/a |
+| `torch_radius_nopbc_grouped_chunked` | 64 | update-only | 0.069001 | 0.073236 | 16,165,038 | 61.3 | n/a |
+| `torch_radius_nopbc_grouped_chunked` | 128 | update-only | 0.035014 | 0.039086 | 30,288,403 | 73.4 | n/a |
+| `torch_radius_nopbc_grouped_chunked` | 256 | update-only | 0.021553 | 0.025552 | 46,331,185 | 110.0 | n/a |
+| `torch_radius_nopbc_grouped_chunked` | 512 | update-only | 0.015826 | 0.019991 | 59,220,668 | 174.8 | n/a |
+| `torch_radius_nopbc_grouped` | all | model+updates | 0.012118 | 0.043540 | 27,189,963 | 263.1 | 33.18 |
+| `torch_radius_nopbc_grouped_chunked` | 64 | model+updates | 0.068641 | 0.099996 | 11,839,051 | 83.0 | 33.18 |
+| `torch_radius_nopbc_grouped_chunked` | 128 | model+updates | 0.037028 | 0.066623 | 17,769,557 | 95.0 | 33.18 |
+| `torch_radius_nopbc_grouped_chunked` | 256 | model+updates | 0.021643 | 0.051295 | 23,079,365 | 130.5 | 33.18 |
+| `torch_radius_nopbc_grouped_chunked` | 512 | model+updates | 0.016391 | 0.046616 | 25,395,950 | 197.7 | 33.18 |
+
+Stage-45 interpretation against TECE/TACE:
+
+- Chunk size is a real provider Pareto axis. Larger chunks reduce update time but increase peak allocation; smaller chunks reduce memory while preserving the same graph semantics and force error.
+- Chunk64 is already above the 1e7 atom-step/s target in the forced-invalid model+update benchmark with about 83MB peak allocation. Chunk256 is the best balanced provider point in this sweep: about 85% of all-config grouped model+update throughput with about half the peak allocation.
+- This supports the TECE/TACE system-renormalization route. Once the model has been degraded to scalar descriptors and fused conservative force kernels, topology-update realization and edge-buffer lifetime are first-class deployment axes, not incidental implementation details.
+- The next clean target remains a fused direct-radius/cell-list provider. Until that exists, `--graph-update-chunk-configs` should be reported in Pareto artifacts together with graph construction and graph update backend metadata.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

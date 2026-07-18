@@ -103,6 +103,12 @@ def parse_args() -> argparse.Namespace:
         help="Graph update backend used when trajectory replay invalidates the cached graph.",
     )
     parser.add_argument(
+        "--graph-update-chunk-configs",
+        type=int,
+        default=128,
+        help="Number of configurations per chunk for chunked graph update backends.",
+    )
+    parser.add_argument(
         "--graph-construction-backend",
         choices=("ase_neighborlist", "torch_radius_nopbc"),
         default="ase_neighborlist",
@@ -213,6 +219,7 @@ def make_graph_update_backend(
     rebuild_fn,
     template_graph: RTECEGraph | None = None,
     cutoff: float | None = None,
+    chunk_configs: int = 128,
 ) -> GraphUpdateBackend:
     if backend_name == "ase_neighborlist":
         return GraphUpdateBackend("ase_neighborlist", rebuild_fn)
@@ -236,9 +243,18 @@ def make_graph_update_backend(
         radius_fns = {
             "torch_radius_nopbc": torch_radius_nopbc_graph,
             "torch_radius_nopbc_grouped": torch_radius_nopbc_grouped_graph,
-            "torch_radius_nopbc_grouped_chunked": torch_radius_nopbc_grouped_chunked_graph,
             "torch_radius_nopbc_grouped_by_size": torch_radius_nopbc_grouped_by_size_graph,
         }
+        if backend_name == "torch_radius_nopbc_grouped_chunked":
+            return GraphUpdateBackend(
+                backend_name,
+                lambda positions: torch_radius_nopbc_grouped_chunked_graph(
+                    template_graph,
+                    positions,
+                    cutoff=float(cutoff),
+                    chunk_configs=int(chunk_configs),
+                ),
+            )
         radius_fn = radius_fns[backend_name]
         return GraphUpdateBackend(
             backend_name,
@@ -697,6 +713,7 @@ def main() -> None:
         rebuild_fn=rebuild_batched_graph_from_positions,
         template_graph=trajectory_template,
         cutoff=float(config.cutoff),
+        chunk_configs=int(args.graph_update_chunk_configs),
     )
 
     def reset_trajectory_runtime_state() -> None:
@@ -712,6 +729,7 @@ def main() -> None:
             rebuild_fn=rebuild_batched_graph_from_positions,
             template_graph=trajectory_template,
             cutoff=float(config.cutoff),
+            chunk_configs=int(args.graph_update_chunk_configs),
         )
 
     def run_model(graph):
@@ -904,6 +922,7 @@ def main() -> None:
         "trajectory_max_displacement_since_rebuild_a": trajectory_report_max_displacement,
         "graph_construction_backend": args.graph_construction_backend,
         "graph_update_backend": graph_update_backend.name if graph_update_backend is not None else None,
+        "graph_update_chunk_configs": int(args.graph_update_chunk_configs),
         "graph_update_rebuild_count": graph_update_backend.rebuild_count if graph_update_backend is not None else 0,
         "graph_update_total_s": graph_update_backend.total_rebuild_time_s if graph_update_backend is not None else 0.0,
         "graph_update_times_s": graph_update_backend.rebuild_times_s if graph_update_backend is not None else [],

@@ -1099,6 +1099,39 @@ def test_torch_radius_nopbc_update_backend_rebuilds_edges_within_each_batch():
     assert backend.rebuild_count == 1
 
 
+def test_chunked_torch_radius_update_backend_honors_chunk_size():
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import make_graph_update_backend
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import RTECEGraph
+
+    template = RTECEGraph(
+        z=torch.tensor([6, 8, 1, 7, 1], dtype=torch.long),
+        pos=torch.zeros((5, 3), dtype=torch.float64),
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=torch.tensor([0, 0, 0, 1, 1], dtype=torch.long),
+    )
+    positions = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [0.9, 0.0, 0.0],
+            [2.2, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.8, 0.0, 0.0],
+        ],
+        dtype=torch.float64,
+    )
+
+    backend = make_graph_update_backend(
+        backend_name="torch_radius_nopbc_grouped_chunked",
+        rebuild_fn=lambda positions: (_ for _ in ()).throw(AssertionError("ASE rebuild should not run")),
+        template_graph=template,
+        cutoff=1.0,
+        chunk_configs=1,
+    )
+    graph = backend.rebuild(positions)
+
+    assert graph.edge_index.tolist() == [[0, 1, 3, 4], [1, 0, 4, 3]]
+
+
 def test_grouped_chunked_torch_radius_update_backend_rebuilds_edges():
     from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import make_graph_update_backend
     from benchmarks.oc20neb_tace_mace.rtece_scalar_model import RTECEGraph
@@ -1276,6 +1309,7 @@ def test_rtece_benchmark_help_exposes_force_mode():
     assert "--trajectory-validity-only" in result.stdout
     assert "--trajectory-update-only" in result.stdout
     assert "--graph-update-backend" in result.stdout
+    assert "--graph-update-chunk-configs" in result.stdout
     assert "--graph-construction-backend" in result.stdout
     assert "torch_radius_nopbc" in result.stdout
     assert "torch_radius_nopbc_grouped" in result.stdout
