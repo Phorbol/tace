@@ -33,6 +33,7 @@ def write_rtece_matrix_wrapper(
     lr: str | float | None = None,
     hidden_channels: str | None = None,
     num_radial: int | None = None,
+    scalar_path_ids: str | None = None,
     seed: int | None = None,
     energy_weight: float | None = None,
     force_weight: float | None = None,
@@ -60,6 +61,7 @@ def write_rtece_matrix_wrapper(
         _shell_assign("LR", lr),
         _shell_assign("HIDDEN_CHANNELS", hidden_channels),
         _shell_assign("NUM_RADIAL", num_radial),
+        _shell_assign("SCALAR_PATH_IDS", scalar_path_ids),
         _shell_assign("SEED", seed),
         _shell_assign("ENERGY_WEIGHT", energy_weight),
         _shell_assign("FORCE_WEIGHT", force_weight),
@@ -82,7 +84,7 @@ def write_rtece_matrix_wrapper(
         "#SBATCH --error=/home/gengjianrui/bin/logs/rtece-matrix-%j.err",
         "",
         "set -euo pipefail",
-        "# SAI policy: do not submit rTECE jobs with sbatch --export=ALL,... .",
+        "# SAI policy: pass parameters inside this wrapper, not through Slurm command-line environment export.",
     ]
     body.extend(f"export {line}" for line in assignments if line)
     body.append(f"exec /bin/bash {shlex.quote(str(Path(matrix_script)))}")
@@ -95,7 +97,7 @@ def build_sbatch_command(wrapper: str | Path) -> list[str]:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Submit rTECE training/benchmark matrix without Slurm --export.")
+    parser = argparse.ArgumentParser(description="Submit rTECE training/benchmark matrix through a self-contained Slurm wrapper.")
     parser.add_argument("--wrapper-dir", type=Path, required=True)
     parser.add_argument("--variants", required=True)
     parser.add_argument("--run-root", default=None)
@@ -110,6 +112,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", default=None)
     parser.add_argument("--hidden-channels", default=None)
     parser.add_argument("--num-radial", type=int, default=None)
+    parser.add_argument("--scalar-path-ids", default=None)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--energy-weight", type=float, default=None)
     parser.add_argument("--force-weight", type=float, default=None)
@@ -139,6 +142,7 @@ def main() -> None:
         lr=args.lr,
         hidden_channels=args.hidden_channels,
         num_radial=args.num_radial,
+        scalar_path_ids=args.scalar_path_ids,
         seed=args.seed,
         energy_weight=args.energy_weight,
         force_weight=args.force_weight,

@@ -2166,6 +2166,48 @@ Next priority:
 2. If `radial_cavity_vec` is too slow under autograd, do not widen it blindly; first decide whether to implement a cheap analytic/fused evaluator for that selected edge path or keep it as a projection diagnostic candidate only.
 3. Add teacher-force sensitivity weighting after the unweighted path-id route report is reproduced at non-tiny scale.
 
+# Stage 73: Small GPU Path-Id Route Matrix And Negative Projection Check
+
+Stage 73 runs the first non-tiny GPU path-id route matrix after Stage 72 closed the training/benchmark/projection identity loop. The goal was not to maximize accuracy against the largest teacher, but to test whether the TECE path-retention order suggested by the unweighted projection diagnostic becomes a reasonable early Pareto slice when trained and benchmarked as deployable rTECE models.
+
+Implementation and submission gate:
+
+- `submit_rtece_scalar_matrix.py` now accepts `--scalar-path-ids` and writes `SCALAR_PATH_IDS=...` inside the generated wrapper, so path-id route jobs can be submitted without changing the canonical matrix sbatch script.
+- The generated rTECE benchmark and matrix wrappers now describe the SAI rule as self-contained wrapper parameter passing. Wrapper bodies use ordinary `export VAR=value`, and the submission command remains plain `sbatch wrapper.sbatch`.
+- Regression tests check that generated wrapper text contains no command-line Slurm environment export flag, no `--mem`, and no `--cpus-per-task`, while preserving required GPU/QOS lines.
+- Stage-73 wrapper grep over `runs/oc20neb_tace_mace/rtece-stage73-path-id-gpu/submit` found no forbidden Slurm export, memory, or CPU-per-task directives before submission.
+
+Stage-73 jobs on 2026-07-18:
+
+| route | job id | scalar paths | train/valid configs | benchmark configs | max steps | force mode |
+|---|---:|---|---:|---:|---:|---|
+| `radial` | 679965 | `atomic.radial_density` | 64/64 | 256 | 200 | autograd |
+| `radial_cavity_vec` | 679966 | `atomic.radial_density`, `edge.cavity.vector_dot` | 64/64 | 256 | 200 | autograd |
+| `radial_cavity_vec_direct` | 679967 | `atomic.radial_density`, `edge.cavity.vector_dot`, `edge.direct.radial` | 64/64 | 256 | 200 | autograd |
+
+Small GPU matrix result, joined with the Stage-69/70 projection diagnostic:
+
+| route | projection residual | deleted projection paths | GPU atoms/s | DFT F MAE | DFT F RMSE | teacher F MAE | teacher F RMSE | best step | best valid loss |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---:|
+| `radial` | 0.1273 | `edge.cavity.vector_dot`, `edge.direct.radial` | 2.96M | 29.45 | 120.02 | 34.25 | 119.43 | 200 | 0.7752 |
+| `radial_cavity_vec` | 0.00542 | `edge.direct.radial` | 1.08M | 35.16 | 122.58 | 38.53 | 122.24 | 200 | 0.6983 |
+| `radial_cavity_vec_direct` | 2.1e-13 | none | 1.08M | 34.57 | 121.61 | 39.20 | 121.38 | 100 | 0.7391 |
+
+Stage-73 interpretation against TECE/TACE and the review document:
+
+- The unweighted descriptor projection residual is not yet a reliable force-accuracy proxy. It correctly measures descriptor subspace deletion, but on this 64-config/200-step GPU slice the route with the largest residual (`radial`) is both fastest and best on DFT/teacher force MAE. This is negative evidence against using raw descriptor reconstruction as the only renormalization criterion.
+- Adding `edge.cavity.vector_dot` lowers descriptor residual by about 23.5x relative to radial-only, but current unfused autograd edge evaluation costs about 2.7x throughput and does not improve force MAE in this run. The next algorithmic question is whether this path needs teacher-force/Sobolev weighting, better distillation, or dataset stratification before its extra descriptor information becomes useful.
+- Adding `edge.direct.radial` reduces the residual to numerical zero relative to the reference descriptor set, but gives almost no throughput difference and no clear force gain over `radial_cavity_vec`. This supports the Stage-70 priority order: do not expand direct edge paths blindly.
+- This result reinforces the review conclusion that the branch is still a scalar student and performance testbed, not yet a full TECE renormalization/distillation compiler. The next proof step must connect deleted paths to energy/force/virial sensitivity, not just to descriptor least-squares residual.
+- The observed path-id autograd throughput is useful but not the final high-throughput target. Review-aligned backend work should eventually replace slow graph/edge autograd pieces with a graph ABI carrying PBC edge vectors and fused edge-gradient force/virial, but kernel work is lower priority than making the path deletion metric physically meaningful.
+
+Next priority:
+
+1. Upgrade the projection diagnostic from unweighted descriptor residual to teacher-force or energy/force Sobolev-weighted residual on the same path-id routes, so deleted TECE paths are ranked by physical sensitivity rather than raw feature reconstruction.
+2. Keep `radial` as the current high-throughput endpoint baseline and `radial_cavity_vec` as the first semantic edge-path candidate, but do not widen edge autograd routes until weighted projection or distillation shows force-error benefit.
+3. Start a bounded physical-generalization harness after the review-critical semantic bugs remain under control: dimer scans for smooth E/F and rattle+relax RMSD stratified by element/adsorbate class, with special attention to non-metal C/N adsorbates observed by the user.
+4. Plan the graph/geometry ABI change from ASE-style graph construction toward TACE-compatible PyG/matscipy/NVIDIA-op paths only as part of the PBC edge-vector/force/virial closure, not as an isolated graph-build micro-optimization.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

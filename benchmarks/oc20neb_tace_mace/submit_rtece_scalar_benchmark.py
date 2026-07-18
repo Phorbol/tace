@@ -60,7 +60,7 @@ def write_rtece_benchmark_wrapper(
         "#SBATCH --error=/home/gengjianrui/bin/logs/rtece-bench-%j.err",
         "",
         "set -euo pipefail",
-        "# SAI policy: do not submit rTECE jobs with sbatch --export=ALL,... .",
+        "# SAI policy: pass parameters inside this wrapper, not through Slurm command-line environment export.",
     ]
     body.extend(f"export {line}" for line in assignments if line)
     body.append(f"exec /bin/bash {shlex.quote(str(Path(benchmark_script)))}")
@@ -73,7 +73,7 @@ def build_sbatch_command(wrapper: str | Path) -> list[str]:
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Submit rTECE benchmark without Slurm --export.")
+    parser = argparse.ArgumentParser(description="Submit rTECE benchmark through a self-contained Slurm wrapper.")
     parser.add_argument("--wrapper-dir", type=Path, required=True)
     parser.add_argument("--model", required=True)
     parser.add_argument("--force-mode", default="auto")

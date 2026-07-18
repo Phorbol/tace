@@ -3185,6 +3185,7 @@ def test_rtece_benchmark_submit_helper_generates_wrapper_without_sbatch_export(t
     text = wrapper.read_text()
 
     assert "--export" not in command
+    assert "--export" not in text
     assert "#SBATCH --gpus-per-node=1" in text
     assert "#SBATCH --qos=flood-1o2gpu" in text
     assert "--mem" not in text
@@ -3215,6 +3216,7 @@ def test_rtece_matrix_submit_helper_generates_wrapper_without_sbatch_export(tmp_
         max_steps=4,
         hidden_channels="16,16",
         num_radial=4,
+        scalar_path_ids="atomic.radial_density,edge.cavity.vector_dot",
         force_weight=30.0,
         force_mode="autograd",
         measure_passes=1,
@@ -3224,6 +3226,7 @@ def test_rtece_matrix_submit_helper_generates_wrapper_without_sbatch_export(tmp_
     text = wrapper.read_text()
 
     assert "--export" not in command
+    assert "--export" not in text
     assert "#SBATCH --gpus-per-node=1" in text
     assert "#SBATCH --qos=flood-1o2gpu" in text
     assert "--mem" not in text
@@ -3231,6 +3234,7 @@ def test_rtece_matrix_submit_helper_generates_wrapper_without_sbatch_export(tmp_
     assert "VARIANTS='rtece_species_basis4 rtece_cavity_radial_edge_sketch14'" in text
     assert "TRAIN_FILE=/tmp/train.extxyz" in text
     assert "BENCH_LIMIT_CONFIGS=32" in text
+    assert "SCALAR_PATH_IDS=atomic.radial_density,edge.cavity.vector_dot" in text
     assert "FORCE_WEIGHT=30.0" in text
     assert "exec /bin/bash" in text
     assert "rtece_scalar_matrix.sbatch" in text
