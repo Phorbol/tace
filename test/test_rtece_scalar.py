@@ -2405,6 +2405,94 @@ def test_rtece_summary_preserves_graph_construction_backend():
     assert f"| radial4h16 | T3_element_conditioned_scalar_density | {row['tece_path_manifest_hash']} | torch_radius_nopbc | analytic_element_triton_descriptor_force |" in markdown
 
 
+def test_rtece_summary_groups_rows_by_path_manifest():
+    from benchmarks.oc20neb_tace_mace.summarize_tece_distill import (
+        make_student_row,
+        manifest_group_rows,
+    )
+
+    base = {
+        "model": "rtece_scalar.pt",
+        "variant": "rtece_cavity_radial_edge_sketch14",
+        "force_mode": "autograd",
+        "graph_construction_backend": "matscipy_pbc",
+        "hidden_channels": [16, 16],
+        "num_radial": 4,
+        "atoms_per_second": 100.0,
+        "configs_per_second": 2.0,
+        "seconds_per_pass": 0.1,
+        "peak_allocated_mb": 101.0,
+        "peak_reserved_mb": 120.0,
+        "num_parameters": 737,
+        "mae_e_mev_atom": 80.0,
+        "rmse_e_mev_atom": 100.0,
+        "mae_f_mev_a": 40.0,
+        "rmse_f_mev_a": 80.0,
+    }
+    faster = dict(base)
+    faster["atoms_per_second"] = 160.0
+    faster["mae_f_mev_a"] = 45.0
+    better = dict(base)
+    better["atoms_per_second"] = 90.0
+    better["mae_f_mev_a"] = 35.0
+    teacher_faster = dict(faster)
+    teacher_faster["mae_f_mev_a"] = 43.0
+    teacher_better = dict(better)
+    teacher_better["mae_f_mev_a"] = 33.0
+
+    rows = [
+        make_student_row("radial_cavity_smoke_fast", dft_benchmark=faster, teacher_benchmark=teacher_faster),
+        make_student_row("radial_cavity_smoke_better", dft_benchmark=better, teacher_benchmark=teacher_better),
+    ]
+    groups = manifest_group_rows(rows)
+
+    assert len(groups) == 1
+    group = groups[0]
+    assert group["manifest_hash"] == rows[0]["tece_path_manifest_hash"]
+    assert group["semantic_tier"] == "T3_cavity_radial_edge_scalar_sketch"
+    assert group["variants"] == ["radial_cavity_smoke_better", "radial_cavity_smoke_fast"]
+    assert group["row_count"] == 2
+    assert group["best_atoms_per_second"] == 160.0
+    assert group["best_dft_f_mae_mev_a"] == 35.0
+    assert group["best_teacher_f_mae_mev_a"] == 33.0
+    assert "low_rank_radial_edge_moment_sketches" in group["retained_tece_groups"]
+    assert "edge.cavity.vector_cross_radial_dot" in group["scalar_path_ids"]
+
+
+def test_rtece_summary_markdown_includes_manifest_groups_section():
+    from benchmarks.oc20neb_tace_mace.summarize_tece_distill import (
+        format_markdown,
+        make_student_row,
+    )
+
+    dft = {
+        "model": "rtece_scalar.pt",
+        "variant": "rtece_species_basis4",
+        "force_mode": "autograd",
+        "hidden_channels": [16, 16],
+        "num_radial": 4,
+        "atoms_per_second": 220.0,
+        "configs_per_second": 3.0,
+        "seconds_per_pass": 0.1,
+        "peak_allocated_mb": 36.0,
+        "peak_reserved_mb": 48.0,
+        "num_parameters": 641,
+        "mae_e_mev_atom": 60.0,
+        "rmse_e_mev_atom": 90.0,
+        "mae_f_mev_a": 38.0,
+        "rmse_f_mev_a": 70.0,
+    }
+    teacher = dict(dft)
+    teacher["mae_f_mev_a"] = 37.0
+
+    row = make_student_row("species_smoke", dft_benchmark=dft, teacher_benchmark=teacher)
+    markdown = format_markdown([row], baselines=[])
+
+    assert "## Manifest Groups" in markdown
+    assert "| manifest | TECE route | variants | retained groups | scalar paths | best atoms/s | best DFT F MAE | best teacher F MAE | rows |" in markdown
+    assert f"| {row['tece_path_manifest_hash']} | T3_low_rank_species_density | species_smoke |" in markdown
+
+
 def test_rtece_matrix_sbatch_separates_training_and_benchmark_validation_files():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()

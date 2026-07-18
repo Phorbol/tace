@@ -1941,6 +1941,29 @@ Stage-64 interpretation against TECE/TACE:
 - The route is now closer to the TECE/TACE design requirement that simplifications be expressed as deleting, projecting, scalarizing, or downfolding explicit semantic groups rather than as loose hyperparameter names.
 - Next priority should use this manifest in one of two concrete ways: (1) a small route registry / path-spec compiler that instantiates configs from manifest-like specs, or (2) a benchmark summarizer that groups and compares Pareto points by manifest hash and retained/deleted path groups, so architecture search is no longer variant-string driven.
 
+# Stage 65: Manifest-Grouped Pareto Summary
+
+Stage 65 follows the Stage 64 path-manifest substrate and addresses the same review concern from the analysis side: benchmark comparison must stop treating a human-readable variant string as the architecture identity. A route is now grouped by `tece_path_manifest_hash`, with retained TECE groups and scalar path ids displayed next to the best measured throughput and force errors.
+
+Implementation gate:
+
+- Added `manifest_group_rows(rows)` to `summarize_tece_distill.py`. It groups benchmark rows by manifest hash, records the semantic tier, descriptor family, variants sharing the manifest, retained/deleted TECE groups, scalar path ids, force modes, graph backends, best atoms/s, and best DFT/teacher force MAE.
+- Markdown summaries now include a `Manifest Groups` section. The main student and Pareto-front rows still exist, but the report now also exposes the TECE path object being compared.
+- JSON summaries now include `manifest_groups`, so later route-search tooling can consume the same architecture-level rows without re-parsing markdown.
+- Regression tests cover grouping multiple benchmark rows under one radial-cavity manifest and rendering the manifest-group table for a species-basis route.
+
+Stage-65 interpretation against TECE/TACE:
+
+- This converts the experimental comparison unit from `variant` to a stable TECE path manifest. That is required for a systematic Pareto curve because the same route can appear under multiple labels, seeds, graph backends, or force backends.
+- It does not yet implement teacher path sensitivity, POD/SVD radial basis selection, Schur-complement downfolding, or an executable path-spec compiler. It makes those next steps auditable by giving every measured point a stable semantic identity.
+- This directly supports the acceptance standard: future Pareto rows can now be filtered or grouped by deleted/retained semantic groups, scalar path families, graph semantics, and force realization, instead of by loose naming conventions.
+
+Next priority:
+
+1. Promote the manifest schema into a small route registry/path-spec constructor, so selected scalar paths instantiate model configs rather than being inferred from variant names.
+2. Use the manifest groups in the next benchmark report to compare actual architecture-level Pareto points; do not scale another autograd cavity-edge sweep unless its path group has an analytic/fused force route.
+3. Return to algorithmic closure after the registry: teacher-conditioned radial/species path selection or a lightweight projection-error diagnostic, because those are the next missing pieces of true renormalization/distillation.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

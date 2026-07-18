@@ -168,6 +168,67 @@ def rank_student_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     )
 
 
+def _finite_values(rows: list[dict[str, Any]], key: str) -> list[float]:
+    return [float(row[key]) for row in rows if row.get(key) is not None]
+
+
+def _sorted_unique_strings(values: list[Any]) -> list[str]:
+    return sorted({str(value) for value in values if value is not None})
+
+
+def _join_limited(values: list[str], *, limit: int = 6) -> str:
+    if not values:
+        return "NA"
+    if len(values) <= limit:
+        return ", ".join(values)
+    shown = values[:limit]
+    return ", ".join(shown) + f", +{len(values) - limit} more"
+
+
+def manifest_group_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    grouped: dict[str, list[dict[str, Any]]] = {}
+    for row in rows:
+        manifest_hash = row.get("tece_path_manifest_hash") or f"missing:{row.get('variant', 'unknown')}"
+        grouped.setdefault(str(manifest_hash), []).append(row)
+
+    groups = []
+    for manifest_hash, group_rows in grouped.items():
+        manifest = group_rows[0].get("tece_path_manifest") or {}
+        route = manifest.get("route") or group_rows[0].get("tece_route") or {}
+        scalar_paths = manifest.get("scalar_paths") or []
+        atoms_values = _finite_values(group_rows, "atoms_per_second")
+        dft_force_values = _finite_values(group_rows, "dft_f_mae_mev_a")
+        teacher_force_values = _finite_values(group_rows, "teacher_f_mae_mev_a")
+        groups.append({
+            "manifest_hash": manifest_hash,
+            "semantic_tier": route.get("semantic_tier"),
+            "descriptor_family": route.get("descriptor_family"),
+            "variants": _sorted_unique_strings([row.get("variant") for row in group_rows]),
+            "row_count": len(group_rows),
+            "retained_tece_groups": _sorted_unique_strings(
+                list(manifest.get("retained_tece_groups") or route.get("retained_tece_groups") or [])
+            ),
+            "deleted_tece_groups": _sorted_unique_strings(
+                list(manifest.get("deleted_tece_groups") or route.get("deleted_tece_groups") or [])
+            ),
+            "scalar_path_ids": _sorted_unique_strings([path.get("id") for path in scalar_paths]),
+            "cost_groups": _sorted_unique_strings([path.get("cost_group") for path in scalar_paths]),
+            "force_modes": _sorted_unique_strings([row.get("force_mode") for row in group_rows]),
+            "graph_backends": _sorted_unique_strings([row.get("graph_construction_backend") for row in group_rows]),
+            "best_atoms_per_second": max(atoms_values) if atoms_values else None,
+            "best_dft_f_mae_mev_a": min(dft_force_values) if dft_force_values else None,
+            "best_teacher_f_mae_mev_a": min(teacher_force_values) if teacher_force_values else None,
+        })
+    return sorted(
+        groups,
+        key=lambda group: (
+            -float(group.get("best_atoms_per_second") or 0.0),
+            float(group.get("best_dft_f_mae_mev_a") or 1.0e30),
+            str(group.get("manifest_hash")),
+        ),
+    )
+
+
 def fmt(value: Any, digits: int = 3) -> str:
     if value is None:
         return "NA"
@@ -205,6 +266,33 @@ def append_front_section(lines: list[str], title: str, rows: list[dict[str, Any]
         )
 
 
+def append_manifest_group_section(lines: list[str], rows: list[dict[str, Any]]) -> None:
+    groups = manifest_group_rows(rows)
+    if not groups:
+        return
+    lines.extend([
+        "",
+        "## Manifest Groups",
+        "",
+        "| manifest | TECE route | variants | retained groups | scalar paths | best atoms/s | best DFT F MAE | best teacher F MAE | rows |",
+        "|---|---|---|---|---|---:|---:|---:|---:|",
+    ])
+    for group in groups:
+        lines.append(
+            "| {manifest} | {route} | {variants} | {retained} | {paths} | {atoms} | {df} | {tf} | {rows} |".format(
+                manifest=fmt(group.get("manifest_hash")),
+                route=fmt(group.get("semantic_tier")),
+                variants=_join_limited(group.get("variants") or [], limit=4),
+                retained=_join_limited(group.get("retained_tece_groups") or [], limit=4),
+                paths=_join_limited(group.get("scalar_path_ids") or [], limit=5),
+                atoms=fmt(group.get("best_atoms_per_second")),
+                df=fmt(group.get("best_dft_f_mae_mev_a")),
+                tf=fmt(group.get("best_teacher_f_mae_mev_a")),
+                rows=fmt(group.get("row_count"), digits=0),
+            )
+        )
+
+
 def format_markdown(rows: list[dict[str, Any]], *, baselines: list[dict[str, Any]]) -> str:
     lines = [
         "# TECE Distillation Matrix Summary",
@@ -234,6 +322,7 @@ def format_markdown(rows: list[dict[str, Any]], *, baselines: list[dict[str, Any
         )
     append_front_section(lines, "## DFT Force Pareto Front", rows, "dft_f_mae_mev_a")
     append_front_section(lines, "## Teacher Force Pareto Front", rows, "teacher_f_mae_mev_a")
+    append_manifest_group_section(lines, rows)
     if baselines:
         lines.extend([
             "",
@@ -306,6 +395,7 @@ def main() -> None:
         baselines.append(item)
     payload = {
         "students": rows,
+        "manifest_groups": manifest_group_rows(rows),
         "dft_force_pareto_front": pareto_front_rows(rows, error_key="dft_f_mae_mev_a"),
         "teacher_force_pareto_front": pareto_front_rows(rows, error_key="teacher_f_mae_mev_a"),
         "baselines": baselines,
