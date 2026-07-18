@@ -1570,6 +1570,26 @@ Stage-52 interpretation against TECE/TACE:
 - The Pareto-route narrative is now cleaner: model semantics are downfolded to scalar element-density descriptors; descriptor/force edge lifetime is already shortened by Triton fused evaluators; topology representation can now be lowered further from materialized edge-list to cell-list candidate streaming.
 
 
+# Stage 53: Formal rTECE Scalar Model Entrypoint
+
+Stage 53 responded to a structural issue in the previous route: most of the high-throughput rTECE model code lived under `benchmarks/oc20neb_tace_mace/`, so it was easy to mistake the work for benchmark-only parameter tuning rather than a real model endpoint. The implementation now promotes the semantic rTECE scalar model into `tace.models.rtece_scalar` while keeping the old benchmark path as a compatibility shim.
+
+Implementation gate:
+
+- Added `tace/models/rtece_scalar.py` as the canonical implementation of `RTECEScalarConfig`, `RTECEGraph`, `RTECEScalarModel`, scalar descriptors, packed element-density descriptors, and the Stage52 cell-list descriptor oracle.
+- Added `tace/models/rtece_triton_kernels.py` as the canonical implementation of the current rTECE Triton pair force, element-density descriptor/force, and direct-radius provider kernels.
+- Replaced `benchmarks/oc20neb_tace_mace/rtece_scalar_model.py` and `benchmarks/oc20neb_tace_mace/rtece_triton_kernels.py` with re-export shims so historical training and benchmark scripts keep the same imports.
+- Exported the rTECE scalar API from `tace.models`. Heavy full-TACE exports are now optional at import time, so a lightweight scalar endpoint can be imported even when the full e3nn/TensorModel stack is unavailable or incompatible in the local environment.
+- Added tests that fix this boundary: `tace.models` and the old benchmark modules must resolve to the same rTECE classes/functions and Triton kernel functions.
+
+Stage-53 interpretation against TECE/TACE:
+
+- This is not a new accuracy/throughput Pareto point; it is an architecture-boundary correction. The scalar endpoint is now represented as a formal model in the TACE package, not only as an OC20NEB benchmark artifact.
+- The theory boundary is cleaner: `tace.models.rtece_scalar` owns the semantic projection/downfolding from TECE/TACE into scalar sufficient statistics; `tace.models.rtece_triton_kernels` owns reusable low-level kernels; benchmark scripts own dataset-specific distillation, provider stress tests, and Pareto measurement.
+- This makes the next fused cell-list descriptor/force work easier to judge. A stabilized kernel should land under the formal rTECE backend instead of remaining purely benchmark-local.
+- Next priority: implement the Stage52 cell-list fused descriptor/force contract as a real backend and benchmark it against `triton_padded` and `triton_counted`. The model semantics and existing Triton kernels have now moved to core; the remaining gap is the fused cell-list runtime.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

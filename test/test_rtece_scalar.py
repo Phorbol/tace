@@ -35,6 +35,38 @@ def complete_directed_edges(num_nodes: int) -> torch.Tensor:
     return torch.tensor(edges, dtype=torch.long).t().contiguous()
 
 
+
+
+def test_rtece_scalar_model_has_formal_tace_models_entrypoint():
+    from benchmarks.oc20neb_tace_mace import rtece_scalar_model as benchmark_rtece
+    from tace.models import (
+        RTECEGraph as CoreRTECEGraph,
+        RTECEScalarConfig as CoreRTECEScalarConfig,
+        RTECEScalarModel as CoreRTECEScalarModel,
+        build_rtece_config as core_build_rtece_config,
+    )
+    from tace.models.rtece_scalar import packed_element_density_descriptors as core_packed_descriptors
+
+    assert CoreRTECEGraph is benchmark_rtece.RTECEGraph
+    assert CoreRTECEScalarConfig is benchmark_rtece.RTECEScalarConfig
+    assert CoreRTECEScalarModel is benchmark_rtece.RTECEScalarModel
+    assert core_build_rtece_config is benchmark_rtece.build_rtece_config
+    assert core_packed_descriptors is benchmark_rtece.packed_element_density_descriptors
+
+
+
+
+def test_rtece_triton_kernels_have_formal_tace_models_entrypoint():
+    from benchmarks.oc20neb_tace_mace import rtece_triton_kernels as benchmark_kernels
+    from tace.models import rtece_triton_kernels as core_kernels
+
+    assert core_kernels.pair_forces_triton is benchmark_kernels.pair_forces_triton
+    assert core_kernels.element_density_descriptors_triton is benchmark_kernels.element_density_descriptors_triton
+    assert core_kernels.element_density_forces_triton is benchmark_kernels.element_density_forces_triton
+    assert core_kernels.direct_radius_padded_edges_triton is benchmark_kernels.direct_radius_padded_edges_triton
+    assert core_kernels.direct_radius_counted_edges_triton is benchmark_kernels.direct_radius_counted_edges_triton
+
+
 def test_build_rtece_config_defines_ordered_variants():
     pair = build_rtece_config("rtece_pair")
     element = build_rtece_config("rtece_element_density")
