@@ -96,6 +96,7 @@ def parse_args() -> argparse.Namespace:
             "cached_topology",
             "torch_radius_nopbc",
             "torch_radius_nopbc_grouped",
+            "torch_radius_nopbc_grouped_chunked",
             "torch_radius_nopbc_grouped_by_size",
         ),
         default="ase_neighborlist",
@@ -222,7 +223,12 @@ def make_graph_update_backend(
             "cached_topology",
             lambda positions: replay_graph_positions(template_graph, positions),
         )
-    if backend_name in {"torch_radius_nopbc", "torch_radius_nopbc_grouped", "torch_radius_nopbc_grouped_by_size"}:
+    if backend_name in {
+        "torch_radius_nopbc",
+        "torch_radius_nopbc_grouped",
+        "torch_radius_nopbc_grouped_chunked",
+        "torch_radius_nopbc_grouped_by_size",
+    }:
         if template_graph is None:
             raise ValueError(f"{backend_name} graph update backend requires a template graph")
         if cutoff is None:
@@ -230,6 +236,7 @@ def make_graph_update_backend(
         radius_fns = {
             "torch_radius_nopbc": torch_radius_nopbc_graph,
             "torch_radius_nopbc_grouped": torch_radius_nopbc_grouped_graph,
+            "torch_radius_nopbc_grouped_chunked": torch_radius_nopbc_grouped_chunked_graph,
             "torch_radius_nopbc_grouped_by_size": torch_radius_nopbc_grouped_by_size_graph,
         }
         radius_fn = radius_fns[backend_name]
@@ -427,6 +434,70 @@ def torch_radius_nopbc_grouped_graph(template: RTECEGraph, positions: torch.Tens
                 edge_index = torch.stack([src, dst], dim=0).to(device=template.edge_index.device, dtype=template.edge_index.dtype)
             else:
                 edge_index = template.edge_index.new_zeros((2, 0))
+    return RTECEGraph(
+        z=template.z,
+        pos=pos,
+        edge_index=edge_index,
+        batch=template.batch,
+    )
+
+
+def torch_radius_nopbc_grouped_chunked_graph(
+    template: RTECEGraph,
+    positions: torch.Tensor,
+    *,
+    cutoff: float,
+    chunk_configs: int = 128,
+) -> RTECEGraph:
+    if cutoff <= 0.0:
+        raise ValueError(f"cutoff must be positive, got {cutoff}")
+    if chunk_configs < 1:
+        raise ValueError(f"chunk_configs must be positive, got {chunk_configs}")
+    if tuple(positions.shape) != tuple(template.pos.shape):
+        raise ValueError(f"positions shape {tuple(positions.shape)} does not match graph shape {tuple(template.pos.shape)}")
+    pos = positions.to(device=template.pos.device, dtype=template.pos.dtype)
+    batch = template.batch
+    if batch.ndim != 1 or batch.shape[0] != template.z.shape[0]:
+        raise ValueError("template batch must be a one-dimensional tensor with one entry per atom")
+    if batch.numel() == 0:
+        edge_index = template.edge_index.new_zeros((2, 0))
+    else:
+        if torch.any(batch[1:] < batch[:-1]):
+            raise ValueError("template batch must be sorted by configuration")
+        _, counts = torch.unique_consecutive(batch, return_counts=True)
+        starts = torch.cat([batch.new_zeros(1), counts.cumsum(dim=0)[:-1]])
+        edge_parts = []
+        cutoff_sq = float(cutoff) * float(cutoff)
+        num_graphs = int(counts.numel())
+        for chunk_start in range(0, num_graphs, int(chunk_configs)):
+            chunk_stop = min(chunk_start + int(chunk_configs), num_graphs)
+            counts_chunk = counts[chunk_start:chunk_stop]
+            starts_chunk = starts[chunk_start:chunk_stop].to(device=pos.device)
+            max_count = int(counts_chunk.max().detach().cpu())
+            if max_count <= 1:
+                continue
+            local = torch.arange(max_count, device=pos.device)
+            counts_device = counts_chunk.to(device=pos.device)
+            valid = local.unsqueeze(0) < counts_device.unsqueeze(1)
+            flat = starts_chunk.unsqueeze(1) + local.unsqueeze(0)
+            safe_flat = flat.clamp(max=max(pos.shape[0] - 1, 0))
+            padded = pos.new_zeros((chunk_stop - chunk_start, max_count, 3))
+            padded[valid] = pos[safe_flat[valid]]
+            delta = padded[:, :, None, :] - padded[:, None, :, :]
+            dist_sq = delta.square().sum(dim=-1)
+            mask = dist_sq < cutoff_sq
+            mask &= valid[:, :, None] & valid[:, None, :]
+            mask &= ~torch.eye(max_count, dtype=torch.bool, device=pos.device).unsqueeze(0)
+            graph_idx, src_local, dst_local = torch.nonzero(mask, as_tuple=True)
+            if src_local.numel() == 0:
+                continue
+            src = starts_chunk[graph_idx] + src_local
+            dst = starts_chunk[graph_idx] + dst_local
+            edge_parts.append(torch.stack([src, dst], dim=0).to(device=template.edge_index.device, dtype=template.edge_index.dtype))
+        if edge_parts:
+            edge_index = torch.cat(edge_parts, dim=1).to(device=template.edge_index.device, dtype=template.edge_index.dtype)
+        else:
+            edge_index = template.edge_index.new_zeros((2, 0))
     return RTECEGraph(
         z=template.z,
         pos=pos,
