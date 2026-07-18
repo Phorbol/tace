@@ -1049,6 +1049,44 @@ def test_rtece_physical_pareto_row_combines_benchmark_dimer_and_rattle_gates():
     assert [item["variant"] for item in front] == ["fast_tradeoff", "radial_core_balanced"]
 
 
+def test_rtece_physical_pareto_penalizes_negative_dimer_energy_lift():
+    from benchmarks.oc20neb_tace_mace.summarize_rtece_physical_pareto import make_physical_pareto_row
+
+    benchmark = {"atoms_per_second": 3.0e6, "mae_f_mev_a": 29.0, "rmse_f_mev_a": 101.0}
+    rattle = {
+        "summary": {
+            "mean_final_rmsd_a": 0.16,
+            "max_fmax_ev_a": 0.20,
+            "focus_groups": [{"label": "C_or_N", "mean_final_rmsd_a": 0.16, "max_fmax_ev_a": 0.20}],
+        }
+    }
+    repulsive_but_negative_energy = {
+        "pair_summaries": [
+            {
+                "pair": "C-N",
+                "summary": {
+                    "short_force_repulsive": True,
+                    "has_nonfinite": False,
+                    "short_force_parallel_ev_a": -0.25,
+                    "short_minus_long_energy_eV": -0.02,
+                },
+            }
+        ]
+    }
+
+    row = make_physical_pareto_row(
+        "negative_energy_lift",
+        dft_benchmark=benchmark,
+        dimer_scan=repulsive_but_negative_energy,
+        rattle_relax=rattle,
+    )
+
+    assert row["dimer_gate_pass"] is True
+    assert row["dimer_min_short_energy_lift_eV"] == pytest.approx(-0.02)
+    assert row["dimer_energy_shape_penalty"] == pytest.approx(0.02)
+    assert row["physical_score"] == pytest.approx(29.0 / 35.0 + 0.16 / 0.20 + 0.20 / 0.40 + 0.02 / 0.05)
+
+
 def test_rtece_force_error_stratification_reports_element_and_focus_groups():
     from benchmarks.oc20neb_tace_mace.stratify_rtece_force_errors import stratify_symbol_force_errors
 

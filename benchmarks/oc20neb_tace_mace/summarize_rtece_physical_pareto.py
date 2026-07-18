@@ -98,6 +98,7 @@ def make_physical_pareto_row(
     max_dft_f_mae_mev_a: float = 35.0,
     max_cn_rattle_rmsd_a: float = 0.20,
     max_rattle_fmax_ev_a: float = 0.40,
+    dimer_energy_penalty_scale_ev: float = 0.05,
 ) -> dict[str, Any]:
     teacher_benchmark = teacher_benchmark or {}
     dft_f_mae = _finite_float(dft_benchmark.get("mae_f_mev_a"))
@@ -112,12 +113,15 @@ def make_physical_pareto_row(
     )
     dimer_fail_fraction = 1.0 - float(dimer["dimer_short_repulsive_fraction"])
     nonfinite_penalty = float(dimer["dimer_nonfinite_pair_count"])
+    min_short_energy_lift = _finite_float(dimer.get("dimer_min_short_energy_lift_eV"))
+    dimer_energy_shape_penalty = max(0.0, -min_short_energy_lift) if min_short_energy_lift is not None else 0.0
     physical_score = (
         _safe_ratio(dft_f_mae, max_dft_f_mae_mev_a)
         + _safe_ratio(rattle["cn_rattle_final_rmsd_a"], max_cn_rattle_rmsd_a)
         + _safe_ratio(rattle["rattle_max_fmax_ev_a"], max_rattle_fmax_ev_a)
         + 2.0 * dimer_fail_fraction
         + nonfinite_penalty
+        + _safe_ratio(dimer_energy_shape_penalty, dimer_energy_penalty_scale_ev)
     )
     manifest = dft_benchmark.get("tece_architecture_path_manifest") or dft_benchmark.get("tece_path_manifest") or {}
     manifest_hash = (
@@ -142,6 +146,8 @@ def make_physical_pareto_row(
         "max_rattle_fmax_ev_a": float(max_rattle_fmax_ev_a),
         "benchmark_gate_pass": benchmark_gate_pass,
         "rattle_gate_pass": rattle_gate_pass,
+        "dimer_energy_shape_penalty": float(dimer_energy_shape_penalty),
+        "dimer_energy_penalty_scale_ev": float(dimer_energy_penalty_scale_ev),
         "physical_score": float(physical_score),
     }
     row.update(dimer)
@@ -247,7 +253,7 @@ def format_markdown(rows: list[dict[str, Any]], front: list[dict[str, Any]]) -> 
         "",
         "## Gate Definition",
         "",
-        "- `physical_score` is lower-is-better: normalized DFT force MAE + normalized C/N rattle RMSD + normalized rattle max fmax + dimer/nonfinite penalties.",
+        "- `physical_score` is lower-is-better: normalized DFT force MAE + normalized C/N rattle RMSD + normalized rattle max fmax + dimer force/nonfinite penalties + short-range dimer energy-shape penalty.",
         "- `physical_gate_pass` requires benchmark, dimer, and rattle gates to pass at the configured thresholds.",
         "- This score is a checkpoint-selection aid, not a replacement for the TECE path manifest or full Pareto table.",
         "",
@@ -268,6 +274,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-dft-f-mae-mev-a", type=float, default=35.0)
     parser.add_argument("--max-cn-rattle-rmsd-a", type=float, default=0.20)
     parser.add_argument("--max-rattle-fmax-ev-a", type=float, default=0.40)
+    parser.add_argument("--dimer-energy-penalty-scale-ev", type=float, default=0.05)
     parser.add_argument("--output-json", type=Path, required=True)
     parser.add_argument("--output-md", type=Path, required=True)
     return parser.parse_args()
@@ -285,6 +292,7 @@ def main() -> None:
             max_dft_f_mae_mev_a=args.max_dft_f_mae_mev_a,
             max_cn_rattle_rmsd_a=args.max_cn_rattle_rmsd_a,
             max_rattle_fmax_ev_a=args.max_rattle_fmax_ev_a,
+            dimer_energy_penalty_scale_ev=args.dimer_energy_penalty_scale_ev,
         )
         for variant, dft_path, teacher_path, dimer_path, rattle_path in args.case
     ])
@@ -295,6 +303,7 @@ def main() -> None:
             "max_dft_f_mae_mev_a": args.max_dft_f_mae_mev_a,
             "max_cn_rattle_rmsd_a": args.max_cn_rattle_rmsd_a,
             "max_rattle_fmax_ev_a": args.max_rattle_fmax_ev_a,
+            "dimer_energy_penalty_scale_ev": args.dimer_energy_penalty_scale_ev,
         },
         "rows": rows,
         "physical_pareto_front": front,

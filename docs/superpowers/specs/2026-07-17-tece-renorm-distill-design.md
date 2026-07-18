@@ -2735,6 +2735,64 @@ Next priority after Stage 84:
 3. If a beta-smoothed candidate improves the score on this bounded window, broaden the rattle window and add a metal/not-CHNO control set before implementing analytic/fused radial-core forces.
 4. Keep graph-provider work tied to the review P0 PBC edge-vector/force/virial ABI; this scorer is now the gate that decides when returning to throughput engineering is justified.
 
+
+# Stage 85: Radial-Core Beta Softening Calibration
+
+Stage 85 is the direct follow-up to the Stage-84 physical scorer, not a new heuristic sweep. Stage 83 identified `radial_core_s0p6_r0p75` as the first row passing the combined MAE/dimer/CN-rattle/fmax gates, but its strict rattle window still showed a force spike around 0.339 eV/A. The TECE-aligned question for this stage is whether the same retained scalar T4 operator can be softened by the core overlap sharpness `beta`, preserving the scalar endpoint while lowering high-curvature relaxation artifacts.
+
+Submitted and completed jobs:
+
+| job id | route | strength | radius scale | beta | scalar paths | train/valid/bench configs | force mode |
+|---:|---|---:|---:|---:|---|---|---|
+| 680370 | `radial_core_s0p6_r0p75_b10` | 0.6 | 0.75 | 10.0 | `atomic.radial_density` | 512/128/512 | `autograd` |
+| 680371 | `radial_core_s0p6_r0p75_b15` | 0.6 | 0.75 | 15.0 | `atomic.radial_density` | 512/128/512 | `autograd` |
+| 680372 | `radial_core_s0p8_r0p75_b10` | 0.8 | 0.75 | 10.0 | `atomic.radial_density` | 512/128/512 | `autograd` |
+| 680373 | `radial_core_s0p8_r0p75_b15` | 0.8 | 0.75 | 15.0 | `atomic.radial_density` | 512/128/512 | `autograd` |
+
+All jobs were submitted through self-contained wrappers with parameters exported inside the wrapper body; no command-line `sbatch --export` was used.
+
+Training and benchmark rows:
+
+| route | best step | best valid loss | DFT E MAE | DFT F MAE | DFT F RMSE | teacher F MAE | atoms/s |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Stage-83 `radial_core_s0p6_r0p75` beta=20 | 100 | 0.5399 | 168.02 | 29.08 | 101.13 | 34.21 | 3.07e6 |
+| Stage-85 `s0p6_r0p75_b10` | 100 | 0.5398 | 168.02 | 29.08 | 101.12 | 34.21 | 3.08e6 |
+| Stage-85 `s0p6_r0p75_b15` | 100 | 0.5399 | 168.02 | 29.08 | 101.13 | 34.21 | 2.98e6 |
+| Stage-85 `s0p8_r0p75_b10` | 100 | 0.5397 | 168.02 | 29.08 | 101.12 | 34.21 | 3.02e6 |
+| Stage-85 `s0p8_r0p75_b15` | 100 | 0.5399 | 168.02 | 29.08 | 101.13 | 34.21 | 3.00e6 |
+
+Stage-79 dimer and Stage-80 strict rattle gates were scored with the Stage-84 physical Pareto scorer:
+
+| rank | route | gate | score | atoms/s | DFT F MAE | dimer repulsive | min dimer dE eV | C/N RMSD A | CHNO-no-CN RMSD A | max fmax eV/A |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | `radial_core_s0p6_r0p75_b10` | 1 | 2.379 | 3.08e6 | 29.08 | 4/4 | -0.00740 | 0.176 | 0.116 | 0.209 |
+| 2 | `radial_core_s0p8_r0p75_b10` | 1 | 2.408 | 3.02e6 | 29.08 | 4/4 | -0.00110 | 0.175 | 0.101 | 0.273 |
+| 3 | `radial_core_s0p6_r0p75_b15` | 1 | 2.665 | 2.98e6 | 29.08 | 4/4 | -0.00839 | 0.179 | 0.176 | 0.308 |
+| 4 | `radial_core_s0p8_r0p75_b15` | 1 | 2.676 | 3.00e6 | 29.08 | 4/4 | -0.00243 | 0.178 | 0.174 | 0.362 |
+| 5 | Stage-83 `radial_core_s0p6_r0p75` beta=20 | 1 | 2.751 | 3.07e6 | 29.08 | 4/4 | -0.00859 | 0.180 | 0.178 | 0.339 |
+
+Physical Pareto front under score/throughput dominance:
+
+| route | score | atoms/s | interpretation |
+|---|---:|---:|---|
+| `radial_core_s0p6_r0p75_b10` | 2.379 | 3.08e6 | dominates the Stage-83 anchor and all Stage-85 beta rows in this bounded window under the energy-shape-aware score. |
+
+Stage-85 interpretation against TECE/TACE and the review document:
+
+- Beta softening is a real TECE degradation coordinate for the retained short-range radial-core operator. It changes the high-curvature prior without adding persistent equivariant state, extra message passing, or a wider scalar head.
+- `s0p6_r0p75_b10` is now the cleanest local candidate: it keeps Stage-73/83-level DFT force MAE, preserves 4/4 short-distance dimer repulsion, reduces C/N strict-rattle RMSD slightly, and cuts the maximum rattle fmax from 0.339 to 0.209 eV/A.
+- Increasing strength to 0.8 at beta=10 slightly improves the bounded C/N and CHNO-no-CN RMSDs, but worsens the force spike and loses throughput. Under the current scorer it is dominated by `s0p6_r0p75_b10`.
+- The force/energy dimer shape is still not fully solved: some short-distance energy lifts remain slightly negative even when the force sign is repulsive. The scorer now adds a soft penalty `max(0, -min_short_energy_lift)/0.05 eV`, which keeps the current gate force-based but makes this defect visible in the score.
+- None of the strict rattle rows converges within 10 LBFGS steps. The comparison is still useful because all candidates share the same bounded protocol, but the next validation stage must broaden the window and report RMSD/fmax trajectories, not just final means.
+
+Priority after Stage 85:
+
+1. Promote `radial_core_s0p6_r0p75_b10` to the local anchor for broader validation.
+2. Run a broader stratified rattle+relax validation: more C/N-containing adsorbate structures, a CHNO-no-CN control set, and a metal/non-adsorbate control set.
+3. Add the dimer energy-shape term to all future matrix summaries and consider making it a hard gate only after the broader validation shows the tolerance is stable.
+4. If the broader validation preserves the Stage-85 advantage, implement analytic/fused radial-core force and then return to graph/provider throughput engineering under the review P0 PBC edge-vector/force/virial ABI.
+5. Do not move next to isolated ASE graph-builder replacement. The document-driven blocker remains physical closure of the scalar TECE endpoint; graph work becomes the right priority only after this candidate survives the broader physical gates.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
