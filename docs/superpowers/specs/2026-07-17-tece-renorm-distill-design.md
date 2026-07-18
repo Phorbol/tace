@@ -1547,6 +1547,29 @@ Stage-51 interpretation against TECE/TACE:
 - The current Pareto interpretation becomes three-tiered: `triton_padded` is the peak-throughput edge-list provider when memory permits; `triton_counted` is the low-memory edge-list provider; cell-list/fused descriptor is the next candidate to move the frontier because it attacks padded candidate work rather than only edge-list allocation.
 
 
+# Stage 52: Cell-List Fused Descriptor Oracle
+
+Stage 52 implemented the first semantics-level bridge from Stage51's cell-list work analysis to a fused scalar rTECE descriptor. The new `cell_list_packed_element_density_descriptors(...)` path preserves the same direct-active, no-PBC graph semantics as the current high-throughput branch, but it does not consume `edge_index`. It partitions atoms by batch, builds cutoff-sized cells, scans the 27-cell stencil, filters true cutoff distances, and directly accumulates the packed `[rho, rho_z]` element-density descriptor into atoms.
+
+Implementation gate:
+
+- Added `cell_list_packed_element_density_descriptors(...)` with the same narrow eligibility as the existing packed element-density descriptor: scalar density plus element density only, no quadratic/vector/atomic moments and no edge sketches.
+- Added tests that first failed on the missing function, then verified exact agreement with `packed_element_density_descriptors(torch_radius_nopbc_graph(...))` and verified that bogus cross-batch `edge_index` input is ignored.
+- Added `runs/oc20neb_tace_mace/rtece-stage52-cell-list-fused-descriptor/run_descriptor_oracle.py` to check real OC20NEB geometry windows and emit JSON evidence.
+
+| limit configs | atoms | active edges | cell candidates | candidate/padded | candidate/active | max abs descriptor diff | direct graph CPU s | edge-list descriptor CPU s | cell-list fused descriptor CPU s |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 128 | 5,298 | 69,804 | 207,504 | 0.372159 | 2.972666 | 6.77e-15 | 0.013755 | 0.480110 | 2.010375 |
+| 512 | 31,831 | 472,830 | 1,661,434 | 0.428721 | 3.513808 | 9.16e-15 | 0.125035 | 0.993020 | 4.695996 |
+
+Stage-52 interpretation against TECE/TACE:
+
+- This closes the current semantic gap between Stage51's cell-list candidate-space argument and the actual scalar rTECE descriptor. The element-density descriptor does not require persistent public edge-list state; the retained TECE scalar statistics can be accumulated directly from local cell candidates.
+- The result is deliberately not a new throughput point. The CPU prototype is slower than the existing edge-list descriptor path, so it should be treated as an oracle and executable specification for a lower-level fused kernel.
+- The next priority remains algorithm-first but implementation-aware: produce a fused cell-list descriptor/force provider that preserves this exact descriptor semantics and conservative force chain rule, then benchmark it against `triton_padded` and `triton_counted`. NVIDIA nvalchemi toolkit ops and DeepMD edge-force/edge-virial implementations can be studied as backend references, but they should serve the TECE compiler route rather than define it.
+- The Pareto-route narrative is now cleaner: model semantics are downfolded to scalar element-density descriptors; descriptor/force edge lifetime is already shortened by Triton fused evaluators; topology representation can now be lowered further from materialized edge-list to cell-list candidate streaming.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

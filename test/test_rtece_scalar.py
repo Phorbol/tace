@@ -13,6 +13,7 @@ from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
     collate_graphs,
     atomic_scalar_descriptors,
     build_rtece_config,
+    cell_list_packed_element_density_descriptors,
     descriptor_dim,
     edge_relational_sketches,
     packed_element_density_descriptors,
@@ -100,6 +101,80 @@ def test_packed_element_density_descriptors_match_split_descriptors():
 
     assert packed.shape == (4, 2 * config.num_radial)
     assert torch.allclose(packed, split, atol=1e-10, rtol=1e-10)
+
+
+def test_cell_list_packed_element_density_descriptors_match_direct_radius_edges():
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import torch_radius_nopbc_graph
+
+    config = RTECEScalarConfig(
+        variant="rtece_element_density",
+        cutoff=1.0,
+        num_radial=4,
+        use_element_density=True,
+    )
+    z = torch.tensor([6, 8, 1, 7, 1], dtype=torch.long)
+    batch = torch.tensor([0, 0, 0, 1, 1], dtype=torch.long)
+    pos = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [0.9, 0.0, 0.0],
+            [1.8, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.8, 0.0, 0.0],
+        ],
+        dtype=torch.float64,
+    )
+    template = RTECEGraph(
+        z=z,
+        pos=pos,
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=batch,
+    )
+    direct_graph = torch_radius_nopbc_graph(template, pos, cutoff=config.cutoff)
+
+    direct = packed_element_density_descriptors(direct_graph, config)
+    fused = cell_list_packed_element_density_descriptors(template, config)
+
+    assert fused.shape == (5, 2 * config.num_radial)
+    assert torch.allclose(fused, direct, atol=1e-10, rtol=1e-10)
+
+
+def test_cell_list_packed_element_density_descriptors_ignore_input_edge_index():
+    config = RTECEScalarConfig(
+        variant="rtece_element_density",
+        cutoff=1.0,
+        num_radial=4,
+        use_element_density=True,
+    )
+    z = torch.tensor([6, 8, 1, 7], dtype=torch.long)
+    pos = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [0.9, 0.0, 0.0],
+            [2.2, 0.0, 0.0],
+            [0.2, 0.0, 0.0],
+        ],
+        dtype=torch.float64,
+    )
+    batch = torch.tensor([0, 0, 0, 1], dtype=torch.long)
+    empty_graph = RTECEGraph(
+        z=z,
+        pos=pos,
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=batch,
+    )
+    bogus_cross_batch_edges = RTECEGraph(
+        z=z,
+        pos=pos,
+        edge_index=complete_directed_edges(4),
+        batch=batch,
+    )
+
+    empty = cell_list_packed_element_density_descriptors(empty_graph, config)
+    bogus = cell_list_packed_element_density_descriptors(bogus_cross_batch_edges, config)
+
+    assert torch.allclose(bogus, empty, atol=1e-10, rtol=1e-10)
+    assert torch.allclose(empty[3], torch.zeros_like(empty[3]))
 
 
 def test_element_density_descriptors_are_rotation_invariant_and_element_sensitive():

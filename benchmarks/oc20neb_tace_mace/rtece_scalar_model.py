@@ -196,19 +196,74 @@ def density_scalar_descriptors(
     return torch.cat(parts, dim=-1) if len(parts) > 1 else density
 
 
-def packed_element_density_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
+def _validate_packed_element_density_config(config: RTECEScalarConfig, name: str) -> None:
     if not config.use_element_density:
-        raise ValueError("packed_element_density_descriptors requires use_element_density=True")
+        raise ValueError(f"{name} requires use_element_density=True")
     if config.use_density_quadratic or config.use_vector_moments:
-        raise ValueError("packed element-density descriptors only support density plus element density")
+        raise ValueError(f"{name} only supports density plus element density")
     if config.use_atomic_moments or config.num_edge_sketches:
-        raise ValueError("packed element-density descriptors only support scalar density descriptors")
+        raise ValueError(f"{name} only supports scalar density descriptors")
+
+
+def packed_element_density_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
+    _validate_packed_element_density_config(config, "packed_element_density_descriptors")
     _, distances, _ = compute_pair_geometry(graph)
     radial = compute_radial_features(distances, config)
     src, dst = graph.edge_index
     neighbor_z = graph.z[src].to(dtype=graph.pos.dtype, device=graph.pos.device) / float(config.max_atomic_number)
     edge_descriptors = torch.cat([radial, radial * neighbor_z[:, None]], dim=-1)
     return scatter_sum(edge_descriptors, dst, graph.z.shape[0])
+
+
+def cell_list_packed_element_density_descriptors(
+    graph: RTECEGraph,
+    config: RTECEScalarConfig,
+) -> torch.Tensor:
+    _validate_packed_element_density_config(config, "cell_list_packed_element_density_descriptors")
+    if graph.batch.ndim != 1 or graph.batch.shape[0] != graph.z.shape[0]:
+        raise ValueError("cell-list descriptors require one batch id per atom")
+    if graph.batch.numel() > 1 and torch.any(graph.batch[1:] < graph.batch[:-1]):
+        raise ValueError("cell-list descriptors require atoms sorted by batch")
+
+    num_nodes = graph.z.shape[0]
+    descriptors = graph.pos.new_zeros((num_nodes, 2 * config.num_radial))
+    if num_nodes == 0:
+        return descriptors
+
+    _, counts = torch.unique_consecutive(graph.batch, return_counts=True)
+    starts = torch.cat([counts.new_zeros(1), counts.cumsum(dim=0)[:-1]])
+    cutoff = float(config.cutoff)
+    cutoff_sq = cutoff * cutoff
+
+    for start_tensor, count_tensor in zip(starts, counts):
+        start = int(start_tensor.item())
+        count = int(count_tensor.item())
+        if count <= 1:
+            continue
+
+        local_pos = graph.pos[start : start + count]
+        origin = local_pos.min(dim=0).values
+        cell_coords = torch.floor((local_pos - origin) / cutoff).to(dtype=torch.long)
+        cell_delta = torch.abs(cell_coords[:, None, :] - cell_coords[None, :, :])
+        candidate_mask = torch.all(cell_delta <= 1, dim=-1)
+        candidate_mask.fill_diagonal_(False)
+
+        deltas = local_pos[:, None, :] - local_pos[None, :, :]
+        distance_sq = deltas.square().sum(dim=-1)
+        active_mask = candidate_mask & (distance_sq < cutoff_sq)
+        src_local, dst_local = torch.nonzero(active_mask, as_tuple=True)
+        if src_local.numel() == 0:
+            continue
+
+        distances = distance_sq[src_local, dst_local].sqrt().clamp_min(1e-12)
+        radial = compute_radial_features(distances, config)
+        src = src_local + start
+        dst = dst_local + start
+        neighbor_z = graph.z[src].to(dtype=graph.pos.dtype, device=graph.pos.device) / float(config.max_atomic_number)
+        edge_descriptors = torch.cat([radial, radial * neighbor_z[:, None]], dim=-1)
+        descriptors.index_add_(0, dst, edge_descriptors)
+
+    return descriptors
 
 
 def atomic_scalar_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
