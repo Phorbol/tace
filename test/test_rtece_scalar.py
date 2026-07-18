@@ -372,6 +372,57 @@ def test_element_density_descriptors_are_rotation_invariant_and_element_sensitiv
     assert not torch.allclose(desc, desc_changed, atol=1e-10, rtol=1e-10)
 
 
+
+def test_species_basis_descriptors_distinguish_equal_z_sum_neighbors():
+    element_config = RTECEScalarConfig(
+        variant="rtece_element_density",
+        cutoff=2.0,
+        num_radial=3,
+        use_element_density=True,
+        max_atomic_number=10,
+    )
+    species_config = RTECEScalarConfig(
+        variant="rtece_species_basis4",
+        cutoff=2.0,
+        num_radial=3,
+        species_basis_channels=2,
+        max_atomic_number=10,
+    )
+    edge_index = torch.tensor([[1, 2], [0, 0]], dtype=torch.long)
+    pos = torch.tensor([[0.0, 0.0, 0.0], [0.8, 0.0, 0.0], [-0.8, 0.0, 0.0]], dtype=torch.float64)
+    cc = RTECEGraph(
+        z=torch.tensor([1, 6, 6], dtype=torch.long),
+        pos=pos,
+        edge_index=edge_index,
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+    bn = RTECEGraph(
+        z=torch.tensor([1, 5, 7], dtype=torch.long),
+        pos=pos,
+        edge_index=edge_index,
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    element_cc = atomic_scalar_descriptors(cc, element_config)[0]
+    element_bn = atomic_scalar_descriptors(bn, element_config)[0]
+    species_cc = atomic_scalar_descriptors(cc, species_config)[0]
+    species_bn = atomic_scalar_descriptors(bn, species_config)[0]
+
+    assert torch.allclose(element_cc, element_bn, atol=1e-12, rtol=1e-12)
+    assert not torch.allclose(species_cc, species_bn, atol=1e-12, rtol=1e-12)
+
+
+def test_rtece_species_basis_variant_has_route_contract():
+    config = build_rtece_config("rtece_species_basis4")
+    route = rtece_route_contract(config, force_mode="autograd")
+
+    assert config.species_basis_channels == 4
+    assert descriptor_dim(config) == config.num_radial * 5
+    assert route["semantic_tier"] == "T3_low_rank_species_density"
+    assert route["descriptor_family"] == "species_basis_density"
+    assert "low_rank_neighbor_species_basis" in route["retained_tece_groups"]
+
+
 def test_density_quadratic_descriptors_are_rotation_invariant():
     config = build_rtece_config("rtece_density_quadratic")
     z = torch.tensor([6, 8, 1], dtype=torch.long)

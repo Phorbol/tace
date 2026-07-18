@@ -218,6 +218,7 @@ def parse_args() -> argparse.Namespace:
             "rtece_density_quadratic",
             "rtece_vector_moments",
             "rtece_atomic_moments",
+            "rtece_species_basis4",
             "rtece_edge_sketch8",
             "rtece_edge_sketch16",
         ),

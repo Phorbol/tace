@@ -1770,6 +1770,40 @@ Stage-59 interpretation against TECE/TACE:
 - The graph-provider design now matches TACE's existing matscipy/PyG data contract closely enough that later high-throughput providers can be swapped under the same ABI.
 - nvalchemi-toolkit-ops remains a candidate GPU neighbor/edge-force provider, but only after this cell/shift ABI is stable. The next model-side review priorities are still chemical low-rank species basis and cavity/radial angular sketches for the non-metal adsorbate failures.
 
+
+# Stage 60: Low-Rank Species Basis For Chemical-Collision Repair
+
+Stage 60 addresses review P0 #6: the old `rtece_element_density` descriptor restored only the first neighbor atomic-number moment,
+
+```text
+rho_Z,in = sum_j R_n(r_ij) (Z_j / Z_max),
+```
+
+so two equal-geometry environments with the same neighbor count and the same summed atomic number can collide. The review's example is `C + C` versus `B + N`: both have `Z` sum 12, but they are chemically different. This failure mode is consistent with the user's early rattle-and-relax observation that rTECE can produce much larger relaxed RMSD on non-metal adsorbates such as C/N-containing adsorbates.
+
+The new `rtece_species_basis4` variant adds a fixed low-rank species basis while preserving the T3 scalarized execution principle:
+
+```text
+rho_a,in = sum_j R_n(r_ij) (Z_j / Z_max)^a,  a = 1..4.
+```
+
+This is a conservative first chemistry-channel repair, not the final learned species representation. It keeps the model in the scalar-density family and makes the retained TECE group explicit as `low_rank_neighbor_species_basis`. The immediate purpose is to test whether a tiny chemistry basis can reduce composition/adsorbate collisions before adding angular or edge-relational state.
+
+Implementation gate:
+
+- Added `species_basis_channels` to `RTECEScalarConfig` and `build_rtece_config("rtece_species_basis4")`.
+- Extended scalar descriptor construction with low-rank neighbor species densities.
+- Added a route-contract semantic tier, `T3_low_rank_species_density`, so summary artifacts can distinguish this model from the old first-moment `element_density` route.
+- Exposed the variant in the rTECE training CLI and distillation summarizer.
+- Added a regression test where old element-density descriptors intentionally collide for equal-distance `C+C` and `B+N` neighbors, while the species-basis descriptors separate them.
+
+Stage-60 interpretation against TECE/TACE:
+
+- This change is not a blind width or parameter sweep. It restores a deleted TECE chemistry-channel axis in a compressed scalar form.
+- It is still a fixed polynomial basis over `Z`; the cleaner v2 route should replace this with a learned or teacher-POD/SVD species basis once the descriptor manifest/compiler exists.
+- It does not address edge self-leakage or radial-channel averaging. The next review-aligned architecture tasks remain cavity edge moments and low-rank radial/cross-radial sketches.
+- After the remaining review P0 bugs are fixed, the dimer-scan and rattle/relax validation suite should bucket errors by element pair and adsorbate chemistry to test whether this species-basis repair specifically improves C/N and other non-metal adsorbate basins.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

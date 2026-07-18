@@ -18,6 +18,7 @@ class RTECEScalarConfig:
     use_density_quadratic: bool = False
     use_vector_moments: bool = False
     use_atomic_moments: bool = False
+    species_basis_channels: int = 0
     num_edge_sketches: int = 0
     energy_per_atom_shift: float = 0.0
     atomic_energies: Mapping[int, float] | None = None
@@ -34,6 +35,8 @@ def build_rtece_config(variant: str) -> RTECEScalarConfig:
         return RTECEScalarConfig(variant=variant, use_vector_moments=True)
     if variant == "rtece_atomic_moments":
         return RTECEScalarConfig(variant=variant, use_atomic_moments=True)
+    if variant == "rtece_species_basis4":
+        return RTECEScalarConfig(variant=variant, species_basis_channels=4)
     if variant == "rtece_edge_sketch8":
         return RTECEScalarConfig(variant=variant, use_atomic_moments=True, num_edge_sketches=8)
     if variant == "rtece_edge_sketch16":
@@ -49,6 +52,8 @@ def descriptor_dim(config: RTECEScalarConfig) -> int:
         dim += config.num_radial
     if config.use_vector_moments:
         dim += config.num_radial
+    if config.species_basis_channels:
+        dim += config.num_radial * int(config.species_basis_channels)
     if config.use_atomic_moments:
         dim += 2 * config.num_radial
     dim += config.num_edge_sketches
@@ -81,6 +86,10 @@ def rtece_route_contract(
         semantic_tier = "T3_vector_moment_scalarization"
         descriptor_family = "vector_moment_norm"
         retained.append("low_order_vector_moment_norm")
+    elif config.species_basis_channels:
+        semantic_tier = "T3_low_rank_species_density"
+        descriptor_family = "species_basis_density"
+        retained.append("low_rank_neighbor_species_basis")
     elif config.use_atomic_moments or config.num_edge_sketches:
         semantic_tier = "T3_atomic_moment_scalar_sketch"
         descriptor_family = "atomic_moment_sketch"
@@ -353,9 +362,21 @@ def compute_atomic_moments(graph: RTECEGraph, config: RTECEScalarConfig) -> dict
     eye = torch.eye(3, device=graph.pos.device, dtype=graph.pos.dtype)
     quad_unit = unit[:, :, None] * unit[:, None, :] - eye[None, :, :] / 3.0
     quadrupole = scatter_sum(radial[:, :, None, None] * quad_unit[:, None, :, :], dst, num_nodes)
+    species_density = None
+    if config.species_basis_channels:
+        powers = torch.arange(
+            1,
+            int(config.species_basis_channels) + 1,
+            device=graph.pos.device,
+            dtype=graph.pos.dtype,
+        )
+        species_basis = neighbor_z[:, None].pow(powers[None, :])
+        species_density = scatter_sum(radial[:, :, None] * species_basis[:, None, :], dst, num_nodes)
+        species_density = species_density.reshape(num_nodes, config.num_radial * int(config.species_basis_channels))
     return {
         "density": density,
         "element_density": element_density,
+        "species_density": species_density,
         "vector": vector,
         "quadrupole": quadrupole,
     }
@@ -374,6 +395,10 @@ def density_scalar_descriptors(
         parts.append(element_density)
     if config.use_density_quadratic:
         parts.append(density.square())
+    if config.species_basis_channels:
+        if element_density is None:
+            raise ValueError("species_density is required when species_basis_channels > 0")
+        parts.append(element_density)
     if config.use_vector_moments:
         if vector_norm is None:
             raise ValueError("vector_norm is required when use_vector_moments=True")
@@ -384,7 +409,7 @@ def density_scalar_descriptors(
 def _validate_packed_element_density_config(config: RTECEScalarConfig, name: str) -> None:
     if not config.use_element_density:
         raise ValueError(f"{name} requires use_element_density=True")
-    if config.use_density_quadratic or config.use_vector_moments:
+    if config.use_density_quadratic or config.use_vector_moments or config.species_basis_channels:
         raise ValueError(f"{name} only supports density plus element density")
     if config.use_atomic_moments or config.num_edge_sketches:
         raise ValueError(f"{name} only supports scalar density descriptors")
@@ -471,7 +496,7 @@ def atomic_scalar_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> t
     density_desc = density_scalar_descriptors(
         density,
         config,
-        moments["element_density"],
+        moments["species_density"] if config.species_basis_channels else moments["element_density"],
         vector_norm,
     )
     if not config.use_atomic_moments:

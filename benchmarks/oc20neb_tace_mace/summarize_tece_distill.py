@@ -27,6 +27,8 @@ def _rtece_config_from_benchmark(variant: str, benchmark: dict[str, Any]) -> RTE
             model_variant = "rtece_density_quadratic"
         elif "vector" in variant:
             model_variant = "rtece_vector_moments"
+        elif "species" in variant:
+            model_variant = "rtece_species_basis4"
     if model_variant is None:
         return None
     try:
