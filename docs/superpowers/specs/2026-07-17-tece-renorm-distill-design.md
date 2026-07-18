@@ -2947,6 +2947,68 @@ Priority after Stage 88:
 3. Keep the Stage-87 C/N force proxy as the cheap pre-filter and Stage-86 broader rattle as the confirmation gate for every new C/N-sensitive operator.
 4. Only return to fused radial-core force, ASE/matscipy/nvalchemi graph acceleration, or PBC provider engineering after a candidate improves the physical score under these gates.
 
+## Stage 89: Low-Rank Species-Basis Retained Operator Probe
+
+Stage 89 follows the Stage-88 decision. Since force-focus weighting did not repair the C/N residual, this stage tests the review-suggested chemistry representation axis: add a low-rank neighbor species basis while keeping the same short-range radial core. This is a retained-path projection experiment rather than a loss-weight sweep.
+
+Candidate setup:
+
+| job id | route | retained paths | core | train/valid/bench configs | force mode |
+|---:|---|---|---|---|---|
+| 680858 | 'rtece_species_basis4_core_s0p6_r0p75_b10' | radial_density + low_rank_neighbor_species_basis + short_range_radial_core | strength 0.6, radius 0.75, beta 10 | 512/128/512 | autograd |
+
+Aggregate benchmark result:
+
+| route | DFT F MAE | DFT F RMSE | teacher F MAE | atoms/s | peak MB | params |
+|---|---:|---:|---:|---:|---:|---:|
+| Stage-85 's0p6_r0p75_b10' | 29.08 | 101.12 | 34.21 | 3.08e6 | 178.6 | 449 |
+| Stage-88 's0p6_r0p75_b10_cnfw4' | 31.29 | 101.79 | 35.97 | 3.08e6 | 178.6 | 449 |
+| Stage-89 'species_basis4_core' | 28.44 | 101.99 | 33.80 | 2.66e6 | 571.9 | 961 |
+
+Stage-87 exact-window C/N force-selection proxy:
+
+| route | target | global F MAE | C/N F MAE | C/N excess | selection score |
+|---|---|---:|---:|---:|---:|
+| Stage-85 's0p6_r0p75_b10' | DFT | 75.41 | 485.39 | 409.98 | 895.37 |
+| Stage-88 's0p6_r0p75_b10_cnfw4' | DFT | 77.51 | 487.47 | 409.97 | 897.44 |
+| Stage-89 'species_basis4_core' | DFT | 76.19 | 485.74 | 409.55 | 895.30 |
+
+Stage-89 dimer probe remains force-sign valid but still has a negative short-range energy-shape residual:
+
+| route | short repulsive pairs | C-N short F | C-N short dE | C-O short dE | N-H short dE | O-H short dE |
+|---|---:|---:|---:|---:|---:|---:|
+| Stage-89 'species_basis4_core' | 4/4 | -0.2964 | -0.00589 | -0.00637 | -0.00785 | -0.00725 |
+
+Stage-86 broader rattle window gives:
+
+| route | converged frac | all mean final RMSD A | C/N mean final RMSD A | CHNO-no-CN mean final RMSD A | max fmax eV/A |
+|---|---:|---:|---:|---:|---:|
+| Stage-85 's0p6_r0p75_b10' | 0.000 | 0.2365 | 0.2444 | 0.1183 | 0.4866 |
+| Stage-88 's0p6_r0p75_b10_cnfw4' | 0.000 | 0.2591 | 0.2612 | 0.2276 | 0.4656 |
+| Stage-89 'species_basis4_core' | 0.000 | 0.2428 | 0.2524 | 0.0980 | 0.5613 |
+
+Physical scorer comparison:
+
+| route | gate | score | atoms/s | DFT F MAE | C/N RMSD A | max fmax eV/A |
+|---|---:|---:|---:|---:|---:|---:|
+| Stage-85 's0p6_r0p75_b10' | 0 | 3.417 | 3.08e6 | 29.08 | 0.244 | 0.487 |
+| Stage-88 's0p6_r0p75_b10_cnfw4' | 0 | 3.518 | 3.08e6 | 31.29 | 0.261 | 0.466 |
+| Stage-89 'species_basis4_core' | 0 | 3.635 | 2.66e6 | 28.44 | 0.252 | 0.561 |
+
+Stage-89 interpretation against TECE/TACE and the review document:
+
+- Low-rank species basis is a TECE-clean retained path and improves aggregate supervised force MAE, but the current fixed Z-power basis does not repair the C/N-local failure mode.
+- The Stage-87 proxy predicted this: C/N excess remains about 410 meV/A. The broader rattle gate confirms it: C/N RMSD remains above the 0.20 A gate and max fmax worsens to 0.561 eV/A.
+- The CHNO-no-CN control improves to 0.098 A, so the retained chemistry path is not useless; it helps some non-C/N controls but misses the hard C/N adsorbate basins.
+- This points away from simple species density alone and toward geometry-conditioned retained paths: cavity moments, radial/cross-radial sketches, or force/teacher-conditioned species-radial projections.
+
+Priority after Stage 89:
+
+1. Do not promote simple 'rtece_species_basis4' to the Pareto front despite its aggregate DFT MAE improvement. It fails the same physical gate and costs throughput/memory.
+2. The next architecture experiment should be a C/N-sensitive cavity/radial retained operator, not another scalar loss or simple species-density sweep. Candidate: radial/cavity vector or cross-radial scalar sketches with the Stage87 C/N proxy as pre-filter.
+3. If using species information again, make it teacher/force-conditioned or pair/radial-conditioned rather than fixed Z-power moments.
+4. Keep graph/provider work deferred until a candidate improves the broader physical score.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
