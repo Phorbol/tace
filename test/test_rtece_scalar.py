@@ -813,6 +813,35 @@ def test_rtece_force_residual_weights_mean_normalize():
     assert payload["weight_mean"] == pytest.approx(1.0)
 
 
+def test_rtece_projection_weight_stratification_reports_element_and_focus_groups():
+    from benchmarks.oc20neb_tace_mace.stratify_rtece_projection_weights import stratify_symbol_weights
+
+    summary = stratify_symbol_weights(
+        symbols=["C", "N", "H", "Cu"],
+        weights=[4.0, 2.0, 1.0, 3.0],
+        top_fraction=0.5,
+    )
+    elements = {row["label"]: row for row in summary["elements"]}
+    groups = {row["label"]: row for row in summary["focus_groups"]}
+
+    assert summary["num_samples"] == 4
+    assert summary["total_weight"] == pytest.approx(10.0)
+    assert elements["C"]["count"] == 1
+    assert elements["C"]["weight_fraction"] == pytest.approx(0.4)
+    assert groups["C_or_N"]["count"] == 2
+    assert groups["C_or_N"]["weight_sum"] == pytest.approx(6.0)
+    assert groups["CHNO"]["count"] == 3
+    assert groups["not_CHNO"]["weight_fraction"] == pytest.approx(0.3)
+    assert groups["C_or_N"]["top_weight_fraction"] == pytest.approx(4.0 / 7.0)
+
+
+def test_rtece_projection_weight_stratification_rejects_misaligned_weights():
+    from benchmarks.oc20neb_tace_mace.stratify_rtece_projection_weights import stratify_symbol_weights
+
+    with pytest.raises(ValueError, match="symbols/weights length mismatch"):
+        stratify_symbol_weights(symbols=["C", "N"], weights=[1.0])
+
+
 def test_rtece_projection_loads_sample_weight_json(tmp_path):
     from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import _load_sample_weights_json
 

@@ -2329,6 +2329,55 @@ Next priority:
 2. Compare radial vs radial-cavity routes on the high residual-weight atoms rather than only aggregate MAE; if cavity helps there, rerun training with stratified validation/checkpoint selection.
 3. If cavity still fails on the residual-focused subset, prioritize distillation loss/head capacity or physical tests before any graph-backend acceleration.
 
+# Stage 77: Element-Stratified Force-Residual Weights
+
+Stage 77 implements the first element/focus-group stratification layer for the weighted projection diagnostics. This follows the Stage-76 conclusion and the user observation that C/N adsorbate relax RMSD may be disproportionately bad. The implementation is deliberately conservative: `C_or_N`, `CHNO`, and `not_CHNO` are lightweight element proxies, not a true adsorbate/site annotation.
+
+Implementation gate:
+
+- Added `stratify_rtece_projection_weights.py`.
+- The script loads a projection sample-weight JSON, reloads the matching extxyz symbols, checks weight/atom alignment, and emits JSON plus Markdown grouped by element and by focus groups.
+- Focus groups are `C_or_N`, `CHNO`, and `not_CHNO`; per-element rows are also reported.
+- Group rows include atom count, sample fraction, total weight fraction, mean/max weight, and each group share of the global top-weight atoms.
+- Regression tests cover weight-fraction accounting, top-weight share accounting, and symbol/weight length mismatch rejection.
+
+Bounded Stage-77 run on the same 8-config/419-atom subset, using Stage-76 radial teacher-force residual weights:
+
+| group | atom fraction | residual-weight fraction | mean normalized weight | top-10 percent weight share |
+|---|---:|---:|---:|---:|
+| `CHNO` | 0.158 | 0.688 | 4.37 | 0.824 |
+| `C_or_N` | 0.033 | 0.356 | 10.66 | 0.436 |
+| `not_CHNO` | 0.842 | 0.312 | 0.371 | 0.176 |
+
+Leading elements for radial teacher-force residual weights:
+
+| element | atom fraction | residual-weight fraction | mean normalized weight | top-10 percent weight share |
+|---|---:|---:|---:|---:|
+| C | 0.026 | 0.246 | 9.38 | 0.300 |
+| H | 0.117 | 0.213 | 1.82 | 0.238 |
+| O | 0.007 | 0.118 | 16.51 | 0.149 |
+| N | 0.007 | 0.110 | 15.37 | 0.136 |
+
+Radial versus radial-cavity comparison on the same subset:
+
+| route | residual raw mean | residual raw max | `C_or_N` weight fraction | `CHNO` weight fraction | `C_or_N` top-10 percent weight share |
+|---|---:|---:|---:|---:|---:|
+| `radial` | 0.160 | 7.23 | 0.356 | 0.688 | 0.436 |
+| `radial_cavity_vec` | 0.174 | 7.28 | 0.331 | 0.652 | 0.427 |
+
+Stage-77 interpretation against TECE/TACE and the review document:
+
+- The user-observed C/N problem is supported as a real priority on this bounded slice: C and N are only 3.3 percent of atoms but carry 35.6 percent of radial teacher-force residual weight. CHNO atoms are 15.8 percent of atoms but carry 68.8 percent of residual weight.
+- The cavity-vector route slightly reduces C/N and CHNO residual concentration, but its overall residual mean is worse than radial on this subset, consistent with the Stage-73 aggregate force MAE. This means the edge path is not automatically Pareto-useful just because projection residual says it carries information.
+- The next clean experiment is not a wider edge-path architecture sweep. It is stratified validation/checkpoint selection or loss weighting: train/evaluate radial and radial-cavity routes while explicitly monitoring C/N or CHNO residual subsets, then see whether the cavity path improves the failure mode without sacrificing too much throughput.
+- This stage also clarifies the physical-test plan: dimer scans and rattle+relax should be stratified by these element/focus groups, with C/N adsorbates pulled out instead of hidden in aggregate OC20NEB metrics.
+
+Next priority:
+
+1. Add stratified benchmark summaries for existing Stage-73 checkpoints: force MAE/RMSE by `C_or_N`, `CHNO`, and element, using DFT and teacher forces.
+2. Use those summaries to decide whether a stratified validation/checkpoint run is justified for `radial_cavity_vec`.
+3. If C/N remains bad under both routes, move to physical dimer/rattle+relax tests before changing graph backends or adding more edge paths.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
