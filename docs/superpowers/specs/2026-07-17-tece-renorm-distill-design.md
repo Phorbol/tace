@@ -2793,6 +2793,50 @@ Priority after Stage 85:
 4. If the broader validation preserves the Stage-85 advantage, implement analytic/fused radial-core force and then return to graph/provider throughput engineering under the review P0 PBC edge-vector/force/virial ABI.
 5. Do not move next to isolated ASE graph-builder replacement. The document-driven blocker remains physical closure of the scalar TECE endpoint; graph work becomes the right priority only after this candidate survives the broader physical gates.
 
+
+# Stage 86: Broader Rattle Validation of the Stage-85 Anchor
+
+Stage 86 tests whether the Stage-85 local anchor survives a broader physical-generalization window. Stage 85 selected `radial_core_s0p6_r0p75_b10` on a bounded 4-config strict rattle window. The review-aligned concern is that this may still hide the C/N adsorbate relax failure mode seen earlier by the user, so the next check broadened the rattle window before any analytic/fused radial-core force work.
+
+Run setup:
+
+| job id | route | checkpoint | configs | start | limit | rattle std | fmax | max steps | device |
+|---:|---|---|---|---:|---:|---:|---:|---:|---|
+| 680399 | `radial_core_s0p6_r0p75_b10` | Stage-85 best | `mixed_train_tw0.75.extxyz` | 58 | 48 | 0.03 A | 0.01 eV/A | 10 | cuda |
+
+The selected train window contains 45 C/N-containing configs and 3 CHNO-no-CN controls. A scan of `mixed_train_tw0.75.extxyz` found 4961/5000 configs in `C_or_N`, 39/5000 in `CHNO_no_CN`, and no `not_CHNO` metal-only controls. Attempting to fully read `mixed_valid_tw0.75.extxyz` hit an extxyz frame-length error, so Stage 86 does not claim metal-only coverage.
+
+Broader rattle+relax result:
+
+| group | count | converged frac | mean final RMSD A | max final RMSD A | max fmax eV/A |
+|---|---:|---:|---:|---:|---:|
+| all | 48 | 0.000 | 0.2365 | 0.4955 | 0.4866 |
+| C_or_N | 45 | 0.000 | 0.2444 | 0.4955 | 0.4866 |
+| CHNO | 48 | 0.000 | 0.2365 | 0.4955 | 0.4866 |
+| CHNO_no_CN | 3 | 0.000 | 0.1183 | 0.1392 | 0.3915 |
+
+The same Stage-84/85 physical scorer, now including the dimer energy-shape penalty, gives:
+
+| variant | gate | score | DFT F MAE | dimer repulsive | dimer energy penalty | C/N RMSD A | max fmax eV/A | atoms/s |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `radial_core_s0p6_r0p75_b10_broader_rattle` | 0 | 3.417 | 29.08 | 4/4 | 0.00740 | 0.244 | 0.487 | 3.08e6 |
+
+Worst final-RMSD cases in this window are C/N structures, led by config 92 `C2H3OSc40Si24` at 0.496 A final RMSD and config 83 `C2H4Au48K24` at 0.456 A. The highest max fmax is config 82 `CH3Ag12HgNY`-type formula (`CH3Ag12Hg24NY12`) at 0.487 eV/A.
+
+Stage-86 interpretation against TECE/TACE and the review document:
+
+- The Stage-85 local anchor is not yet a robust Pareto-front model. It passes the 4-config local gate but fails the broader 48-config rattle gate: C/N mean RMSD rises from 0.176 A to 0.244 A, and max fmax rises from 0.209 to 0.487 eV/A.
+- The failure is concentrated in the C/N-heavy adsorbate population; the small CHNO-no-CN control subset remains much better on RMSD. This matches the user observation that non-metal adsorbates, especially C/N-containing structures, expose the current scalar endpoint weakness.
+- The retained radial-core operator remains useful for short-range dimer sign and local force-spike reduction, but it is not sufficient by itself for broader C/N relax stability. This shifts priority from kernel/fusion work back to stratified model selection and possibly adding a low-cost C/N-sensitive scalar operator or training augmentation.
+- Since the broader rattle gate fails, analytic/fused radial-core force should not be the next task. It would optimize the throughput of a candidate that is not physically closed under the review-mandated diagnostics.
+
+Priority after Stage 86:
+
+1. Add stratified C/N rattle or force-residual proxy into checkpoint/model selection, so aggregate mixed-label loss cannot select rows that fail C/N relax.
+2. Compare two algorithmic fixes before graph/kernel work: targeted C/N close-contact/rattle augmentation versus a low-cost C/N-sensitive scalar retained operator beyond the radial core.
+3. Keep `radial_core_s0p6_r0p75_b10` as the local anchor for comparison, but do not promote it to fused-force implementation until it passes broader rattle gates.
+4. Repair or avoid the corrupted `mixed_valid_tw0.75.extxyz` path before claiming validation-set stratification; use train-window diagnostics only as bounded evidence.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
