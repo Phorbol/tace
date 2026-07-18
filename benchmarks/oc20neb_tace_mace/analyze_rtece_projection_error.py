@@ -113,6 +113,23 @@ def _descriptor_matrix(graphs: list[RTECEGraph], config: RTECEScalarConfig) -> t
     return torch.cat([rtece_descriptors(graph, config).detach().cpu() for graph in graphs], dim=0)
 
 
+def build_projection_config(
+    variant: str,
+    scalar_path_ids: tuple[str, ...] | list[str],
+    *,
+    cutoff: float = 5.0,
+    num_radial: int = 8,
+    species_basis_channels: int = 0,
+) -> RTECEScalarConfig:
+    return build_rtece_config_from_path_ids(
+        variant,
+        scalar_path_ids,
+        cutoff=float(cutoff),
+        num_radial=int(num_radial),
+        species_basis_channels=int(species_basis_channels),
+    )
+
+
 def _deleted_path_ids(candidate: RTECEScalarConfig, reference: RTECEScalarConfig) -> list[str]:
     candidate_paths = set(candidate.scalar_path_ids or ())
     return [path_id for path_id in (reference.scalar_path_ids or ()) if path_id not in candidate_paths]
@@ -216,6 +233,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--reference-path-ids", type=_parse_path_ids, required=True)
     parser.add_argument("--candidate", action="append", type=_parse_candidate, default=[])
     parser.add_argument("--num-radial", type=int, default=8)
+    parser.add_argument("--species-basis-channels", type=int, default=0)
     parser.add_argument("--cutoff", type=float, default=5.0)
     parser.add_argument("--limit-configs", type=int, default=32)
     parser.add_argument("--default-dtype", choices=("float32", "float64"), default="float64")
@@ -229,11 +247,12 @@ def main() -> None:
     args = parse_args()
     dtype = torch.float64 if args.default_dtype == "float64" else torch.float32
     device = torch.device("cpu")
-    reference_config = build_rtece_config_from_path_ids(
+    reference_config = build_projection_config(
         "rtece_projection_reference",
         args.reference_path_ids,
         cutoff=float(args.cutoff),
         num_radial=int(args.num_radial),
+        species_basis_channels=int(args.species_basis_channels),
     )
     graphs = _load_graphs(
         args.configs,
@@ -250,11 +269,12 @@ def main() -> None:
         sample_weights, weight_source = _load_sample_weights_json(args.sample_weight_json)
     rows = []
     for candidate_name, candidate_path_ids in args.candidate:
-        candidate_config = build_rtece_config_from_path_ids(
+        candidate_config = build_projection_config(
             f"rtece_projection_{candidate_name}",
             candidate_path_ids,
             cutoff=float(args.cutoff),
             num_radial=int(args.num_radial),
+            species_basis_channels=int(args.species_basis_channels),
         )
         rows.append(
             make_projection_diagnostic_row(
@@ -271,6 +291,7 @@ def main() -> None:
         "configs": str(args.configs),
         "limit_configs": int(args.limit_configs),
         "num_radial": int(args.num_radial),
+        "species_basis_channels": int(args.species_basis_channels),
         "cutoff": float(args.cutoff),
         "reference_path_ids": list(args.reference_path_ids),
         "sample_weight_json": str(args.sample_weight_json) if args.sample_weight_json else None,

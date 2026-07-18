@@ -1172,6 +1172,26 @@ def test_rtece_projection_loads_sample_weight_json(tmp_path):
     assert weights.tolist() == pytest.approx([0.5, 2.0, 3.5])
 
 
+def test_rtece_projection_diagnostic_builds_species_path_config():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import build_projection_config
+
+    config = build_projection_config(
+        "weighted_species_cavity",
+        ("atomic.radial_density", "atomic.species_basis_density", "edge.cavity.vector_dot"),
+        num_radial=4,
+        species_basis_channels=3,
+    )
+
+    assert config.variant == "weighted_species_cavity"
+    assert config.species_basis_channels == 3
+    assert descriptor_dim(config) == 4 + 12 + 1
+    assert config.scalar_path_ids == (
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "edge.cavity.vector_dot",
+    )
+
+
 def test_rtece_projection_diagnostic_row_reports_deleted_path_residual():
     from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import make_projection_diagnostic_row
     from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids

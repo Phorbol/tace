@@ -3106,6 +3106,150 @@ Priority after Stage 91:
 3. Implement or use an active-set projection diagnostic that ranks species/radial/cavity path components by teacher/DFT force residual on the Stage-87 C/N slice, then train only the selected low-cost subset. This is closer to TECE renormalized deletion/projection than another fixed Z-power or broad cavity sweep.
 4. Continue deferring graph/backend acceleration until a candidate improves the C/N physical gate. The ASE/matscipy/nvalchemi/deepmd backend question is real but is a P2 execution problem; the current blocker is still P1 retained-operator selection.
 
+## Stage 92: Force-Weighted Active Projection And Element-Core Candidate
+
+Stage 92 follows the Stage-91 decision: convert the species+cavity result into a force-conditioned deletion/projection problem before adding more paths. The reference descriptor was the Stage-91 path set `atomic.radial_density + atomic.species_basis_density + edge.cavity.vector_dot`. Sample weights came from the Stage-91 DFT force residual on the exact Stage-87/86 48-config C/N-heavy slice.
+
+Force-residual weight stratification confirms that the weighting is relevant to the user-observed C/N failure mode: C/N atoms are only 147/3116 atoms (4.7%) but carry 30.9% of total weight and 35.6% of the top-10% weight.
+
+Weighted descriptor projection ranking:
+
+| candidate | retained paths | dim | deleted paths | weighted relative residual |
+|---|---|---:|---|---:|
+| `species_only` | radial + species_basis4 | 40 | cavity vector-dot | 0.0274 |
+| `element_cavity` | radial + element_density + cavity vector-dot | 17 | species_basis4 | 0.0492 |
+| `element_only` | radial + element_density | 16 | species_basis4 + cavity vector-dot | 0.0574 |
+| `radial_only` | radial | 8 | species_basis4 + cavity vector-dot | 0.1956 |
+
+Interpretation: most of the Stage-91 species+cavity descriptor space on the force-residual-weighted slice is captured by low-rank chemistry, while the expensive cavity scalar contributes comparatively little projection residual. Because the target is high throughput, Stage 92 trains the cheaper `element_only + short_range_radial_core` candidate first instead of adding cavity.
+
+Stage-92 candidate setup:
+
+| job id | route | scalar path ids | core | train/valid/bench configs | force mode |
+|---:|---|---|---|---|---|
+| 681111 | `element_core_s0p6_r0p75_b10` | `atomic.radial_density,atomic.element_density` | strength 0.6, radius 0.75, beta 10 | 512/128/512 | autograd |
+
+Aggregate benchmark result:
+
+| route | DFT F MAE | DFT F RMSE | teacher F MAE | atoms/s | peak MB | params |
+|---|---:|---:|---:|---:|---:|---:|
+| Stage-85 `s0p6_r0p75_b10` | 29.08 | 101.12 | 34.21 | 3.08e6 | 178.6 | 449 |
+| Stage-91 `species4_cavity_vec_core` | 23.93 | 100.48 | 30.79 | 0.79e6 | 2020.5 | 977 |
+| Stage-92 `element_core` | 25.84 | 101.08 | 32.22 | 3.02e6 | 472.8 | 577 |
+
+Stage-87 exact-window C/N force-selection proxy:
+
+| route | target | global F MAE | C/N F MAE | C/N excess | selection score |
+|---|---|---:|---:|---:|---:|
+| Stage-85 `s0p6_r0p75_b10` | DFT | 75.41 | 485.39 | 409.98 | 895.37 |
+| Stage-90 `cavity_vec_core` | DFT | 76.22 | 485.08 | 408.85 | 893.93 |
+| Stage-91 `species4_cavity_vec_core` | DFT | 71.87 | 484.49 | 412.62 | 897.11 |
+| Stage-92 `element_core` | DFT | 72.59 | 483.89 | 411.29 | 895.18 |
+
+Stage-92 dimer probe:
+
+| route | short repulsive pairs | C-N short F | C-N short dE | C-O short dE | N-H short dE | O-H short dE |
+|---|---:|---:|---:|---:|---:|---:|
+| Stage-92 `element_core` | 4/4 | -0.2598 | +0.00574 | +0.00419 | -0.00501 | -0.00569 |
+
+Stage-86 broader rattle window:
+
+| route | converged frac | all mean final RMSD A | C/N mean final RMSD A | CHNO-no-CN mean final RMSD A | max fmax eV/A |
+|---|---:|---:|---:|---:|---:|
+| Stage-85 `s0p6_r0p75_b10` | 0.000 | 0.2365 | 0.2444 | 0.1183 | 0.4866 |
+| Stage-89 `species_basis4_core` | 0.000 | 0.2428 | 0.2524 | 0.0980 | 0.5613 |
+| Stage-92 `element_core` | 0.000 | 0.2403 | 0.2467 | 0.1441 | 0.3915 |
+
+Physical scorer comparison:
+
+| route | gate | score | atoms/s | DFT F MAE | C/N RMSD A | max fmax eV/A | min dimer dE |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Stage-92 `element_core` | 0 | 3.064 | 3.02e6 | 25.84 | 0.247 | 0.391 | -0.00569 |
+| Stage-85 `s0p6_r0p75_b10` | 0 | 3.417 | 3.08e6 | 29.08 | 0.244 | 0.487 | -0.00740 |
+| Stage-88 `cnfw4` | 0 | 3.518 | 3.08e6 | 31.29 | 0.261 | 0.466 | -0.00771 |
+| Stage-89 `species_basis4_core` | 0 | 3.635 | 2.66e6 | 28.44 | 0.252 | 0.561 | -0.00785 |
+
+Stage-92 interpretation:
+
+- The force-weighted active projection was useful: it found a cheaper element-density compression that keeps most of the Stage-91 aggregate force improvement while recovering Stage-85-class throughput. This is a genuine TECE-style projection/downfolding step, not a blind hyperparameter change.
+- Stage-92 is the best physical-score row in the broader-rattle comparison so far, mainly because it improves DFT force MAE and brings max rattle fmax under the 0.40 eV/A gate.
+- C/N mean final RMSD remains about 0.247 A, above the provisional 0.20 A diagnostic threshold. This is a strong external physical warning, but it should not become the long-term organizing gate for every algorithmic stage. The diagnostic identifies a deployment-manifold failure mode; it does not by itself prove that the next move must be another architecture path.
+- The residual-weighted projection says fixed species/cavity information can be compressed. The remaining C/N adsorbate basin may reflect projection error, but it may also reflect insufficient teacher/mixed-label coverage of rattle, close-contact, and rare light-element adsorbate configurations. The next controlled stage must therefore separate architecture projection error from distillation-data coverage error.
+
+Priority after Stage 92:
+
+1. Keep `element_core_s0p6_r0p75_b10` as the current high-throughput anchor: it is faster and cleaner than Stage91 and scores better than Stage85/88/89 under the current physical scorer, while retaining Stage85-class throughput.
+2. The immediate Stage93 control experiment should keep this architecture fixed and increase distillation coverage: train the same route on a larger slice of the existing mixed teacher/DFT fake-label file, then compare against the 512-config Stage92 row. This tests whether the current residual is distillation/data-limited before adding another retained path.
+3. If larger existing fake-label coverage improves aggregate or C/N diagnostics, extend the teacher cache with deployment-conditioned labels: rattle/near-contact configs and C/N-heavy adsorbate windows labelled by the TACE teacher. This is the clean data-side complement to TECE projection.
+4. Keep C/N rattle, dimer energy shape, and C/N force proxy as external diagnostics/ranking signals. Do not use the provisional C/N RMSD threshold as a hard blocker that prevents testing document-aligned distillation or projection ideas.
+5. The selected-species radial density path remains a plausible architecture-side branch if data coverage does not move the residual: explicit low-rank one-hot densities for residual-active light elements C/N/H/O would be a TECE-clean alternative to fixed Z-power species moments. It should be compared after the Stage93 coverage control, not substituted for it.
+6. Continue deferring larger cavity/radial14 and backend acceleration. Graph/provider work matters for deployment, but the current review-aligned P1 question is whether the high-throughput scalar anchor can be made physically useful by controlled distillation coverage and force-conditioned path selection.
+
+## Stage 93: Fixed-Architecture Distillation-Coverage Control
+
+Stage 93 follows the revised Stage-92 priority after the user pointed out that the C/N rattle RMSD is a useful physical external diagnostic, but should not become the long-term organizing gate for all algorithmic exploration. This stage therefore keeps the Stage-92 architecture fixed and changes only distillation/data coverage: the same `atomic.radial_density + atomic.element_density + short_range_radial_core` route is trained on 2048 mixed teacher/DFT fake-label configs instead of the 512-config Stage-92 slice.
+
+Run setup:
+
+| job id | route | scalar path ids | core | train/valid/bench configs | steps | force mode |
+|---:|---|---|---|---|---:|---|
+| 681215 | `element_core_s0p6_r0p75_b10_train2048` | `atomic.radial_density,atomic.element_density` | strength 0.6, radius 0.75, beta 10 | 2048/256/512 | 2048 | autograd |
+
+The Slurm wrapper was generated through the no-export submission helper. The submitted command was plain `sbatch wrapper.sbatch`; parameters were set inside the wrapper body. A scan for `--export`, `SBATCH --export`, and `export=` on the wrapper and submit path returned no matches.
+
+Training and aggregate benchmark result:
+
+| route | train configs | best step | best valid loss | DFT E MAE | DFT F MAE | DFT F RMSE | teacher F MAE | atoms/s | peak MB | params |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Stage-92 `element_core` | 512 | 500 | 0.5657 | 177.94 | 25.84 | 101.08 | 32.22 | 3.02e6 | 472.8 | 577 |
+| Stage-93 `element_core_train2048` | 2048 | 256 | 0.4577 | 172.85 | 25.53 | 100.72 | 31.87 | 2.94e6 | 472.8 | 577 |
+
+Stage-87 exact-window C/N force-selection proxy:
+
+| route | target | global F MAE | C/N F MAE | C/N excess | selection score |
+|---|---|---:|---:|---:|---:|
+| Stage-92 `element_core` | DFT | 72.59 | 483.89 | 411.29 | 895.18 |
+| Stage-93 `element_core_train2048` | DFT | 72.33 | 482.84 | 410.51 | 893.35 |
+
+Stage-79 dimer probe:
+
+| route | short repulsive pairs | C-N short dE | C-O short dE | N-H short dE | O-H short dE | min short dE |
+|---|---:|---:|---:|---:|---:|---:|
+| Stage-92 `element_core` | 4/4 | +0.00574 | +0.00419 | -0.00501 | -0.00569 | -0.00569 |
+| Stage-93 `element_core_train2048` | 4/4 | +0.01693 | +0.01485 | +0.00178 | +0.00056 | +0.00056 |
+
+Stage-86 broader rattle window:
+
+| route | converged frac | all mean final RMSD A | C/N mean final RMSD A | CHNO-no-CN mean final RMSD A | max final RMSD A | max fmax eV/A |
+|---|---:|---:|---:|---:|---:|---:|
+| Stage-92 `element_core` | 0.000 | 0.2403 | 0.2467 | 0.1441 | 0.6143 | 0.3915 |
+| Stage-93 `element_core_train2048` | 0.000 | 0.2399 | 0.2464 | 0.1423 | 0.7140 | 0.2873 |
+
+Physical scorer comparison with the same Stage-85/88/89/92 rows:
+
+| route | gate | score | atoms/s | DFT F MAE | teacher F MAE | C/N RMSD A | max fmax eV/A | min dimer dE |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| Stage-93 `element_core_train2048` | 0 | 2.680 | 2.94e6 | 25.53 | 31.87 | 0.246 | 0.287 | +0.00056 |
+| Stage-92 `element_core` | 0 | 3.064 | 3.02e6 | 25.84 | 32.22 | 0.247 | 0.391 | -0.00569 |
+| Stage-85 `s0p6_r0p75_b10` | 0 | 3.417 | 3.08e6 | 29.08 | 34.21 | 0.244 | 0.487 | -0.00740 |
+| Stage-88 `cnfw4` | 0 | 3.518 | 3.08e6 | 31.29 | 35.97 | 0.261 | 0.466 | -0.00771 |
+| Stage-89 `species_basis4_core` | 0 | 3.635 | 2.66e6 | 28.44 | 33.80 | 0.252 | 0.561 | -0.00785 |
+
+Stage-93 interpretation against TECE/TACE and the review document:
+
+- Increasing mixed teacher/DFT fake-label coverage at fixed architecture gives a small but consistent improvement in aggregate supervised metrics, C/N force proxy, dimer energy shape, and rattle force spikes. This means the Stage-92 residual is not purely architecture projection error; some part is distillation/data-coverage limited.
+- The improvement is not enough to solve the C/N adsorbate basin. C/N mean final RMSD remains about 0.246 A, essentially unchanged from Stage 92, and no broader-rattle structures converge within the strict 10-step/0.01 eV/A protocol. Therefore existing-prefix coverage alone is not sufficient.
+- The positive dimer result is important: all four CHNO dimers now have positive short-distance energy lift while preserving repulsive short forces. This suggests more data can improve the learned residual around the retained radial+element core without adding new paths.
+- The physical scorer now ranks Stage 93 best among the Stage85/88/89/92/93 comparison, but the Pareto interpretation is not a hard-gate success. It is a clean control result showing that the next data-side move should be targeted teacher fake labels, not merely another random architecture branch.
+
+Priority after Stage 93:
+
+1. Keep `element_core_s0p6_r0p75_b10_train2048` as the current high-throughput/data-coverage anchor, while remembering it is not a closed physical endpoint.
+2. The next distillation step should create deployment-conditioned teacher fake labels rather than only increasing the same prefix: rattle/near-contact perturbations, high residual C/N adsorbate windows, and dimer/close-contact structures labelled by the TACE teacher where possible.
+3. Use Stage93 as the architecture fixed point for that data-side experiment. If targeted fake labels reduce C/N force proxy or rattle RMSD at roughly the same throughput, the bottleneck is partly data/manifold coverage. If they do not, return to architecture-side selected-species radial density or force-conditioned path selection.
+4. Continue to report C/N rattle as a diagnostic/ranking signal, not as the only algorithmic gate. The main TECE question remains how to decompose total error into teacher error, projection error, distillation error, and deployment-manifold coverage error.
+5. Do not spend the next stage on graph/backend acceleration. Stage93 improves the physics score without changing backend code, so the current highest-value work remains teacher-cache/fake-label coverage and TECE path-selection logic.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
