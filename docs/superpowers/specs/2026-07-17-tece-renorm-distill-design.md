@@ -1361,6 +1361,40 @@ Stage-45 interpretation against TECE/TACE:
 - This supports the TECE/TACE system-renormalization route. Once the model has been degraded to scalar descriptors and fused conservative force kernels, topology-update realization and edge-buffer lifetime are first-class deployment axes, not incidental implementation details.
 - The next clean target remains a fused direct-radius/cell-list provider. Until that exists, `--graph-update-chunk-configs` should be reported in Pareto artifacts together with graph construction and graph update backend metadata.
 
+
+# Stage 46: Direct-Radius Provider Work Metadata
+
+Stage 46 added provider-work metadata to `GraphUpdateBackend` and reran the Stage-45 forced-invalid direct-radius sweep. This is a benchmark/compiler instrumentation step: it does not change rTECE descriptors, learned parameters, direct-active graph semantics, or conservative force evaluation. Its purpose is to quantify the all-pairs work and chunking overhead that a fused direct-radius/cell-list provider must remove.
+
+Implementation gate:
+
+- `GraphUpdateBackend` now carries `static_metadata` and `last_metadata`.
+- Direct-radius update backends record `num_configs`, `num_atoms`, `max_atoms_per_config`, `num_chunks`, `max_chunk_configs`, exact per-config pair slots, padded pair slots, padding overhead ratio, and last directed-edge count.
+- Benchmark JSON now records `graph_update_backend_metadata`.
+- The test was first run red and failed on missing `static_metadata`; after implementation, the new metadata test passed and the full rTECE scalar test file passed with 56 tests.
+
+GPU setup: radial8h24 `rtece_element_density`, direct-active initial graph, DFT valid `:1024`, 59193 atoms, one V100, float32, `--force-mode auto`, forced invalid cache with `trajectory_skin_margin=0.002`, `trajectory_displacement_std=0.001`, 20 force steps and 10 update events.
+
+| update backend | chunk configs | mode | atom-step/s | update total s | peak alloc MB | chunks | padded pair slots | padding overhead | directed edges | DFT F MAE |
+|---|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `torch_radius_nopbc_grouped` | all | update-only | 68,543,495 | 0.011981 | 241.3 | 1 | 7,750,656 | 2.095 | 825,584 | n/a |
+| `torch_radius_nopbc_grouped_chunked` | 64 | update-only | 16,279,118 | 0.068561 | 61.3 | 16 | 4,956,992 | 1.340 | 825,584 | n/a |
+| `torch_radius_nopbc_grouped_chunked` | 128 | update-only | 29,808,822 | 0.035617 | 73.4 | 8 | 5,365,888 | 1.450 | 825,584 | n/a |
+| `torch_radius_nopbc_grouped_chunked` | 256 | update-only | 46,420,113 | 0.021265 | 110.0 | 4 | 6,211,328 | 1.679 | 825,584 | n/a |
+| `torch_radius_nopbc_grouped_chunked` | 512 | update-only | 59,142,031 | 0.015863 | 174.8 | 2 | 7,574,528 | 2.047 | 825,584 | n/a |
+| `torch_radius_nopbc_grouped` | all | model+updates | 27,338,063 | 0.012368 | 263.1 | 1 | 7,750,656 | 2.095 | 825,584 | 33.18 |
+| `torch_radius_nopbc_grouped_chunked` | 64 | model+updates | 12,175,411 | 0.067447 | 83.0 | 16 | 4,956,992 | 1.340 | 825,584 | 33.18 |
+| `torch_radius_nopbc_grouped_chunked` | 128 | model+updates | 17,863,813 | 0.035686 | 95.0 | 8 | 5,365,888 | 1.450 | 825,584 | 33.18 |
+| `torch_radius_nopbc_grouped_chunked` | 256 | model+updates | 22,841,929 | 0.022921 | 130.5 | 4 | 6,211,328 | 1.679 | 825,584 | 33.18 |
+| `torch_radius_nopbc_grouped_chunked` | 512 | model+updates | 24,931,106 | 0.017448 | 197.7 | 2 | 7,574,528 | 2.047 | 825,584 | 33.18 |
+
+Stage-46 interpretation against TECE/TACE:
+
+- The direct-radius provider bottleneck is now quantitatively decomposed. The exact per-config dense pair work for this window is 3,699,489 pair slots, while all-config grouped radius evaluates 7,750,656 padded slots, about 2.10x exact.
+- Chunk64 reduces padded work to 4,956,992 slots, about 1.34x exact, but pays 16 chunk launches/materializations and is much slower. Chunk512 approaches grouped throughput because it uses only two chunks, but its padded work is almost as high as all-config grouping.
+- This explains the Stage-45 Pareto curve: the current PyTorch provider trades launch count against padded tensor size. The next provider should not be another Python grouping variant; it should approach exact pair/cell-list work while keeping launch count close to one.
+- The fused/cell-list target is concrete: generate about 0.826M directed active edges from about 3.70M exact per-config pair slots without materializing long-lived padded distance/mask tensors. This is the next system-level TECE/TACE renormalization step before more model architecture changes.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

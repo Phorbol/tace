@@ -196,9 +196,11 @@ def validate_graph_construction_args(
 
 
 class GraphUpdateBackend:
-    def __init__(self, name: str, rebuild_fn):
+    def __init__(self, name: str, rebuild_fn, *, static_metadata: dict[str, object] | None = None):
         self.name = str(name)
         self._rebuild_fn = rebuild_fn
+        self.static_metadata = dict(static_metadata or {})
+        self.last_metadata = dict(self.static_metadata)
         self.rebuild_count = 0
         self.rebuild_times_s: list[float] = []
         self.total_rebuild_time_s = 0.0
@@ -210,7 +212,83 @@ class GraphUpdateBackend:
         self.rebuild_count += 1
         self.rebuild_times_s.append(float(elapsed))
         self.total_rebuild_time_s += float(elapsed)
+        metadata = dict(self.static_metadata)
+        if isinstance(result, RTECEGraph):
+            metadata["num_directed_edges"] = int(result.edge_index.shape[1])
+        self.last_metadata = metadata
         return result
+
+
+def direct_radius_backend_static_metadata(
+    template: RTECEGraph,
+    *,
+    backend_name: str,
+    chunk_configs: int = 128,
+) -> dict[str, object]:
+    batch = template.batch
+    if batch.ndim != 1 or batch.shape[0] != template.z.shape[0]:
+        raise ValueError("template batch must be a one-dimensional tensor with one entry per atom")
+    if batch.numel() == 0:
+        return {
+            "provider_family": "direct_radius_nopbc",
+            "num_configs": 0,
+            "num_atoms": 0,
+            "max_atoms_per_config": 0,
+            "num_chunks": 0,
+            "max_chunk_configs": 0,
+            "exact_pair_slots": 0,
+            "padded_pair_slots": 0,
+            "padding_overhead_ratio": 0.0,
+        }
+    if torch.any(batch[1:] < batch[:-1]):
+        raise ValueError("template batch must be sorted by configuration")
+    _, counts = torch.unique_consecutive(batch, return_counts=True)
+    counts_list = [int(v) for v in counts.detach().cpu().tolist()]
+    num_configs = len(counts_list)
+    exact_pair_slots = int(sum(count * count for count in counts_list))
+    max_atoms = int(max(counts_list))
+
+    if backend_name == "torch_radius_nopbc":
+        num_chunks = num_configs
+        max_chunk_configs = 1 if num_configs else 0
+        padded_pair_slots = exact_pair_slots
+    elif backend_name == "torch_radius_nopbc_grouped":
+        num_chunks = 1 if num_configs else 0
+        max_chunk_configs = num_configs
+        padded_pair_slots = int(num_configs * max_atoms * max_atoms)
+    elif backend_name == "torch_radius_nopbc_grouped_chunked":
+        if chunk_configs < 1:
+            raise ValueError(f"chunk_configs must be positive, got {chunk_configs}")
+        num_chunks = 0
+        max_chunk_configs = 0
+        padded_pair_slots = 0
+        chunk_size = int(chunk_configs)
+        for chunk_start in range(0, num_configs, chunk_size):
+            chunk_counts = counts_list[chunk_start : chunk_start + chunk_size]
+            chunk_len = len(chunk_counts)
+            chunk_max = max(chunk_counts)
+            num_chunks += 1
+            max_chunk_configs = max(max_chunk_configs, chunk_len)
+            padded_pair_slots += int(chunk_len * chunk_max * chunk_max)
+    elif backend_name == "torch_radius_nopbc_grouped_by_size":
+        unique_counts = sorted(set(counts_list))
+        num_chunks = len(unique_counts)
+        max_chunk_configs = max(counts_list.count(count) for count in unique_counts) if unique_counts else 0
+        padded_pair_slots = int(sum(counts_list.count(count) * count * count for count in unique_counts))
+    else:
+        raise ValueError(f"unknown direct-radius backend for metadata: {backend_name}")
+
+    return {
+        "provider_family": "direct_radius_nopbc",
+        "num_configs": int(num_configs),
+        "num_atoms": int(batch.numel()),
+        "max_atoms_per_config": int(max_atoms),
+        "num_chunks": int(num_chunks),
+        "max_chunk_configs": int(max_chunk_configs),
+        "exact_pair_slots": int(exact_pair_slots),
+        "padded_pair_slots": int(padded_pair_slots),
+        "padding_overhead_ratio": float(padded_pair_slots / exact_pair_slots) if exact_pair_slots else 0.0,
+    }
 
 
 def make_graph_update_backend(
@@ -229,6 +307,11 @@ def make_graph_update_backend(
         return GraphUpdateBackend(
             "cached_topology",
             lambda positions: replay_graph_positions(template_graph, positions),
+            static_metadata={
+                "provider_family": "cached_topology",
+                "num_atoms": int(template_graph.pos.shape[0]),
+                "cached_num_directed_edges": int(template_graph.edge_index.shape[1]),
+            },
         )
     if backend_name in {
         "torch_radius_nopbc",
@@ -254,11 +337,21 @@ def make_graph_update_backend(
                     cutoff=float(cutoff),
                     chunk_configs=int(chunk_configs),
                 ),
+                static_metadata=direct_radius_backend_static_metadata(
+                    template_graph,
+                    backend_name=backend_name,
+                    chunk_configs=int(chunk_configs),
+                ),
             )
         radius_fn = radius_fns[backend_name]
         return GraphUpdateBackend(
             backend_name,
             lambda positions: radius_fn(template_graph, positions, cutoff=float(cutoff)),
+            static_metadata=direct_radius_backend_static_metadata(
+                template_graph,
+                backend_name=backend_name,
+                chunk_configs=int(chunk_configs),
+            ),
         )
     raise ValueError(f"unknown graph update backend: {backend_name}")
 
@@ -923,6 +1016,7 @@ def main() -> None:
         "graph_construction_backend": args.graph_construction_backend,
         "graph_update_backend": graph_update_backend.name if graph_update_backend is not None else None,
         "graph_update_chunk_configs": int(args.graph_update_chunk_configs),
+        "graph_update_backend_metadata": graph_update_backend.last_metadata if graph_update_backend is not None else None,
         "graph_update_rebuild_count": graph_update_backend.rebuild_count if graph_update_backend is not None else 0,
         "graph_update_total_s": graph_update_backend.total_rebuild_time_s if graph_update_backend is not None else 0.0,
         "graph_update_times_s": graph_update_backend.rebuild_times_s if graph_update_backend is not None else [],

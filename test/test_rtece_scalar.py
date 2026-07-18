@@ -1132,6 +1132,43 @@ def test_chunked_torch_radius_update_backend_honors_chunk_size():
     assert graph.edge_index.tolist() == [[0, 1, 3, 4], [1, 0, 4, 3]]
 
 
+def test_chunked_torch_radius_update_backend_records_provider_work_metadata():
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import make_graph_update_backend
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import RTECEGraph
+
+    template = RTECEGraph(
+        z=torch.tensor([6, 8, 1, 7, 1], dtype=torch.long),
+        pos=torch.zeros((5, 3), dtype=torch.float64),
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=torch.tensor([0, 0, 0, 1, 1], dtype=torch.long),
+    )
+    positions = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [0.9, 0.0, 0.0],
+            [2.2, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.8, 0.0, 0.0],
+        ],
+        dtype=torch.float64,
+    )
+
+    backend = make_graph_update_backend(
+        backend_name="torch_radius_nopbc_grouped_chunked",
+        rebuild_fn=lambda positions: (_ for _ in ()).throw(AssertionError("ASE rebuild should not run")),
+        template_graph=template,
+        cutoff=1.0,
+        chunk_configs=1,
+    )
+
+    graph = backend.rebuild(positions)
+
+    assert backend.static_metadata["num_configs"] == 2
+    assert backend.static_metadata["max_atoms_per_config"] == 3
+    assert backend.static_metadata["num_chunks"] == 2
+    assert backend.static_metadata["padded_pair_slots"] == 13
+    assert backend.last_metadata["num_directed_edges"] == graph.edge_index.shape[1] == 4
+
 def test_grouped_chunked_torch_radius_update_backend_rebuilds_edges():
     from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import make_graph_update_backend
     from benchmarks.oc20neb_tace_mace.rtece_scalar_model import RTECEGraph
