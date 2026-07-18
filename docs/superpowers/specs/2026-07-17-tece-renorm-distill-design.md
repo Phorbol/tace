@@ -2038,6 +2038,30 @@ Next priority:
 2. Separately split radial-cavity cross paths into named basis functions before allowing `edge.cavity.vector_cross_radial_dot` or related ids in `build_rtece_config_from_path_ids(...)`.
 3. Do not spend GPU on large autograd edge sweeps until a route's selected paths have either a compact autograd cost profile or an analytic/fused inference path.
 
+# Stage 69: Descriptor Projection-Error Diagnostic
+
+Stage 69 adds the first bounded diagnostic for separating architecture projection error from later distillation or optimization error. It does not train a student. It asks whether the descriptors retained by a candidate path-id route can linearly reconstruct the descriptors of a richer reference route on a bounded set of structures.
+
+Implementation gate:
+
+- Added `benchmarks/oc20neb_tace_mace/analyze_rtece_projection_error.py`.
+- Added `projection_residual_metrics(source, target)`, which solves a ridge-regularized least-squares projection from candidate descriptors to reference descriptors and reports Frobenius residual, target norm, relative residual, source/target dimension, and sample count.
+- Added `make_projection_diagnostic_row(...)`, which computes rTECE descriptors for candidate/reference configs over supplied graphs and records manifest hashes, selected path ids, deleted path ids, dimensions, graph count, and projection residual metrics.
+- Added a CLI skeleton that reads a bounded extxyz subset through the existing `atoms_to_rtece_graph()` path, accepts a reference path-id list and multiple `name:path_id,path_id` candidates, and writes JSON with schema `rtece_projection_diagnostic.v1`.
+- Regression tests cover an exactly spanned synthetic descriptor target and a real rTECE graph comparison where deleting `edge.direct.radial` is reported as a deleted scalar path.
+
+Stage-69 interpretation against TECE/TACE:
+
+- This begins the required projection/distillation separation: before spending training budget, a candidate route can be checked for descriptor-space information loss relative to a richer path set.
+- The current metric is descriptor-space only. It is not yet teacher-force sensitivity, Hessian-vector distillation, or Schur-complement downfolding. Those require teacher/model gradients or cached teacher path activations.
+- The diagnostic is still useful for path search because the route compiler now has atomic and non-radial edge path granularity; deleted path ids can be measured instead of guessed from variant names.
+
+Next priority:
+
+1. Run this diagnostic on a small OC20NEB subset for candidate path-id routes such as `radial_density`, `radial_density+edge.cavity.vector_dot`, and `radial_density+edge.cavity.vector_dot+edge.direct.radial`.
+2. Add optional teacher-force or teacher-energy sensitivity weighting to the projection residual once a teacher checkpoint/path cache is available in the same workflow.
+3. Feed the diagnostic rows into the manifest-group Pareto summary so projection residual, MAE/RMSE, and atoms/s appear together for the same route hash.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

@@ -688,6 +688,68 @@ def test_rtece_path_id_edge_manifest_reconstructs_selected_edge_paths():
     assert rtece_path_manifest(rebuilt)["manifest_hash"] == manifest["manifest_hash"]
 
 
+def test_rtece_projection_residual_metrics_detects_spanned_and_deleted_components():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import projection_residual_metrics
+
+    source = torch.tensor(
+        [[1.0, 0.0], [0.0, 1.0], [1.0, 1.0], [2.0, -1.0]],
+        dtype=torch.float64,
+    )
+    spanned_target = torch.cat([source, (2.0 * source[:, :1] - source[:, 1:2])], dim=-1)
+    unspanned_target = torch.cat([spanned_target, torch.tensor([[0.0], [1.0], [0.0], [-1.0]], dtype=torch.float64)], dim=-1)
+
+    spanned = projection_residual_metrics(source, spanned_target)
+    unspanned = projection_residual_metrics(source, unspanned_target)
+
+    assert spanned["source_dim"] == 2
+    assert spanned["target_dim"] == 3
+    assert spanned["relative_residual"] < 1e-10
+    assert unspanned["target_dim"] == 4
+    assert unspanned["relative_residual"] > spanned["relative_residual"]
+
+
+def test_rtece_projection_diagnostic_row_reports_deleted_path_residual():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import make_projection_diagnostic_row
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
+
+    candidate = build_rtece_config_from_path_ids(
+        "rtece_path_keep_vector",
+        ("atomic.radial_density", "edge.cavity.vector_dot"),
+        num_radial=3,
+    )
+    reference = build_rtece_config_from_path_ids(
+        "rtece_path_keep_vector_and_radial",
+        ("atomic.radial_density", "edge.cavity.vector_dot", "edge.direct.radial"),
+        num_radial=3,
+    )
+    graph = RTECEGraph(
+        z=torch.tensor([6, 1, 8], dtype=torch.long),
+        pos=torch.tensor(
+            [[0.0, 0.0, 0.0], [0.7, 0.1, 0.0], [0.2, 0.9, 0.1]],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    row = make_projection_diagnostic_row(
+        "keep_vector",
+        candidate_config=candidate,
+        reference_config=reference,
+        graphs=[graph],
+    )
+
+    assert row["candidate"] == "keep_vector"
+    assert row["num_graphs"] == 1
+    assert row["num_samples"] == 3
+    assert row["candidate_dim"] == 4
+    assert row["reference_dim"] == 6
+    assert row["deleted_scalar_path_ids"] == ["edge.direct.radial"]
+    assert row["relative_residual"] >= 0.0
+    assert row["candidate_manifest_hash"] == rtece_path_manifest(candidate)["manifest_hash"]
+    assert row["reference_manifest_hash"] == rtece_path_manifest(reference)["manifest_hash"]
+
+
 def test_rtece_species_basis_variant_has_route_contract():
     config = build_rtece_config("rtece_species_basis4")
     route = rtece_route_contract(config, force_mode="autograd")
