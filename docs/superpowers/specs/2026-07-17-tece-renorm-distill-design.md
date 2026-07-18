@@ -1492,6 +1492,34 @@ Stage-49 interpretation against TECE/TACE:
 - The next highest-value test is not another Torch provider. It is either a larger-system/bigger-batch counted-vs-padded stress test, or a cell-list/fused descriptor provider that removes the remaining padded candidate scan and moves closer to the NEP/DPA-style throughput target while preserving the TECE/TACE direct-active semantics.
 
 
+# Stage 50: Triton Counted Batch-Size Stress
+
+Stage 50 stress-tested the Stage49 counted provider against Stage48 padded over increasing real-data batch sizes. The aim was to decide whether counted should replace padded as the large-batch provider front, or whether it is specifically a memory-headroom point. The OC20NEB valid extxyz contains 10000 configs, so the stress range was 1024, 2048, 4096, 8192, and the real-data upper bound 10000.
+
+Setup: radial8h24 `rtece_element_density`, direct-active initial graph, one V100, float32, update-only trajectory replay, 20 replay steps, forced invalid cache, comparing only `torch_radius_nopbc_triton_padded` and `torch_radius_nopbc_triton_counted`.
+
+| limit configs | backend | atoms | atom-step/s | seconds/pass | update enqueue s | peak alloc MB | peak reserved MB | directed edges | padded pair slots | counted/padded throughput | counted/padded alloc |
+|---:|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1024 | `triton_padded` | 59,193 | 155,998,009 | 0.007589 | 0.003706 | 255.0 | 286.0 | 825,584 | 7,750,656 | n/a | n/a |
+| 1024 | `triton_counted` | 59,193 | 146,506,776 | 0.008081 | 0.003414 | 43.7 | 74.0 | 825,584 | 7,750,656 | 0.939 | 0.171 |
+| 2048 | `triton_padded` | 119,271 | 180,892,419 | 0.013187 | 0.008160 | 510.1 | 582.0 | 1,634,364 | 15,501,312 | n/a | n/a |
+| 2048 | `triton_counted` | 119,271 | 172,418,404 | 0.013835 | 0.006429 | 86.7 | 158.0 | 1,634,364 | 15,501,312 | 0.953 | 0.170 |
+| 4096 | `triton_padded` | 250,355 | 257,656,655 | 0.019433 | 0.014725 | 1,327.7 | 1,466.0 | 3,459,786 | 40,960,000 | n/a | n/a |
+| 4096 | `triton_counted` | 250,355 | 207,028,037 | 0.024186 | 0.010465 | 181.3 | 322.0 | 3,459,786 | 40,960,000 | 0.804 | 0.137 |
+| 8192 | `triton_padded` | 525,769 | 325,610,466 | 0.032294 | 0.026098 | 2,658.2 | 2,926.0 | 7,303,632 | 81,920,000 | n/a | n/a |
+| 8192 | `triton_counted` | 525,769 | 249,657,496 | 0.042119 | 0.015261 | 382.2 | 650.0 | 7,303,632 | 81,920,000 | 0.767 | 0.144 |
+| 10000 | `triton_padded` | 646,473 | 341,899,920 | 0.037817 | 0.031106 | 3,247.3 | 3,582.0 | 9,006,668 | 100,000,000 | n/a | n/a |
+| 10000 | `triton_counted` | 646,473 | 258,546,783 | 0.050008 | 0.017702 | 471.3 | 806.0 | 9,006,668 | 100,000,000 | 0.756 | 0.145 |
+
+Stage-50 interpretation against TECE/TACE:
+
+- Counted should not replace padded as the maximum-throughput provider in the current real-data regime. Padded remains faster at every tested batch size and reaches 342M atom-step/s at 10000 configs.
+- Counted is still a clean memory-renormalized provider. It uses only 13.7-17.1% of padded peak allocated memory across the stress range, and 471 MB vs 3247 MB at the 10000-config upper bound.
+- The timing interpretation must use `seconds_per_pass`, not only `graph_update_total_s`. The latter is CPU-side enqueue timing and can make counted look faster even when end-to-end GPU elapsed time is slower. This matters for future Pareto tables.
+- The current provider Pareto front should be stated conditionally: `torch_radius_nopbc_triton_padded` is the peak-throughput point when memory permits; `torch_radius_nopbc_triton_counted` is the memory-headroom point for larger systems or constrained devices.
+- The next highest-priority architecture step is now sharper. Another counted/two-pass variant is unlikely to close the NEP/DPA-style throughput gap. The clean TECE/TACE route is a cell-list or fused descriptor provider that removes the remaining padded candidate scan and avoids the extra count pass, while preserving direct-active semantics and the scalar rTECE force path.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
