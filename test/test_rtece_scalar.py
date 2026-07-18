@@ -723,6 +723,36 @@ def test_rtece_projection_residual_metrics_detects_spanned_and_deleted_component
     assert unspanned["relative_residual"] > spanned["relative_residual"]
 
 
+def test_rtece_projection_residual_metrics_accepts_sample_weights():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import projection_residual_metrics
+
+    source = torch.ones((3, 1), dtype=torch.float64)
+    target = torch.tensor([[0.0], [10.0], [10.0]], dtype=torch.float64)
+
+    unweighted = projection_residual_metrics(source, target)
+    weighted = projection_residual_metrics(source, target, sample_weights=torch.tensor([100.0, 1.0, 1.0]))
+
+    assert weighted["weighted"] is True
+    assert weighted["weight_sum"] == pytest.approx(102.0)
+    assert weighted["relative_residual"] > unweighted["relative_residual"]
+
+
+def test_rtece_projection_loads_sample_weight_json(tmp_path):
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import _load_sample_weights_json
+
+    path = tmp_path / "sample_weights.json"
+    path.write_text(
+        json.dumps({"weight_source": "teacher_force_l2", "sample_weights": [0.5, 2.0, 3.5]}),
+        encoding="utf-8",
+    )
+
+    weights, source = _load_sample_weights_json(path)
+
+    assert source == "teacher_force_l2"
+    assert weights.dtype == torch.float64
+    assert weights.tolist() == pytest.approx([0.5, 2.0, 3.5])
+
+
 def test_rtece_projection_diagnostic_row_reports_deleted_path_residual():
     from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import make_projection_diagnostic_row
     from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
@@ -763,6 +793,43 @@ def test_rtece_projection_diagnostic_row_reports_deleted_path_residual():
     assert row["relative_residual"] >= 0.0
     assert row["candidate_manifest_hash"] == rtece_path_manifest(candidate)["manifest_hash"]
     assert row["reference_manifest_hash"] == rtece_path_manifest(reference)["manifest_hash"]
+
+
+def test_rtece_projection_diagnostic_row_accepts_sample_weights():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import make_projection_diagnostic_row
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
+
+    candidate = build_rtece_config_from_path_ids(
+        "rtece_path_keep_radial",
+        ("atomic.radial_density",),
+        num_radial=3,
+    )
+    reference = build_rtece_config_from_path_ids(
+        "rtece_path_keep_vector_and_radial",
+        ("atomic.radial_density", "edge.cavity.vector_dot"),
+        num_radial=3,
+    )
+    graph = RTECEGraph(
+        z=torch.tensor([6, 1, 8], dtype=torch.long),
+        pos=torch.tensor(
+            [[0.0, 0.0, 0.0], [0.7, 0.1, 0.0], [0.2, 0.9, 0.1]],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    row = make_projection_diagnostic_row(
+        "weighted_keep_radial",
+        candidate_config=candidate,
+        reference_config=reference,
+        graphs=[graph],
+        sample_weights=torch.tensor([3.0, 1.0, 2.0]),
+    )
+
+    assert row["weighted"] is True
+    assert row["weight_sum"] == pytest.approx(6.0)
+    assert row["num_samples"] == 3
 
 
 def test_rtece_species_basis_variant_has_route_contract():
@@ -2963,6 +3030,26 @@ def test_rtece_summary_markdown_includes_manifest_groups_section():
     assert f"| {row['tece_path_manifest_hash']} | T3_low_rank_species_density | species_smoke |" in markdown
 
 
+def test_rtece_summary_load_projection_rows_preserves_weight_metadata(tmp_path):
+    from benchmarks.oc20neb_tace_mace.summarize_tece_distill import load_projection_diagnostic_rows
+
+    path = tmp_path / "projection.json"
+    path.write_text(
+        json.dumps({
+            "weighted": True,
+            "sample_weight_source": "teacher_force_norm_per_atom_mean1",
+            "rows": [{"candidate": "radial", "relative_residual": 0.2}],
+        }),
+        encoding="utf-8",
+    )
+
+    rows = load_projection_diagnostic_rows([path])
+
+    assert rows[0]["weighted"] is True
+    assert rows[0]["sample_weight_source"] == "teacher_force_norm_per_atom_mean1"
+    assert rows[0]["projection_diagnostic"] == str(path)
+
+
 def test_rtece_summary_manifest_groups_attach_projection_residuals():
     from benchmarks.oc20neb_tace_mace.summarize_tece_distill import (
         make_student_row,
@@ -2996,6 +3083,8 @@ def test_rtece_summary_manifest_groups_attach_projection_residuals():
             "relative_residual": 0.0125,
             "deleted_scalar_path_ids": ["edge.direct.radial"],
             "num_samples": 128,
+            "weighted": True,
+            "sample_weight_source": "teacher_force_norm_per_atom_mean1",
         }
     ]
 
@@ -3004,6 +3093,8 @@ def test_rtece_summary_manifest_groups_attach_projection_residuals():
     assert groups[0]["projection_relative_residual"] == 0.0125
     assert groups[0]["projection_deleted_scalar_path_ids"] == ["edge.direct.radial"]
     assert groups[0]["projection_num_samples"] == 128
+    assert groups[0]["projection_weighted"] is True
+    assert groups[0]["projection_sample_weight_source"] == "teacher_force_norm_per_atom_mean1"
 
 
 def test_rtece_summary_manifest_groups_keep_zero_projection_residual_as_best():

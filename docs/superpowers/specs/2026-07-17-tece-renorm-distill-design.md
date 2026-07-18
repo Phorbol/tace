@@ -2208,6 +2208,50 @@ Next priority:
 3. Start a bounded physical-generalization harness after the review-critical semantic bugs remain under control: dimer scans for smooth E/F and rattle+relax RMSD stratified by element/adsorbate class, with special attention to non-metal C/N adsorbates observed by the user.
 4. Plan the graph/geometry ABI change from ASE-style graph construction toward TACE-compatible PyG/matscipy/NVIDIA-op paths only as part of the PBC edge-vector/force/virial closure, not as an isolated graph-build micro-optimization.
 
+# Stage 74: Sample-Weighted Projection Diagnostic Substrate
+
+Stage 74 implements the first weighted projection substrate requested by the Stage-73 negative check. The goal is to move from raw descriptor least-squares residual toward a physically meaningful TECE deletion metric. This stage still does not implement full teacher-force sensitivity, Hessian-vector distillation, or virial-aware Sobolev projection; it adds the required sample-weighted Gram machinery and runs a bounded force-norm weighted probe.
+
+Implementation gate:
+
+- `projection_residual_metrics(...)` now accepts optional per-sample weights and computes weighted least-squares by scaling source and target descriptors with `sqrt(weight)`. The reported residual and target norms use the same weighted metric.
+- The projection diagnostic row builder accepts `sample_weights`, and the CLI accepts `--sample-weight-json` containing either a list of weights or `{"weight_source": ..., "sample_weights": [...]}`.
+- Projection diagnostic payloads record `weighted`, `sample_weight_json`, and `sample_weight_source`. The Pareto summary loader preserves that metadata, and manifest groups expose `projection_weighted` plus `projection_sample_weight_source` in summary JSON.
+- Regression tests cover weighted residual behavior, JSON weight loading, row-level weight passthrough, and summary metadata propagation.
+
+Bounded force-norm weighted probe on the same 8-config/419-atom Stage-69 subset:
+
+| weighting | route | projection residual | interpretation |
+|---|---|---:|---|
+| raw descriptor | `radial` | 0.1273 | Stage-69 baseline. |
+| DFT force-norm mean1 | `radial` | 0.1660 | Force-magnitude weighting makes radial-only deletion look worse. |
+| teacher force-norm mean1 | `radial` | 0.1622 | Same direction as DFT force-norm weighting. |
+| raw descriptor | `radial_cavity_vec` | 0.00542 | Stage-69 baseline. |
+| DFT force-norm mean1 | `radial_cavity_vec` | 0.00582 | Slightly larger, same qualitative rank. |
+| teacher force-norm mean1 | `radial_cavity_vec` | 0.00578 | Slightly larger, same qualitative rank. |
+| teacher force-norm mean1 | `radial_cavity_vec_direct` | 2.85e-13 | Full reference route remains numerical zero. |
+
+Joined Stage-74 teacher-force-norm summary with Stage-73 GPU benchmarks:
+
+| route | weighted residual | weight source | GPU atoms/s | DFT F MAE | teacher F MAE |
+|---|---:|---|---:|---:|---:|
+| `radial` | 0.1622 | `teacher_force_norm_per_atom_mean1` | 2.96M | 29.45 | 34.25 |
+| `radial_cavity_vec` | 0.00578 | `teacher_force_norm_per_atom_mean1` | 1.08M | 35.16 | 38.53 |
+| `radial_cavity_vec_direct` | 2.85e-13 | `teacher_force_norm_per_atom_mean1` | 1.08M | 34.57 | 39.20 |
+
+Stage-74 interpretation against TECE/TACE and the review document:
+
+- The weighting substrate is necessary and now exists, but simple per-atom force magnitude is not sufficient. It preserves the descriptor residual ordering and even increases the gap between `radial` and edge-retaining routes, while the Stage-73 force MAE still favors `radial` on the small GPU slice.
+- Therefore the missing ingredient is not merely sample importance by force size. The next TECE-renormalization metric must estimate teacher/model sensitivity of deleted paths to E/F/V outputs, for example Jacobian-weighted projection, Sobolev Gram blocks, finite-difference teacher response, HVP, or cached teacher semantic path activations.
+- This result is useful negative evidence: it prevents us from declaring `edge.cavity.vector_dot` Pareto-useful solely because raw or force-magnitude-weighted descriptor residual is small. Any edge path retained for the high-throughput front must also show force-error or physical-generalization benefit under the same training and benchmark protocol.
+- The graph-build question should be handled inside the review-mandated PBC/edge-vector ABI. ASE graph construction is too slow for final high-throughput MD, but changing graph builders alone will not fix the Stage-73 algorithmic mismatch between descriptor residual and force MAE.
+
+Next priority:
+
+1. Add a real teacher-sensitivity weight generator for projection diagnostics. Minimum viable version: compute per-atom or per-descriptor sensitivity from teacher force residual/Jacobian probes on the same bounded subset, then re-run the path-id route residual table.
+2. Keep the current `radial` route as the endpoint baseline for throughput/accuracy. Treat `radial_cavity_vec` as a semantic candidate requiring proof through weighted sensitivity and physical tests, not as an automatic Pareto improvement.
+3. After the sensitivity metric is available, run dimer scan and rattle+relax tests on representative metal and non-metal adsorbates to check whether the metric predicts the C/N relaxation RMSD failure mode observed by the user.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

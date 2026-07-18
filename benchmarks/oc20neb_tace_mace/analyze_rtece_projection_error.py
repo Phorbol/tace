@@ -34,12 +34,28 @@ def _as_float64_matrix(values: torch.Tensor, name: str) -> torch.Tensor:
     return values.detach().to(dtype=torch.float64, device="cpu")
 
 
+def _as_sample_weights(sample_weights: torch.Tensor | None, num_samples: int) -> torch.Tensor | None:
+    if sample_weights is None:
+        return None
+    weights = sample_weights.detach().to(dtype=torch.float64, device="cpu").flatten()
+    if weights.numel() != num_samples:
+        raise ValueError(f"sample_weights must contain {num_samples} values, got {weights.numel()}")
+    if not bool(torch.isfinite(weights).all().item()):
+        raise ValueError("sample_weights must be finite")
+    if bool((weights < 0.0).any().item()):
+        raise ValueError("sample_weights must be non-negative")
+    if float(weights.sum().item()) <= 0.0:
+        raise ValueError("sample_weights must have positive total weight")
+    return weights
+
+
 def projection_residual_metrics(
     source: torch.Tensor,
     target: torch.Tensor,
     *,
     ridge: float = 1.0e-12,
-) -> dict[str, float | int]:
+    sample_weights: torch.Tensor | None = None,
+) -> dict[str, float | int | bool]:
     """Project target descriptors onto source descriptors and report residual size."""
     x = _as_float64_matrix(source, "source")
     y = _as_float64_matrix(target, "target")
@@ -48,17 +64,35 @@ def projection_residual_metrics(
     if x.shape[1] < 1 or y.shape[1] < 1:
         raise ValueError("source and target must both have at least one descriptor column")
 
-    lhs = x.T @ x
+    weights = _as_sample_weights(sample_weights, int(x.shape[0]))
+    if weights is None:
+        fit_x = x
+        fit_y = y
+        residual_scale = None
+        weight_sum = float(x.shape[0])
+    else:
+        residual_scale = torch.sqrt(weights).unsqueeze(-1)
+        fit_x = x * residual_scale
+        fit_y = y * residual_scale
+        weight_sum = float(weights.sum().item())
+
+    lhs = fit_x.T @ fit_x
     if ridge > 0.0:
         lhs = lhs + float(ridge) * torch.eye(lhs.shape[0], dtype=x.dtype)
-    rhs = x.T @ y
+    rhs = fit_x.T @ fit_y
     try:
         coeff = torch.linalg.solve(lhs, rhs)
     except RuntimeError:
-        coeff = torch.linalg.lstsq(x, y).solution
+        coeff = torch.linalg.lstsq(fit_x, fit_y).solution
     residual = y - x @ coeff
-    residual_norm = torch.linalg.vector_norm(residual)
-    target_norm = torch.linalg.vector_norm(y)
+    if residual_scale is None:
+        residual_for_norm = residual
+        target_for_norm = y
+    else:
+        residual_for_norm = residual * residual_scale
+        target_for_norm = y * residual_scale
+    residual_norm = torch.linalg.vector_norm(residual_for_norm)
+    target_norm = torch.linalg.vector_norm(target_for_norm)
     relative = residual_norm / target_norm.clamp_min(torch.finfo(y.dtype).tiny)
     return {
         "num_samples": int(x.shape[0]),
@@ -68,6 +102,8 @@ def projection_residual_metrics(
         "target_frobenius": float(target_norm.item()),
         "relative_residual": float(relative.item()),
         "ridge": float(ridge),
+        "weighted": weights is not None,
+        "weight_sum": weight_sum,
     }
 
 
@@ -89,10 +125,16 @@ def make_projection_diagnostic_row(
     reference_config: RTECEScalarConfig,
     graphs: list[RTECEGraph],
     ridge: float = 1.0e-12,
+    sample_weights: torch.Tensor | None = None,
 ) -> dict[str, Any]:
     candidate_descriptors = _descriptor_matrix(graphs, candidate_config)
     reference_descriptors = _descriptor_matrix(graphs, reference_config)
-    metrics = projection_residual_metrics(candidate_descriptors, reference_descriptors, ridge=ridge)
+    metrics = projection_residual_metrics(
+        candidate_descriptors,
+        reference_descriptors,
+        ridge=ridge,
+        sample_weights=sample_weights,
+    )
     candidate_manifest = rtece_path_manifest(candidate_config)
     reference_manifest = rtece_path_manifest(reference_config)
     row: dict[str, Any] = {
@@ -124,6 +166,21 @@ def _parse_candidate(value: str) -> tuple[str, tuple[str, ...]]:
     if len(parts) != 2:
         raise argparse.ArgumentTypeError("candidate must be name:path_id,path_id")
     return parts[0], _parse_path_ids(parts[1])
+
+
+def _load_sample_weights_json(path: Path) -> tuple[torch.Tensor, str]:
+    payload = json.loads(Path(path).read_text(encoding="utf-8"))
+    if isinstance(payload, dict):
+        if "sample_weights" not in payload:
+            raise ValueError("sample weight JSON object must contain sample_weights")
+        values = payload["sample_weights"]
+        source = str(payload.get("weight_source") or path)
+    else:
+        values = payload
+        source = str(path)
+    weights = torch.as_tensor(values, dtype=torch.float64).flatten()
+    _as_sample_weights(weights, int(weights.numel()))
+    return weights, source
 
 
 def _load_graphs(
@@ -164,6 +221,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--default-dtype", choices=("float32", "float64"), default="float64")
     parser.add_argument("--neighborlist-backend", choices=("ase", "vesin", "matscipy"), default="matscipy")
     parser.add_argument("--ridge", type=float, default=1.0e-12)
+    parser.add_argument("--sample-weight-json", type=Path, default=None)
     return parser.parse_args()
 
 
@@ -185,6 +243,11 @@ def main() -> None:
         limit_configs=int(args.limit_configs),
         neighborlist_backend=args.neighborlist_backend,
     )
+    if args.sample_weight_json is None:
+        sample_weights = None
+        weight_source = None
+    else:
+        sample_weights, weight_source = _load_sample_weights_json(args.sample_weight_json)
     rows = []
     for candidate_name, candidate_path_ids in args.candidate:
         candidate_config = build_rtece_config_from_path_ids(
@@ -200,6 +263,7 @@ def main() -> None:
                 reference_config=reference_config,
                 graphs=graphs,
                 ridge=float(args.ridge),
+                sample_weights=sample_weights,
             )
         )
     payload = {
@@ -209,6 +273,9 @@ def main() -> None:
         "num_radial": int(args.num_radial),
         "cutoff": float(args.cutoff),
         "reference_path_ids": list(args.reference_path_ids),
+        "sample_weight_json": str(args.sample_weight_json) if args.sample_weight_json else None,
+        "sample_weight_source": weight_source,
+        "weighted": sample_weights is not None,
         "rows": rows,
     }
     args.output_json.parent.mkdir(parents=True, exist_ok=True)

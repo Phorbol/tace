@@ -201,6 +201,10 @@ def load_projection_diagnostic_rows(paths: list[Path]) -> list[dict[str, Any]]:
         payload = load_json(path)
         for row in payload.get("rows", []):
             item = dict(row)
+            if "weighted" not in item and "weighted" in payload:
+                item["weighted"] = payload["weighted"]
+            if "sample_weight_source" not in item and payload.get("sample_weight_source") is not None:
+                item["sample_weight_source"] = payload["sample_weight_source"]
             item["projection_diagnostic"] = str(path)
             rows.append(item)
     return rows
@@ -289,6 +293,8 @@ def manifest_group_rows(
             "projection_deleted_scalar_path_ids": list(projection.get("deleted_scalar_path_ids") or []) if projection else [],
             "projection_num_samples": projection.get("num_samples") if projection else None,
             "projection_candidate": projection.get("candidate") if projection else None,
+            "projection_weighted": bool(projection.get("weighted")) if projection else False,
+            "projection_sample_weight_source": projection.get("sample_weight_source") if projection else None,
         })
     return sorted(
         groups,
