@@ -2378,6 +2378,47 @@ Next priority:
 2. Use those summaries to decide whether a stratified validation/checkpoint run is justified for `radial_cavity_vec`.
 3. If C/N remains bad under both routes, move to physical dimer/rattle+relax tests before changing graph backends or adding more edge paths.
 
+# Stage 78: Element-Stratified Force Error Benchmark
+
+Stage 78 closes the Stage-77 diagnostic loop by moving from residual-weight concentration to actual force-error concentration. This directly follows the Stage-77 next priority: summarize existing Stage-73 checkpoints by `C_or_N`, `CHNO`, and element under the same MAE/RMSE convention used by `benchmark_rtece_scalar.py`.
+
+Implementation gate:
+
+- Added `stratify_rtece_force_errors.py`.
+- The script loads an rTECE checkpoint and extxyz configs, rebuilds the same rTECE graphs, predicts forces, loads a chosen reference force array, and emits JSON plus Markdown grouped by element and focus group.
+- The reported force MAE/RMSE is component-wise in meV/A, matching the existing benchmark definition.
+- Focus groups are kept identical to Stage 77: `C_or_N`, `CHNO`, and `not_CHNO`.
+- Regression coverage checks the pure force-error stratification contract for element rows, focus rows, component counts, and MAE/RMSE units.
+
+Bounded Stage-78 run on the same 8-config/419-atom subset used in Stages 76-77:
+
+| route | target | all-atom F MAE | all-atom F RMSE | `C_or_N` F MAE | `CHNO` F MAE | `not_CHNO` F MAE |
+|---|---|---:|---:|---:|---:|---:|
+| `radial` | `teacher_forces` | 79.79 | 369.90 | 899.37 | 350.42 | 29.18 |
+| `radial_cavity_vec` | `teacher_forces` | 86.32 | 373.03 | 904.60 | 358.12 | 35.51 |
+| `radial` | `dft_forces` | 77.95 | 370.61 | 892.03 | 344.77 | 28.06 |
+| `radial_cavity_vec` | `dft_forces` | 86.29 | 373.84 | 903.79 | 356.68 | 35.73 |
+
+Leading teacher-force element errors:
+
+| route | C F MAE | N F MAE | O F MAE | H F MAE | best non-CHNO reference |
+|---|---:|---:|---:|---:|---:|
+| `radial` | 764.74 | 1393.01 | 1244.17 | 138.86 | Ga 43.11 / Cd 62.75 |
+| `radial_cavity_vec` | 772.48 | 1389.01 | 1264.47 | 146.49 | Ga 47.95 / Cd 63.60 |
+
+Stage-78 interpretation against TECE/TACE and the review document:
+
+- The C/N failure mode is now supported by actual force errors, not only by projection weights. On this bounded slice, `C_or_N` component MAE is about 899 meV/A for `radial` versus about 29 meV/A for `not_CHNO`; this is roughly a 31x separation.
+- The `edge.cavity.vector_dot` path does not repair the failure. It slightly lowers the relative C/N concentration in Stage 77 only because its non-CHNO error also rises; in absolute component MAE it is worse or essentially tied for C/N and worse overall.
+- Therefore the next clean TECE step is not adding more cavity-vector capacity or changing low-level graph backends. The deleted-path metric has found a chemically concentrated failure mode, but the current candidate path does not convert that information into force accuracy.
+- This agrees with the review document: before kernel acceleration or wider route sweeps, the branch needs physical and semantic closure tests. The immediate target should be dimer scans and rattle+relax RMSD stratified around C/N/CHNO adsorbates, plus checking whether the error comes from dataset scarcity, missing angular chemistry, or force/energy normalization.
+
+Next priority:
+
+1. Build the bounded physical-generalization harness promised in the review path: C/N/O/H dimer scans over 0.5-5 covalent-radius scale, reporting E/F smoothness and force spikes.
+2. Add rattle+relax comparison grouped by `C_or_N`/`CHNO` versus metal-only or `not_CHNO` structures, using final RMSD and convergence failures, not only single-step force MAE.
+3. Only after the physical tests identify the missing semantic block should we consider a new TECE path beyond radial or `edge.cavity.vector_dot`.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

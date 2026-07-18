@@ -842,6 +842,42 @@ def test_rtece_projection_weight_stratification_rejects_misaligned_weights():
         stratify_symbol_weights(symbols=["C", "N"], weights=[1.0])
 
 
+def test_rtece_force_error_stratification_reports_element_and_focus_groups():
+    from benchmarks.oc20neb_tace_mace.stratify_rtece_force_errors import stratify_symbol_force_errors
+
+    predicted = torch.tensor(
+        [
+            [0.001, -0.001, 0.0],
+            [0.0, 0.002, 0.0],
+            [0.0, 0.0, 0.003],
+            [0.004, 0.0, 0.0],
+        ],
+        dtype=torch.float64,
+    )
+    reference = torch.zeros((4, 3), dtype=torch.float64)
+
+    summary = stratify_symbol_force_errors(
+        symbols=["C", "N", "H", "Cu"],
+        predicted_forces=predicted,
+        reference_forces=reference,
+        target_force_source="teacher_forces",
+    )
+    elements = {row["label"]: row for row in summary["elements"]}
+    groups = {row["label"]: row for row in summary["focus_groups"]}
+
+    assert summary["num_atoms"] == 4
+    assert summary["num_force_components"] == 12
+    assert summary["target_force_source"] == "teacher_forces"
+    assert elements["C"]["count"] == 1
+    assert elements["C"]["component_count"] == 3
+    assert elements["C"]["mae_f_mev_a"] == pytest.approx(2.0 / 3.0)
+    assert elements["C"]["rmse_f_mev_a"] == pytest.approx((2.0 / 3.0) ** 0.5)
+    assert groups["C_or_N"]["count"] == 2
+    assert groups["C_or_N"]["mae_f_mev_a"] == pytest.approx(4.0 / 6.0)
+    assert groups["C_or_N"]["rmse_f_mev_a"] == pytest.approx(1.0)
+    assert groups["not_CHNO"]["mae_f_mev_a"] == pytest.approx(4.0 / 3.0)
+
+
 def test_rtece_projection_loads_sample_weight_json(tmp_path):
     from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import _load_sample_weights_json
 
