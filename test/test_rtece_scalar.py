@@ -1215,6 +1215,40 @@ def test_rtece_benchmark_row_preserves_force_mode():
     assert row["num_radial"] == 4
 
 
+def test_rtece_summary_preserves_graph_construction_backend():
+    from benchmarks.oc20neb_tace_mace.summarize_tece_distill import (
+        format_markdown,
+        make_student_row,
+    )
+
+    dft = {
+        "model": "rtece_scalar.pt",
+        "force_mode": "analytic_element_triton_descriptor_force",
+        "graph_construction_backend": "torch_radius_nopbc",
+        "hidden_channels": [16, 16],
+        "num_radial": 4,
+        "atoms_per_second": 87762046.0,
+        "configs_per_second": 350.0,
+        "seconds_per_pass": 0.1,
+        "peak_allocated_mb": 150.8,
+        "peak_reserved_mb": 180.0,
+        "num_parameters": 449,
+        "mae_e_mev_atom": 1400.0,
+        "rmse_e_mev_atom": 2000.0,
+        "mae_f_mev_a": 43.85,
+        "rmse_f_mev_a": 114.9,
+    }
+    teacher = dict(dft)
+    teacher["mae_f_mev_a"] = 47.71
+
+    row = make_student_row("radial4h16", dft_benchmark=dft, teacher_benchmark=teacher)
+    markdown = format_markdown([row], baselines=[])
+
+    assert row["graph_construction_backend"] == "torch_radius_nopbc"
+    assert "| variant | graph backend | force mode |" in markdown
+    assert "| radial4h16 | torch_radius_nopbc | analytic_element_triton_descriptor_force |" in markdown
+
+
 def test_rtece_matrix_sbatch_separates_training_and_benchmark_validation_files():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()

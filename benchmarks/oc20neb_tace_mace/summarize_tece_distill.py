@@ -24,6 +24,8 @@ def make_student_row(
         "atoms_per_second": dft_benchmark.get("atoms_per_second"),
         "configs_per_second": dft_benchmark.get("configs_per_second"),
         "force_mode": dft_benchmark.get("force_mode", "autograd"),
+        "graph_construction_backend": dft_benchmark.get("graph_construction_backend"),
+        "graph_update_backend": dft_benchmark.get("graph_update_backend"),
         "hidden_channels": dft_benchmark.get("hidden_channels"),
         "num_radial": dft_benchmark.get("num_radial"),
         "seconds_per_pass": dft_benchmark.get("seconds_per_pass"),
@@ -105,13 +107,14 @@ def append_front_section(lines: list[str], title: str, rows: list[dict[str, Any]
         "",
         title,
         "",
-        "| variant | force mode | atoms/s | DFT F MAE | teacher F MAE | params |",
-        "|---|---|---:|---:|---:|---:|",
+        "| variant | graph backend | force mode | atoms/s | DFT F MAE | teacher F MAE | params |",
+        "|---|---|---|---:|---:|---:|---:|",
     ])
     for row in front:
         lines.append(
-            "| {variant} | {force_mode} | {atoms} | {df} | {tf} | {params} |".format(
+            "| {variant} | {graph_backend} | {force_mode} | {atoms} | {df} | {tf} | {params} |".format(
                 variant=row["variant"],
+                graph_backend=fmt(row.get("graph_construction_backend")),
                 force_mode=fmt(row.get("force_mode")),
                 atoms=fmt(row.get("atoms_per_second")),
                 df=fmt(row.get("dft_f_mae_mev_a")),
@@ -127,13 +130,14 @@ def format_markdown(rows: list[dict[str, Any]], *, baselines: list[dict[str, Any
         "",
         "## Students",
         "",
-        "| variant | force mode | atoms/s | configs/s | peak alloc MB | params | teacher E MAE | teacher F MAE | DFT E MAE | DFT F MAE |",
-        "|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| variant | graph backend | force mode | atoms/s | configs/s | peak alloc MB | params | teacher E MAE | teacher F MAE | DFT E MAE | DFT F MAE |",
+        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         lines.append(
-            "| {variant} | {force_mode} | {atoms} | {configs} | {mem} | {params} | {te} | {tf} | {de} | {df} |".format(
+            "| {variant} | {graph_backend} | {force_mode} | {atoms} | {configs} | {mem} | {params} | {te} | {tf} | {de} | {df} |".format(
                 variant=row["variant"],
+                graph_backend=fmt(row.get("graph_construction_backend")),
                 force_mode=fmt(row.get("force_mode")),
                 atoms=fmt(row.get("atoms_per_second")),
                 configs=fmt(row.get("configs_per_second")),
