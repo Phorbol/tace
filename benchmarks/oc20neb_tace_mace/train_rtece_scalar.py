@@ -57,6 +57,12 @@ def parse_scalar_path_ids(value: str | None) -> tuple[str, ...] | None:
 
 def build_training_config(args: argparse.Namespace) -> RTECEScalarConfig:
     hidden_channels = parse_hidden_channels(args.hidden_channels)
+    short_range_kwargs = {
+        "use_short_range_repulsion": bool(getattr(args, "use_short_range_repulsion", False)),
+        "short_range_repulsion_strength": float(getattr(args, "short_range_repulsion_strength", 0.0)),
+        "short_range_repulsion_beta": float(getattr(args, "short_range_repulsion_beta", 10.0)),
+        "short_range_repulsion_radius_scale": float(getattr(args, "short_range_repulsion_radius_scale", 0.75)),
+    }
     scalar_path_ids = parse_scalar_path_ids(getattr(args, "scalar_path_ids", None))
     if scalar_path_ids is not None:
         return build_rtece_config_from_path_ids(
@@ -64,11 +70,13 @@ def build_training_config(args: argparse.Namespace) -> RTECEScalarConfig:
             scalar_path_ids,
             hidden_channels=hidden_channels,
             num_radial=int(args.num_radial),
+            **short_range_kwargs,
         )
     return replace(
         build_rtece_config(args.variant),
         hidden_channels=hidden_channels,
         num_radial=int(args.num_radial),
+        **short_range_kwargs,
     )
 
 
@@ -255,6 +263,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--hidden-channels", default="64,64")
     parser.add_argument("--num-radial", type=int, default=8)
+    parser.add_argument("--use-short-range-repulsion", action="store_true")
+    parser.add_argument("--short-range-repulsion-strength", type=float, default=0.0)
+    parser.add_argument("--short-range-repulsion-beta", type=float, default=10.0)
+    parser.add_argument("--short-range-repulsion-radius-scale", type=float, default=0.75)
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--energy-weight", type=float, default=1.0)
     parser.add_argument("--force-weight", type=float, default=10.0)
@@ -321,6 +333,10 @@ def main() -> None:
             "hidden_channels": list(config.hidden_channels),
             "num_radial": config.num_radial,
             "scalar_path_ids": list(config.scalar_path_ids or []),
+            "use_short_range_repulsion": bool(config.use_short_range_repulsion),
+            "short_range_repulsion_strength": float(config.short_range_repulsion_strength),
+            "short_range_repulsion_beta": float(config.short_range_repulsion_beta),
+            "short_range_repulsion_radius_scale": float(config.short_range_repulsion_radius_scale),
             "seed": int(args.seed),
             "energy_weight": args.energy_weight,
             "force_weight": args.force_weight,

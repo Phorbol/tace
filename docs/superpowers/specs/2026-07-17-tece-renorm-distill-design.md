@@ -2517,6 +2517,49 @@ Next priority:
 3. Build or locate a small metal-only/not-CHNO control set for rattle+relax; the current mixed training prefix cannot answer that comparison.
 4. Keep nvalchemi/matscipy graph-builder acceleration behind the physical-closure gates. ASE graph construction is too slow for final deployment, but it is not the current blocker for proving the TECE degradation route works.
 
+# Stage 81: T4 Short-Range Radial-Core Candidate
+
+Stage 81 implements the first controlled T4 operator suggested by Stage 79/80: a conservative short-range two-body radial core. The purpose is not to recover full TACE accuracy. It tests whether a scalar streaming endpoint can regain the missing high-curvature local response that was deleted when persistent equivariant state and multi-layer message passing were renormalized away.
+
+Architecture implementation:
+
+- Added optional `RTECEScalarConfig` fields: `use_short_range_repulsion`, `short_range_repulsion_strength`, `short_range_repulsion_beta`, and `short_range_repulsion_radius_scale`.
+- The core energy is added after the learned scalar head and atomic reference energy in `RTECEScalarModel.forward`, so autograd forces remain conservative: `F=-dE/dR`.
+- The radial core uses directed graph edges with half weighting to avoid double counting symmetric edge lists. Its threshold is `radius_scale*(r_cov_i+r_cov_j)` from covalent radii, and its smooth overlap is `softplus(beta*(r0-r))/beta`.
+- The route manifest records `short_range_repulsion` and adds `short_range_radial_core` to retained TECE groups plus `short_range_physical_prior` to Pareto axes. This makes the change visible to the TECE compiler/reporting layer rather than hiding it as an external post-processing trick.
+- Analytic/fused force backends reject configs with `use_short_range_repulsion=True` for now, because those paths do not yet include the radial-core force term. Current Stage-81 evaluation must use `force_mode=autograd`.
+- `train_rtece_scalar.py` now exposes CLI arguments for the core, and `rtece_scalar_matrix.sbatch` forwards them through script-local environment variables without using forbidden `sbatch --export`.
+
+Regression coverage:
+
+- Short-distance H-H with zero learned head has higher energy than a long-distance pair, gives repulsive atom-0 force, and conserves net force.
+- Checkpoint save/load and route manifest preserve the short-range core parameters.
+- Analytic pair force backend rejects radial-core configs until a correct analytic force path is implemented.
+- The training config builder and rTECE matrix sbatch forward the new architecture options without `--export`.
+
+Bounded Stage-81 overlay smoke on the Stage-73 `radial` checkpoint, CPU autograd, four Stage-79 CHNO dimers, and the Stage-80 strict rattle window (`start=58`, `limit=4`, `rattle_std=0.03 A`, `fmax=0.01`, `max_steps=10`):
+
+| core strength | dimer short repulsive | C-N short force eV/A | N-H short dE eV | relax converged frac | all mean final RMSD A | C/N mean final RMSD A | max fmax eV/A |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| baseline radial | 0/4 | +0.0204 | -0.0253 | 0.25 | 0.2331 | 0.2578 | 0.0473 |
+| 0.1 | 4/4 | -0.0531 | -0.0123 | 0.00 | 0.2766 | 0.2357 | 0.0879 |
+| 1.0 | 4/4 | -0.7146 | +0.1047 | 0.00 | 0.2346 | 0.1844 | 0.9512 |
+| 10.0 | 4/4 | -7.3296 | +1.2752 | 0.00 | 0.3753 | 0.3172 | 9.5842 |
+
+Stage-81 interpretation against TECE/TACE and the review document:
+
+- The short-range radial core is a valid TECE degradation axis: it restores a deleted local high-curvature response with scalar two-body cost and conservative forces, without adding persistent equivariant state.
+- The dimer failure from Stage 79 is directly addressed. All tested amplitudes flip the short-distance force sign to repulsive for C-N, C-O, N-H, and O-H. This means the missing operator is at least partly short-range radial physics, not only angular/cavity information.
+- The rattle+relax result is mixed. `strength=1.0` improves the C/N mean final RMSD from 0.2578 A to 0.1844 A on the bounded window, but it does not converge within 10 LBFGS steps and raises max force to about 0.95 eV/A. `strength=10.0` is clearly too stiff; `strength=0.1` is too weak to fix N-H/O-H short-distance energy shape and does not improve all-structure RMSD.
+- Therefore this stage is an architecture-enabling result, not a Pareto-front success. The clean conclusion is that T4 needs a calibrated radial-core prior and likely training-time exposure, not a blind fixed overlay on an already trained radial checkpoint.
+
+Next priority:
+
+1. Run a small trained matrix for `radial_core` with `strength` around 0.3-1.0 and possibly `radius_scale` below 1.0, using the same mixed-label training protocol plus Stage-79/80 physical probes.
+2. Add dimer/rattle augmentation or stratified C/N validation so checkpoint selection sees the physical failure mode instead of optimizing only aggregate mixed-label force loss.
+3. If a calibrated core improves dimer and rattle without destroying force MAE, implement the analytic radial-core force contribution and then re-enter throughput/Pareto benchmarking.
+4. Do not spend the next stage on nvalchemi or graph-builder acceleration; Stage 81 again shows the main blocker is physical closure of the scalarized operator, not kernel throughput.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

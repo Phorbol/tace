@@ -27,6 +27,10 @@ class RTECEScalarConfig:
     scalar_path_ids: tuple[str, ...] | None = None
     energy_per_atom_shift: float = 0.0
     atomic_energies: Mapping[int, float] | None = None
+    use_short_range_repulsion: bool = False
+    short_range_repulsion_strength: float = 0.0
+    short_range_repulsion_beta: float = 10.0
+    short_range_repulsion_radius_scale: float = 0.75
 
 
 _ATOMIC_SCALAR_PATH_IDS = {
@@ -100,6 +104,10 @@ def build_rtece_config_from_path_ids(
     species_basis_channels: int = 0,
     energy_per_atom_shift: float = 0.0,
     atomic_energies: Mapping[int, float] | None = None,
+    use_short_range_repulsion: bool = False,
+    short_range_repulsion_strength: float = 0.0,
+    short_range_repulsion_beta: float = 10.0,
+    short_range_repulsion_radius_scale: float = 0.75,
 ) -> RTECEScalarConfig:
     paths = tuple(str(path_id) for path_id in scalar_path_ids)
     if not paths:
@@ -138,6 +146,10 @@ def build_rtece_config_from_path_ids(
         scalar_path_ids=paths,
         energy_per_atom_shift=float(energy_per_atom_shift),
         atomic_energies=atomic_energies,
+        use_short_range_repulsion=bool(use_short_range_repulsion),
+        short_range_repulsion_strength=float(short_range_repulsion_strength),
+        short_range_repulsion_beta=float(short_range_repulsion_beta),
+        short_range_repulsion_radius_scale=float(short_range_repulsion_radius_scale),
     )
 
 
@@ -169,6 +181,10 @@ def build_rtece_config_from_manifest(manifest: Mapping[str, Any]) -> RTECEScalar
         scalar_path_ids=tuple(str(path_id) for path_id in payload["scalar_path_ids"])
         if "scalar_path_ids" in payload
         else None,
+        use_short_range_repulsion=bool((payload.get("short_range_repulsion") or {}).get("enabled", payload.get("use_short_range_repulsion", False))),
+        short_range_repulsion_strength=float((payload.get("short_range_repulsion") or {}).get("strength", payload.get("short_range_repulsion_strength", 0.0))),
+        short_range_repulsion_beta=float((payload.get("short_range_repulsion") or {}).get("beta", payload.get("short_range_repulsion_beta", 10.0))),
+        short_range_repulsion_radius_scale=float((payload.get("short_range_repulsion") or {}).get("radius_scale", payload.get("short_range_repulsion_radius_scale", 0.75))),
     )
 
 
@@ -269,6 +285,10 @@ def rtece_route_contract(
     else:
         semantic_tier = "T4_scalar_pair_density"
         descriptor_family = "pair_density"
+    if config.use_short_range_repulsion:
+        retained.append("short_range_radial_core")
+        semantic_tier = f"{semantic_tier}_with_radial_core"
+        descriptor_family = f"{descriptor_family}_plus_radial_core"
 
     descriptor_realization = "pytorch_edge_scatter"
     force_realization = "autograd_conservative"
@@ -329,6 +349,8 @@ def rtece_route_contract(
         edge_state_lifetime = "caller_supplied_edge_index"
 
     pareto_axes = ["semantic_projection", "scalar_head_capacity", "force_realization"]
+    if config.use_short_range_repulsion:
+        pareto_axes.append("short_range_physical_prior")
     if graph_construction_backend or graph_update_backend:
         pareto_axes.append("topology_provider")
     if fused_descriptor or fused_force:
@@ -402,6 +424,12 @@ def _config_manifest_payload(config: RTECEScalarConfig) -> dict[str, object]:
         "use_cavity_edge_sketches": bool(config.use_cavity_edge_sketches),
         "radial_edge_sketch_channels": int(config.radial_edge_sketch_channels),
         "energy_reference": "per_element_atomic_energies" if config.atomic_energies else ("global_per_atom_shift" if config.energy_per_atom_shift else "none"),
+        "short_range_repulsion": {
+            "enabled": bool(config.use_short_range_repulsion),
+            "strength": float(config.short_range_repulsion_strength),
+            "beta": float(config.short_range_repulsion_beta),
+            "radius_scale": float(config.short_range_repulsion_radius_scale),
+        },
     }
     if config.scalar_path_ids is not None:
         payload["scalar_path_ids"] = list(config.scalar_path_ids)
@@ -716,6 +744,48 @@ def add_atomic_reference_energy(
     config: RTECEScalarConfig,
 ) -> torch.Tensor:
     return energy + atomic_reference_energy(graph, config)
+
+
+def _covalent_radii_for_z(z: torch.Tensor, *, dtype: torch.dtype, device: torch.device) -> torch.Tensor:
+    from ase.data import covalent_radii
+
+    table = torch.as_tensor(covalent_radii, dtype=dtype, device=device)
+    z_index = z.to(device=device, dtype=torch.long).clamp(min=0, max=table.numel() - 1)
+    radii = table[z_index]
+    return torch.where(radii > 0.0, radii, radii.new_full(radii.shape, 0.5))
+
+
+def short_range_repulsive_energy(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
+    num_graphs = int(graph.batch.max().item()) + 1 if graph.batch.numel() else 1
+    if (
+        not config.use_short_range_repulsion
+        or float(config.short_range_repulsion_strength) == 0.0
+        or graph.edge_index.numel() == 0
+    ):
+        return graph.pos.new_zeros(num_graphs)
+    if float(config.short_range_repulsion_beta) <= 0.0:
+        raise ValueError("short_range_repulsion_beta must be positive")
+    if float(config.short_range_repulsion_radius_scale) <= 0.0:
+        raise ValueError("short_range_repulsion_radius_scale must be positive")
+
+    src, dst = graph.edge_index
+    _, distances, _unit = compute_pair_geometry(graph)
+    radii = _covalent_radii_for_z(graph.z, dtype=graph.pos.dtype, device=graph.pos.device)
+    radius_threshold = float(config.short_range_repulsion_radius_scale) * (radii[src] + radii[dst])
+    beta = graph.pos.new_tensor(float(config.short_range_repulsion_beta))
+    overlap = torch.nn.functional.softplus(beta * (radius_threshold - distances)) / beta
+    edge_energy = 0.5 * graph.pos.new_tensor(float(config.short_range_repulsion_strength)) * overlap.square()
+    edge_batch = graph.edge_batch if graph.edge_batch is not None else graph.batch[dst]
+    return 0.5 * scatter_sum(edge_energy[:, None], edge_batch, num_graphs).squeeze(-1)
+
+
+def add_short_range_repulsive_energy(
+    energy: torch.Tensor,
+    graph: RTECEGraph,
+    config: RTECEScalarConfig,
+) -> torch.Tensor:
+    return energy + short_range_repulsive_energy(graph, config)
+
 
 def compute_pair_geometry(graph: RTECEGraph) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     src, dst = graph.edge_index
@@ -1155,6 +1225,11 @@ class RTECEScalarModel(torch.nn.Module):
                 f"{backend_name} is an inference-only rTECE force backend; "
                 "use model.eval() for benchmark/inference or model(graph) for force training."
             )
+        if self.config.use_short_range_repulsion:
+            raise ValueError(
+                f"{backend_name} does not include short-range radial-core forces yet; "
+                "use force_mode='autograd' for this T4 candidate."
+            )
 
     def forward_density_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
         self._require_inference_mode("forward_density_analytic_forces")
@@ -1550,6 +1625,7 @@ class RTECEScalarModel(torch.nn.Module):
         num_graphs = int(graph.batch.max().item()) + 1 if graph.batch.numel() else 1
         energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
         energy = add_atomic_reference_energy(energy, graph, self.config)
+        energy = add_short_range_repulsive_energy(energy, graph, self.config)
         forces = -torch.autograd.grad(
             energy.sum(),
             pos,
@@ -1572,6 +1648,8 @@ __all__ = [
     "compute_pair_geometry",
     "atomic_reference_energy",
     "add_atomic_reference_energy",
+    "short_range_repulsive_energy",
+    "add_short_range_repulsive_energy",
     "cutoff_envelope",
     "radial_features_and_derivatives",
     "compute_radial_features_only",

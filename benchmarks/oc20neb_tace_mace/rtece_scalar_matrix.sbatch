@@ -33,6 +33,10 @@ NUM_RADIAL=${NUM_RADIAL:-8}
 SEED=${SEED:-0}
 ENERGY_WEIGHT=${ENERGY_WEIGHT:-1.0}
 FORCE_WEIGHT=${FORCE_WEIGHT:-10.0}
+USE_SHORT_RANGE_REPULSION=${USE_SHORT_RANGE_REPULSION:-0}
+SHORT_RANGE_REPULSION_STRENGTH=${SHORT_RANGE_REPULSION_STRENGTH:-0.0}
+SHORT_RANGE_REPULSION_BETA=${SHORT_RANGE_REPULSION_BETA:-10.0}
+SHORT_RANGE_REPULSION_RADIUS_SCALE=${SHORT_RANGE_REPULSION_RADIUS_SCALE:-0.75}
 MEASURE_PASSES=${MEASURE_PASSES:-5}
 DEFAULT_DTYPE=${DEFAULT_DTYPE:-float32}
 FORCE_MODE=${FORCE_MODE:-autograd}
@@ -58,6 +62,10 @@ echo "scalar_path_ids=${SCALAR_PATH_IDS}"
 echo "seed=${SEED}"
 echo "energy_weight=${ENERGY_WEIGHT}"
 echo "force_weight=${FORCE_WEIGHT}"
+echo "use_short_range_repulsion=${USE_SHORT_RANGE_REPULSION}"
+echo "short_range_repulsion_strength=${SHORT_RANGE_REPULSION_STRENGTH}"
+echo "short_range_repulsion_beta=${SHORT_RANGE_REPULSION_BETA}"
+echo "short_range_repulsion_radius_scale=${SHORT_RANGE_REPULSION_RADIUS_SCALE}"
 echo "force_mode=${FORCE_MODE}"
 "${TACE_PYTHON}" -V
 nvidia-smi -L
@@ -72,12 +80,22 @@ scalar_path_args=()
 if [[ -n "${SCALAR_PATH_IDS}" ]]; then
   scalar_path_args=(--scalar-path-ids "${SCALAR_PATH_IDS}")
 fi
+short_range_args=()
+if [[ "${USE_SHORT_RANGE_REPULSION}" == "1" ]]; then
+  short_range_args=(
+    --use-short-range-repulsion
+    --short-range-repulsion-strength "${SHORT_RANGE_REPULSION_STRENGTH}"
+    --short-range-repulsion-beta "${SHORT_RANGE_REPULSION_BETA}"
+    --short-range-repulsion-radius-scale "${SHORT_RANGE_REPULSION_RADIUS_SCALE}"
+  )
+fi
 for variant in "${variant_args[@]}"; do
   out_dir="${RUN_ROOT}/${variant}"
   mkdir -p "${out_dir}"
   "${TACE_PYTHON}" "${TACE_ROOT}/benchmarks/oc20neb_tace_mace/train_rtece_scalar.py" \
     --variant "${variant}" \
     "${scalar_path_args[@]}" \
+    "${short_range_args[@]}" \
     --train-file "${TRAIN_FILE}" \
     --valid-file "${TRAIN_VALID_FILE}" \
     --output-dir "${out_dir}" \

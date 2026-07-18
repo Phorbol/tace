@@ -465,6 +465,85 @@ def test_rtece_path_manifest_has_stable_path_ids_and_hash():
     assert "persistent_equivariant_edge_state" in manifest["deleted_tece_groups"]
 
 
+def test_rtece_short_range_repulsive_core_adds_conservative_repulsion():
+    config = RTECEScalarConfig(
+        variant="rtece_pair",
+        hidden_channels=(),
+        num_radial=4,
+        use_short_range_repulsion=True,
+        short_range_repulsion_strength=10.0,
+        short_range_repulsion_beta=20.0,
+        short_range_repulsion_radius_scale=1.0,
+    )
+    model = RTECEScalarModel(config).double()
+    for parameter in model.energy_head.parameters():
+        torch.nn.init.zeros_(parameter)
+
+    short = RTECEGraph(
+        z=torch.tensor([1, 1], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.2, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(2),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+    long = RTECEGraph(
+        z=short.z,
+        pos=torch.tensor([[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=short.edge_index,
+        batch=short.batch,
+    )
+
+    short_out = model(short)
+    long_out = model(long)
+
+    assert short_out["energy"].item() > long_out["energy"].item() + 0.5
+    assert short_out["forces"][0, 0].item() < 0.0
+    assert torch.allclose(short_out["forces"].sum(dim=0), torch.zeros(3, dtype=torch.float64), atol=1e-10)
+
+
+def test_rtece_short_range_repulsive_core_rejects_analytic_force_backend():
+    config = RTECEScalarConfig(
+        variant="rtece_pair",
+        use_short_range_repulsion=True,
+        short_range_repulsion_strength=1.0,
+    )
+    model = RTECEScalarModel(config).double().eval()
+    graph = RTECEGraph(
+        z=torch.tensor([1, 1], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.2, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(2),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+
+    with pytest.raises(ValueError, match="short-range radial-core forces"):
+        model.forward_pair_analytic_forces(graph)
+
+
+def test_rtece_short_range_repulsive_core_is_manifested_and_checkpointed(tmp_path):
+    from tace.models.rtece_workflow import load_checkpoint, save_checkpoint
+
+    config = RTECEScalarConfig(
+        variant="rtece_pair",
+        hidden_channels=(4,),
+        use_short_range_repulsion=True,
+        short_range_repulsion_strength=3.0,
+        short_range_repulsion_beta=8.0,
+        short_range_repulsion_radius_scale=0.75,
+    )
+    model = RTECEScalarModel(config).double()
+    path = tmp_path / "rtece_core.pt"
+
+    manifest = rtece_path_manifest(config)
+    save_checkpoint(path, model, config)
+    _loaded_model, loaded_config, metadata = load_checkpoint(path, dtype=torch.float64)
+
+    assert loaded_config == config
+    assert manifest["config"]["short_range_repulsion"]["enabled"] is True
+    assert manifest["config"]["short_range_repulsion"]["strength"] == pytest.approx(3.0)
+    assert "short_range_radial_core" in manifest["retained_tece_groups"]
+    assert "short_range_physical_prior" in manifest["route"]["pareto_axes"]
+    assert metadata["tece_path_manifest"]["config"]["short_range_repulsion"]["radius_scale"] == pytest.approx(0.75)
+
+
 def test_rtece_variant_registry_exposes_path_spec_architectures():
     from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
         available_rtece_variants,
@@ -1509,6 +1588,31 @@ def test_train_rtece_scalar_builds_config_from_scalar_path_ids():
     assert config.hidden_channels == (8,)
     assert config.num_radial == 3
     assert config.num_edge_sketches == 1
+
+
+def test_train_rtece_scalar_builds_config_with_short_range_repulsive_core():
+    from types import SimpleNamespace
+
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import build_training_config
+
+    args = SimpleNamespace(
+        variant="radial_core",
+        scalar_path_ids="atomic.radial_density",
+        hidden_channels="8",
+        num_radial=3,
+        use_short_range_repulsion=True,
+        short_range_repulsion_strength=4.0,
+        short_range_repulsion_beta=12.0,
+        short_range_repulsion_radius_scale=0.8,
+    )
+
+    config = build_training_config(args)
+
+    assert config.scalar_path_ids == ("atomic.radial_density",)
+    assert config.use_short_range_repulsion is True
+    assert config.short_range_repulsion_strength == pytest.approx(4.0)
+    assert config.short_range_repulsion_beta == pytest.approx(12.0)
+    assert config.short_range_repulsion_radius_scale == pytest.approx(0.8)
 
 
 def test_parse_hidden_channels_accepts_ordered_capacity_axis():
@@ -3454,6 +3558,19 @@ def test_rtece_matrix_sbatch_forwards_scalar_path_ids_without_sbatch_export():
     assert "SCALAR_PATH_IDS=${SCALAR_PATH_IDS:-}" in script
     assert "scalar_path_args=()" in script
     assert "--scalar-path-ids" in script
+    assert "--export" not in script
+
+
+def test_rtece_matrix_sbatch_forwards_short_range_repulsive_core_without_sbatch_export():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
+
+    assert "USE_SHORT_RANGE_REPULSION=${USE_SHORT_RANGE_REPULSION:-0}" in script
+    assert "short_range_args=()" in script
+    assert "--use-short-range-repulsion" in script
+    assert '--short-range-repulsion-strength "${SHORT_RANGE_REPULSION_STRENGTH}"' in script
+    assert '--short-range-repulsion-beta "${SHORT_RANGE_REPULSION_BETA}"' in script
+    assert '--short-range-repulsion-radius-scale "${SHORT_RANGE_REPULSION_RADIUS_SCALE}"' in script
     assert "--export" not in script
 
 
