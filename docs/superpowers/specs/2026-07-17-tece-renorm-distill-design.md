@@ -2014,6 +2014,30 @@ Next priority:
 2. Add a bounded projection-error diagnostic over registered/path-id routes before scaling more training, because the acceptance criterion requires separating projection error from distillation/optimization error.
 3. Keep backend guards explicit: any fused or analytic backend with fixed descriptor layout must reject incompatible path-id order.
 
+# Stage 68: Named Non-Radial Edge Path Selection
+
+Stage 68 extends the Stage 67 path-id constructor from atomic scalar paths to the first executable edge scalar paths. The goal is still compiler substrate, not a new training claim: selected edge path ids now control real descriptor columns for the non-radial cavity/full-moment edge sketch family.
+
+Implementation gate:
+
+- Added supported edge path dimensions for `edge.full_moment.vector_dot`, `edge.cavity.vector_dot`, `edge.cavity.quadrupole_frobenius`, and `edge.direct.radial`.
+- `build_rtece_config_from_path_ids(...)` now accepts these non-radial edge path ids, sets `use_atomic_moments`, `use_cavity_edge_sketches`, and the true `num_edge_sketches` from the selected path dimensions, and rejects unsupported radial-cross edge ids.
+- `descriptor_dim(config)` counts selected edge paths directly; `edge.direct.radial` contributes two scalar columns while vector/quadrupole edge contractions contribute one column each.
+- `edge_relational_sketches()` now has a selected-path branch that builds named edge values and concatenates only the requested edge path columns, while preserving the legacy bundled 8-column sketch output for registered variants.
+- Regression tests verify that a selected `edge.cavity.vector_dot` route produces one edge descriptor column equal to the first column of legacy `rtece_cavity_edge_sketch8`, and that selected edge manifests reconstruct to the same config/hash.
+
+Stage-68 interpretation against TECE/TACE:
+
+- This is a real architecture-projection step: deleting edge paths now reduces the actual deployed descriptor dimension and head input, rather than only masking a label or changing metadata.
+- The edge path semantics are still limited to non-radial mean-projected sketches. The Stage 62 radial/cross-radial cavity paths remain bundled and are intentionally rejected by the path-id constructor until their basis functions are split with clear dimensions.
+- The result closes another review gap: edge relational scalar paths can now be compared as explicit retained/deleted TECE groups in manifest/Pareto reports.
+
+Next priority:
+
+1. Add a bounded projection-error diagnostic over selected path-id routes, because the compiler now has enough atomic and non-radial edge path granularity to measure what is lost when a path group is deleted.
+2. Separately split radial-cavity cross paths into named basis functions before allowing `edge.cavity.vector_cross_radial_dot` or related ids in `build_rtece_config_from_path_ids(...)`.
+3. Do not spend GPU on large autograd edge sweeps until a route's selected paths have either a compact autograd cost profile or an analytic/fused inference path.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

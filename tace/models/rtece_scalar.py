@@ -38,6 +38,21 @@ _ATOMIC_SCALAR_PATH_IDS = {
     "atomic.quadrupole_norm",
 }
 
+_EDGE_SCALAR_PATH_DIMS = {
+    "edge.full_moment.vector_dot": 1,
+    "edge.cavity.vector_dot": 1,
+    "edge.cavity.quadrupole_frobenius": 1,
+    "edge.direct.radial": 2,
+}
+
+
+def _selected_atomic_path_ids(path_ids: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(path_id for path_id in path_ids if path_id.startswith("atomic."))
+
+
+def _selected_edge_path_ids(path_ids: tuple[str, ...]) -> tuple[str, ...]:
+    return tuple(path_id for path_id in path_ids if path_id.startswith("edge."))
+
 
 _RTECE_VARIANT_CONFIG_KWARGS: dict[str, dict[str, object]] = {
     "rtece_pair": {},
@@ -89,16 +104,22 @@ def build_rtece_config_from_path_ids(
     paths = tuple(str(path_id) for path_id in scalar_path_ids)
     if not paths:
         raise ValueError("at least one scalar path id is required")
-    unsupported = [path_id for path_id in paths if path_id not in _ATOMIC_SCALAR_PATH_IDS]
+    supported_paths = _ATOMIC_SCALAR_PATH_IDS | set(_EDGE_SCALAR_PATH_DIMS)
+    unsupported = [path_id for path_id in paths if path_id not in supported_paths]
     if unsupported:
         raise ValueError(
-            "build_rtece_config_from_path_ids currently supports atomic scalar path ids only; "
-            f"unsupported paths: {unsupported}"
+            "build_rtece_config_from_path_ids currently supports selected atomic scalar "
+            f"and non-radial edge scalar path ids only; unsupported paths: {unsupported}"
         )
     if "atomic.radial_density" not in paths:
         raise ValueError("atomic.radial_density is required as the base scalar path")
     if "atomic.species_basis_density" in paths and species_basis_channels <= 0:
         raise ValueError("species_basis_channels must be positive for atomic.species_basis_density")
+    edge_paths = _selected_edge_path_ids(paths)
+    has_cavity_edge_paths = any(path_id.startswith("edge.cavity.") for path_id in edge_paths)
+    has_full_edge_paths = any(path_id.startswith("edge.full_moment.") for path_id in edge_paths)
+    if has_cavity_edge_paths and has_full_edge_paths:
+        raise ValueError("full-moment and cavity edge paths cannot be mixed in one path-id config")
 
     return RTECEScalarConfig(
         variant=variant,
@@ -109,10 +130,10 @@ def build_rtece_config_from_path_ids(
         use_element_density="atomic.element_density" in paths,
         use_density_quadratic="atomic.density_square" in paths,
         use_vector_moments="atomic.vector_norm" in paths,
-        use_atomic_moments="atomic.quadrupole_norm" in paths,
+        use_atomic_moments="atomic.quadrupole_norm" in paths or bool(edge_paths),
         species_basis_channels=int(species_basis_channels) if "atomic.species_basis_density" in paths else 0,
-        num_edge_sketches=0,
-        use_cavity_edge_sketches=False,
+        num_edge_sketches=sum(int(_EDGE_SCALAR_PATH_DIMS[path_id]) for path_id in edge_paths),
+        use_cavity_edge_sketches=has_cavity_edge_paths,
         radial_edge_sketch_channels=0,
         scalar_path_ids=paths,
         energy_per_atom_shift=float(energy_per_atom_shift),
@@ -164,6 +185,8 @@ def _scalar_path_descriptor_dim(path_id: str, config: RTECEScalarConfig) -> int:
         if config.species_basis_channels <= 0:
             raise ValueError("atomic.species_basis_density requires species_basis_channels > 0")
         return int(config.num_radial) * int(config.species_basis_channels)
+    if path_id in _EDGE_SCALAR_PATH_DIMS:
+        return int(_EDGE_SCALAR_PATH_DIMS[path_id])
     raise ValueError(f"unsupported scalar path id {path_id!r}")
 
 
@@ -841,8 +864,9 @@ def density_scalar_descriptors(
     vector_norm: torch.Tensor | None = None,
 ) -> torch.Tensor:
     if config.scalar_path_ids is not None:
+        atomic_path_ids = _selected_atomic_path_ids(config.scalar_path_ids)
         return _atomic_scalar_path_descriptors(
-            config.scalar_path_ids,
+            atomic_path_ids,
             density=density,
             element_density=element_density if config.use_element_density else None,
             species_density=element_density if config.species_basis_channels else None,
@@ -961,8 +985,9 @@ def atomic_scalar_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> t
     vector_norm = (moments["vector"] ** 2).sum(dim=-1)
     quadrupole_norm = (moments["quadrupole"] ** 2).sum(dim=(-1, -2))
     if config.scalar_path_ids is not None:
+        atomic_path_ids = _selected_atomic_path_ids(config.scalar_path_ids)
         return _atomic_scalar_path_descriptors(
-            config.scalar_path_ids,
+            atomic_path_ids,
             density=density,
             element_density=moments["element_density"],
             species_density=moments["species_density"],
@@ -1043,7 +1068,10 @@ def edge_relational_sketches(graph: RTECEGraph, config: RTECEScalarConfig) -> to
         has_reverse = torch.isin(reverse_codes, edge_codes).to(dtype=graph.pos.dtype, device=graph.pos.device)
         vector_channels_j = vector_channels_j + has_reverse[:, None, None] * edge_vector
         quadrupole_channels_j = quadrupole_channels_j - has_reverse[:, None, None, None] * edge_quadrupole
+    edge_path_ids = _selected_edge_path_ids(config.scalar_path_ids or ())
     if config.radial_edge_sketch_channels:
+        if edge_path_ids:
+            raise ValueError("selected radial edge path ids are not implemented yet")
         k_radial = int(config.radial_edge_sketch_channels)
         vi = _project_radial_edge_channels(vector_channels_i, k_radial)
         vj = _project_radial_edge_channels(vector_channels_j, k_radial)
@@ -1055,16 +1083,37 @@ def edge_relational_sketches(graph: RTECEGraph, config: RTECEScalarConfig) -> to
         vj = vector_channels_j.mean(dim=1)
         qi = quadrupole_channels_i.mean(dim=1)
         qj = quadrupole_channels_j.mean(dim=1)
+        vector_dot = (vi * vj).sum(dim=-1)
+        quadrupole_frobenius = (qi * qj).sum(dim=(-1, -2))
+        target_vector_projection = (unit * vi).sum(dim=-1)
+        source_vector_projection = (unit * vj).sum(dim=-1)
+        target_quadrupole_projection = torch.einsum("bi,bij,bj->b", unit, qi, unit)
+        source_quadrupole_projection = torch.einsum("bi,bij,bj->b", unit, qj, unit)
+        direct_radial = torch.stack([radial[:, 0], radial[:, min(1, radial.shape[1] - 1)]], dim=-1)
+        if edge_path_ids:
+            vector_path = "edge.cavity.vector_dot" if config.use_cavity_edge_sketches else "edge.full_moment.vector_dot"
+            path_values = {
+                vector_path: vector_dot[:, None],
+                "edge.direct.radial": direct_radial,
+            }
+            if config.use_cavity_edge_sketches:
+                path_values["edge.cavity.quadrupole_frobenius"] = quadrupole_frobenius[:, None]
+            missing_paths = [path_id for path_id in edge_path_ids if path_id not in path_values]
+            if missing_paths:
+                raise ValueError(f"edge scalar path ids are not available for this config: {missing_paths}")
+            edge_values = torch.cat([path_values[path_id] for path_id in edge_path_ids], dim=-1)
+            edge_values = edge_values * cutoff_envelope(distances, config.cutoff)[:, None]
+            return scatter_sum(edge_values, dst, graph.z.shape[0])
         base = torch.stack(
             [
-                (vi * vj).sum(dim=-1),
-                (qi * qj).sum(dim=(-1, -2)),
-                (unit * vi).sum(dim=-1),
-                (unit * vj).sum(dim=-1),
-                torch.einsum("bi,bij,bj->b", unit, qi, unit),
-                torch.einsum("bi,bij,bj->b", unit, qj, unit),
-                radial[:, 0],
-                radial[:, min(1, radial.shape[1] - 1)],
+                vector_dot,
+                quadrupole_frobenius,
+                target_vector_projection,
+                source_vector_projection,
+                target_quadrupole_projection,
+                source_quadrupole_projection,
+                direct_radial[:, 0],
+                direct_radial[:, 1],
             ],
             dim=-1,
         )

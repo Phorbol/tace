@@ -580,13 +580,13 @@ def test_rtece_path_id_manifest_reconstructs_selected_atomic_paths():
     assert rtece_path_manifest(rebuilt)["manifest_hash"] == manifest["manifest_hash"]
 
 
-def test_rtece_path_id_constructor_rejects_edge_paths_until_edge_compiler_exists():
+def test_rtece_path_id_constructor_rejects_unfactored_radial_edge_paths():
     from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
 
-    with pytest.raises(ValueError, match="atomic scalar"):
+    with pytest.raises(ValueError, match="non-radial edge scalar"):
         build_rtece_config_from_path_ids(
-            "rtece_path_edge_cavity",
-            ("atomic.radial_density", "edge.cavity.vector_dot"),
+            "rtece_path_edge_radial_cross",
+            ("atomic.radial_density", "edge.cavity.vector_cross_radial_dot"),
         )
 
 
@@ -614,6 +614,78 @@ def test_rtece_path_id_custom_order_rejects_packed_element_descriptor_backend():
 
     with pytest.raises(ValueError, match="canonical radial/element path order"):
         packed_element_density_descriptors(graph, config)
+
+
+def test_rtece_path_id_config_selects_named_cavity_edge_column():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
+
+    selected = build_rtece_config_from_path_ids(
+        "rtece_path_cavity_vector_dot",
+        ("atomic.radial_density", "edge.cavity.vector_dot"),
+        num_radial=4,
+        hidden_channels=(8,),
+    )
+    full = build_rtece_config("rtece_cavity_edge_sketch8")
+    full = RTECEScalarConfig(
+        variant=full.variant,
+        cutoff=full.cutoff,
+        num_radial=4,
+        hidden_channels=full.hidden_channels,
+        max_atomic_number=full.max_atomic_number,
+        use_atomic_moments=full.use_atomic_moments,
+        num_edge_sketches=full.num_edge_sketches,
+        use_cavity_edge_sketches=full.use_cavity_edge_sketches,
+    )
+    graph = RTECEGraph(
+        z=torch.tensor([6, 1, 8], dtype=torch.long),
+        pos=torch.tensor(
+            [[0.0, 0.0, 0.0], [0.7, 0.1, 0.0], [0.2, 0.9, 0.1]],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    selected_descriptors = rtece_descriptors(graph, selected)
+    full_edge_sketches = edge_relational_sketches(graph, full)
+    manifest = rtece_path_manifest(selected)
+
+    assert selected.scalar_path_ids == ("atomic.radial_density", "edge.cavity.vector_dot")
+    assert selected.use_atomic_moments is True
+    assert selected.use_cavity_edge_sketches is True
+    assert selected.num_edge_sketches == 1
+    assert descriptor_dim(selected) == 5
+    assert selected_descriptors.shape == (3, 5)
+    assert torch.allclose(selected_descriptors[:, :4], compute_atomic_moments(graph, selected)["density"])
+    assert torch.allclose(selected_descriptors[:, 4:5], full_edge_sketches[:, :1])
+    assert [path["id"] for path in manifest["scalar_paths"]] == [
+        "atomic.radial_density",
+        "edge.cavity.vector_dot",
+    ]
+
+
+def test_rtece_path_id_edge_manifest_reconstructs_selected_edge_paths():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
+        build_rtece_config_from_manifest,
+        build_rtece_config_from_path_ids,
+    )
+
+    config = build_rtece_config_from_path_ids(
+        "rtece_path_cavity_vector_direct_radial",
+        ("atomic.radial_density", "edge.cavity.vector_dot", "edge.direct.radial"),
+        num_radial=3,
+    )
+    manifest = rtece_path_manifest(config)
+    rebuilt = build_rtece_config_from_manifest(manifest)
+
+    assert descriptor_dim(config) == 3 + 1 + 2
+    assert manifest["config"]["scalar_path_ids"] == [
+        "atomic.radial_density",
+        "edge.cavity.vector_dot",
+        "edge.direct.radial",
+    ]
+    assert rebuilt == config
+    assert rtece_path_manifest(rebuilt)["manifest_hash"] == manifest["manifest_hash"]
 
 
 def test_rtece_species_basis_variant_has_route_contract():
