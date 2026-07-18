@@ -1017,6 +1017,43 @@ def test_atoms_to_torch_radius_nopbc_graph_builds_direct_edges():
     assert graph.edge_index.tolist() == [[0, 1], [1, 0]]
 
 
+
+def test_cell_list_oracle_work_metadata_counts_candidate_and_active_pairs():
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import cell_list_oracle_work_metadata
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import RTECEGraph
+
+    template = RTECEGraph(
+        z=torch.tensor([6, 8, 1, 7, 1], dtype=torch.long),
+        pos=torch.zeros((5, 3), dtype=torch.float64),
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=torch.tensor([0, 0, 0, 1, 1], dtype=torch.long),
+    )
+    positions = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [0.9, 0.0, 0.0],
+            [1.8, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.8, 0.0, 0.0],
+        ],
+        dtype=torch.float64,
+    )
+
+    metadata = cell_list_oracle_work_metadata(template, positions, cutoff=1.0)
+
+    assert metadata["num_configs"] == 2
+    assert metadata["num_atoms"] == 5
+    assert metadata["exact_pair_slots"] == 13
+    assert metadata["padded_pair_slots"] == 18
+    assert metadata["all_pair_nonself_slots"] == 8
+    assert metadata["cell_candidate_directed_pairs"] == 8
+    assert metadata["active_directed_edges"] == 6
+    assert metadata["max_cell_occupancy"] == 2
+    assert metadata["candidate_to_padded_ratio"] == 8 / 18
+    assert metadata["candidate_to_active_ratio"] == 8 / 6
+
+
+
 def test_torch_radius_nopbc_grouped_matches_loop_edges():
     from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import (
         torch_radius_nopbc_graph,

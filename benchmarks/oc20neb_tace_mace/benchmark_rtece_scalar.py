@@ -302,6 +302,91 @@ def direct_radius_backend_static_metadata(
     }
 
 
+def cell_list_oracle_work_metadata(template: RTECEGraph, positions: torch.Tensor, *, cutoff: float) -> dict[str, object]:
+    if cutoff <= 0.0:
+        raise ValueError(f"cutoff must be positive, got {cutoff}")
+    if tuple(positions.shape) != tuple(template.pos.shape):
+        raise ValueError(f"positions shape {tuple(positions.shape)} does not match graph shape {tuple(template.pos.shape)}")
+    batch = template.batch
+    if batch.ndim != 1 or batch.shape[0] != template.z.shape[0]:
+        raise ValueError("template batch must be a one-dimensional tensor with one entry per atom")
+    if batch.numel() == 0:
+        return {
+            "provider_family": "direct_radius_cell_list_oracle",
+            "num_configs": 0,
+            "num_atoms": 0,
+            "max_atoms_per_config": 0,
+            "exact_pair_slots": 0,
+            "padded_pair_slots": 0,
+            "all_pair_nonself_slots": 0,
+            "cell_candidate_directed_pairs": 0,
+            "active_directed_edges": 0,
+            "max_cell_occupancy": 0,
+            "candidate_to_padded_ratio": 0.0,
+            "candidate_to_all_pair_nonself_ratio": 0.0,
+            "candidate_to_active_ratio": 0.0,
+            "active_to_padded_ratio": 0.0,
+        }
+    if torch.any(batch[1:] < batch[:-1]):
+        raise ValueError("template batch must be sorted by configuration")
+
+    pos_cpu = positions.detach().to(device="cpu")
+    batch_cpu = batch.detach().to(device="cpu")
+    _, counts = torch.unique_consecutive(batch_cpu, return_counts=True)
+    starts = torch.cat([batch_cpu.new_zeros(1), counts.cumsum(dim=0)[:-1]])
+    counts_list = [int(v) for v in counts.tolist()]
+    max_atoms = max(counts_list) if counts_list else 0
+    exact_pair_slots = int(sum(count * count for count in counts_list))
+    padded_pair_slots = int(len(counts_list) * max_atoms * max_atoms) if counts_list else 0
+    all_pair_nonself_slots = int(sum(count * (count - 1) for count in counts_list))
+    cutoff_sq = float(cutoff) * float(cutoff)
+
+    cell_candidate_directed_pairs = 0
+    active_directed_edges = 0
+    max_cell_occupancy = 0
+    for start_tensor, count_tensor in zip(starts, counts, strict=True):
+        start = int(start_tensor.item())
+        count = int(count_tensor.item())
+        if count <= 1:
+            max_cell_occupancy = max(max_cell_occupancy, count)
+            continue
+        block = pos_cpu[start : start + count]
+        origin = block.min(dim=0).values
+        cell_coords = torch.floor((block - origin) / float(cutoff)).to(dtype=torch.long)
+        _, cell_counts = torch.unique(cell_coords, dim=0, return_counts=True)
+        if cell_counts.numel() > 0:
+            max_cell_occupancy = max(max_cell_occupancy, int(cell_counts.max().item()))
+
+        cell_delta = torch.abs(cell_coords[:, None, :] - cell_coords[None, :, :])
+        candidate_mask = torch.all(cell_delta <= 1, dim=-1)
+        candidate_mask.fill_diagonal_(False)
+        cell_candidate_directed_pairs += int(candidate_mask.sum().item())
+
+        delta = block[:, None, :] - block[None, :, :]
+        active_mask = delta.square().sum(dim=-1) < cutoff_sq
+        active_mask.fill_diagonal_(False)
+        active_directed_edges += int(active_mask.sum().item())
+
+    return {
+        "provider_family": "direct_radius_cell_list_oracle",
+        "num_configs": int(len(counts_list)),
+        "num_atoms": int(batch.numel()),
+        "max_atoms_per_config": int(max_atoms),
+        "exact_pair_slots": int(exact_pair_slots),
+        "padded_pair_slots": int(padded_pair_slots),
+        "all_pair_nonself_slots": int(all_pair_nonself_slots),
+        "cell_candidate_directed_pairs": int(cell_candidate_directed_pairs),
+        "active_directed_edges": int(active_directed_edges),
+        "max_cell_occupancy": int(max_cell_occupancy),
+        "candidate_to_padded_ratio": float(cell_candidate_directed_pairs / padded_pair_slots) if padded_pair_slots else 0.0,
+        "candidate_to_all_pair_nonself_ratio": (
+            float(cell_candidate_directed_pairs / all_pair_nonself_slots) if all_pair_nonself_slots else 0.0
+        ),
+        "candidate_to_active_ratio": float(cell_candidate_directed_pairs / active_directed_edges) if active_directed_edges else 0.0,
+        "active_to_padded_ratio": float(active_directed_edges / padded_pair_slots) if padded_pair_slots else 0.0,
+    }
+
+
 def make_graph_update_backend(
     *,
     backend_name: str,

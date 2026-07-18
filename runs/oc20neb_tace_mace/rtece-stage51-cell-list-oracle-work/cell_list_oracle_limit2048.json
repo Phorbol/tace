@@ -1,0 +1,20 @@
+{
+  "active_directed_edges": 1634364,
+  "active_to_padded_ratio": 0.10543391423900118,
+  "all_pair_nonself_slots": 7386312,
+  "candidate_to_active_ratio": 3.5209537165527385,
+  "candidate_to_all_pair_nonself_ratio": 0.7790789232840422,
+  "candidate_to_padded_ratio": 0.3712279321905139,
+  "cell_candidate_directed_pairs": 5754520,
+  "cutoff": 5.0,
+  "exact_pair_slots": 7505583,
+  "limit_configs": 2048,
+  "max_atoms_per_config": 87,
+  "max_cell_occupancy": 18,
+  "num_atoms": 119271,
+  "num_configs": 2048,
+  "padded_pair_slots": 15501312,
+  "provider_family": "direct_radius_cell_list_oracle",
+  "trajectory_displacement_std": 0.001,
+  "trajectory_step": 19
+}

@@ -1520,6 +1520,33 @@ Stage-50 interpretation against TECE/TACE:
 - The next highest-priority architecture step is now sharper. Another counted/two-pass variant is unlikely to close the NEP/DPA-style throughput gap. The clean TECE/TACE route is a cell-list or fused descriptor provider that removes the remaining padded candidate scan and avoids the extra count pass, while preserving direct-active semantics and the scalar rTECE force path.
 
 
+# Stage 51: Cell-List Oracle Work Analysis
+
+Stage 51 tested the Stage50 priority before writing a complex runtime kernel: how much padded candidate scan would a direct-active cell-list provider remove on the same real OC20NEB trajectory geometry? This is an oracle/work-analysis stage, not a new model or production provider. It preserves the rTECE checkpoint, scalar descriptor, cutoff, direct-active semantics, and Stage50 trajectory replay geometry.
+
+Implementation gate:
+
+- Added `cell_list_oracle_work_metadata(...)`, a CPU oracle that counts padded slots, all-pair nonself slots, 27-neighbor-cell directed candidate pairs, active directed edges, and candidate ratios.
+- Added a unit test that fixes cell-list oracle semantics on a two-config toy geometry.
+- Added `runs/oc20neb_tace_mace/rtece-stage51-cell-list-oracle-work/run_oracle.py` and JSON outputs for 1024, 2048, 4096, 8192, and 10000 configs.
+- The oracle uses the same cutoff 5.0 A and synthetic trajectory step 19 geometry as the final Stage50 invalid-cache rebuild; active edge counts match the Stage50 provider metadata.
+
+| limit configs | atoms | padded slots | all-pair nonself | cell candidates | active edges | candidate/padded | candidate/active | max cell occupancy |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1024 | 59,193 | 7,750,656 | 3,640,296 | 2,850,522 | 825,584 | 0.367778 | 3.452734 | 18 |
+| 2048 | 119,271 | 15,501,312 | 7,386,312 | 5,754,520 | 1,634,364 | 0.371228 | 3.520954 | 18 |
+| 4096 | 250,355 | 40,960,000 | 16,402,870 | 12,406,382 | 3,459,786 | 0.302890 | 3.585881 | 18 |
+| 8192 | 525,769 | 81,920,000 | 35,936,006 | 26,219,846 | 7,303,632 | 0.320066 | 3.589974 | 20 |
+| 10000 | 646,473 | 100,000,000 | 44,242,578 | 32,313,616 | 9,006,668 | 0.323136 | 3.587744 | 20 |
+
+Stage-51 interpretation against TECE/TACE:
+
+- The cell-list direction is justified, but the expected gain is bounded. On real OC20NEB batches, cell-list candidates are about 30-37% of padded slots, so it can remove roughly 63-70% of candidate distance checks.
+- Cell-list alone is not a 10x route. The candidate set remains about 3.5x the active directed edge count, so a runtime provider that only replaces padded scanning with cell-list edge materialization may improve throughput but probably will not close the NEP/DPA-style gap.
+- The next clean architecture step is therefore a fused cell-list descriptor/force provider: generate cell-list candidates and accumulate scalar rTECE radial/element-density descriptors or force contributions directly, minimizing intermediate edge lifetime. This follows the TECE/TACE renormalization logic more closely than adding another graph-update backend.
+- The current Pareto interpretation becomes three-tiered: `triton_padded` is the peak-throughput edge-list provider when memory permits; `triton_counted` is the low-memory edge-list provider; cell-list/fused descriptor is the next candidate to move the frontier because it attacks padded candidate work rather than only edge-list allocation.
+
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
