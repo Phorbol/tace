@@ -1123,6 +1123,39 @@ def test_rtece_force_error_stratification_reports_element_and_focus_groups():
     assert groups["not_CHNO"]["mae_f_mev_a"] == pytest.approx(4.0 / 3.0)
 
 
+def test_rtece_force_error_stratification_adds_cn_selection_proxy():
+    from benchmarks.oc20neb_tace_mace.stratify_rtece_force_errors import stratify_symbol_force_errors
+
+    predicted = torch.tensor(
+        [
+            [0.006, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+        ],
+        dtype=torch.float64,
+    )
+    reference = torch.zeros((2, 3), dtype=torch.float64)
+
+    summary = stratify_symbol_force_errors(
+        symbols=["C", "Cu"],
+        predicted_forces=predicted,
+        reference_forces=reference,
+        target_force_source="teacher_forces",
+        focus_selection_label="C_or_N",
+        focus_excess_weight=2.0,
+    )
+
+    assert summary["selection_focus_label"] == "C_or_N"
+    assert summary["selection_focus_mae_f_mev_a"] == pytest.approx(2.0)
+    assert summary["selection_focus_excess_mae_f_mev_a"] == pytest.approx(1.0)
+    assert summary["selection_score_mev_a"] == pytest.approx(3.0)
+
+    from benchmarks.oc20neb_tace_mace.stratify_rtece_force_errors import format_markdown
+
+    markdown = format_markdown(summary)
+    assert "selection score: 3.000 meV/A" in markdown
+    assert "selection focus: `C_or_N` excess weight 2.0" in markdown
+
+
 def test_rtece_projection_loads_sample_weight_json(tmp_path):
     from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import _load_sample_weights_json
 

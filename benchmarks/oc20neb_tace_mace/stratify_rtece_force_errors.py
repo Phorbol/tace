@@ -88,6 +88,8 @@ def stratify_symbol_force_errors(
     predicted_forces: Any,
     reference_forces: Any,
     target_force_source: str,
+    focus_selection_label: str = "C_or_N",
+    focus_excess_weight: float = 2.0,
 ) -> dict[str, Any]:
     pred = _as_force_matrix(predicted_forces, "predicted_forces")
     ref = _as_force_matrix(reference_forces, "reference_forces")
@@ -103,14 +105,27 @@ def stratify_symbol_force_errors(
         for label, indices in _focus_masks(symbols).items()
     ]
     focus_rows.sort(key=lambda row: (-float(row["mae_f_mev_a"]), str(row["label"])))
+    global_mae = float(abs_error.mean().item())
+    focus_by_label = {str(row["label"]): row for row in focus_rows}
+    selection_focus = focus_by_label.get(str(focus_selection_label))
+    focus_mae = float(selection_focus["mae_f_mev_a"]) if selection_focus is not None else 0.0
+    focus_excess = max(0.0, focus_mae - global_mae)
+    selection_score = global_mae + float(focus_excess_weight) * focus_excess
     return {
         "schema_version": "rtece_force_error_stratification.v1",
         "target_force_source": str(target_force_source),
         "num_atoms": int(pred.shape[0]),
         "num_force_components": int(pred.numel()),
-        "mae_f_mev_a": float(abs_error.mean().item()),
+        "mae_f_mev_a": global_mae,
         "rmse_f_mev_a": float(torch.sqrt(signed_error.square().mean()).item()),
         "max_abs_f_mev_a": float(abs_error.max().item()),
+        "selection_focus_label": str(focus_selection_label),
+        "selection_focus_count": int(selection_focus["count"]) if selection_focus is not None else 0,
+        "selection_focus_mae_f_mev_a": float(focus_mae),
+        "selection_focus_excess_mae_f_mev_a": float(focus_excess),
+        "selection_focus_excess_weight": float(focus_excess_weight),
+        "selection_score_mev_a": float(selection_score),
+        "selection_score_definition": "global_mae + focus_excess_weight * max(0, focus_mae - global_mae)",
         "elements": _element_rows([str(symbol) for symbol in symbols], abs_error, signed_error),
         "focus_groups": focus_rows,
     }
@@ -172,6 +187,8 @@ def format_markdown(payload: dict[str, Any]) -> str:
         f"- target force source: `{payload.get('target_force_source', 'NA')}`",
         f"- atoms: {payload['num_atoms']}",
         f"- force MAE/RMSE: {payload['mae_f_mev_a']:.3f} / {payload['rmse_f_mev_a']:.3f} meV/A",
+        f"- selection score: {payload.get('selection_score_mev_a', payload['mae_f_mev_a']):.3f} meV/A",
+        f"- selection focus: `{payload.get('selection_focus_label', 'NA')}` excess weight {payload.get('selection_focus_excess_weight', 'NA')}",
         "",
         "## Focus Groups",
         "",
@@ -206,6 +223,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--route", default=None)
     parser.add_argument("--limit-configs", type=int, required=True)
     parser.add_argument("--target-force-array", default="teacher_forces")
+    parser.add_argument("--focus-selection-label", default="C_or_N")
+    parser.add_argument("--focus-excess-weight", type=float, default=2.0)
     parser.add_argument("--cutoff", type=float, default=None)
     parser.add_argument("--default-dtype", choices=("float32", "float64"), default="float64")
     parser.add_argument("--neighborlist-backend", choices=("ase", "vesin", "matscipy"), default="matscipy")
@@ -235,6 +254,8 @@ def main() -> None:
         predicted_forces=predicted,
         reference_forces=reference,
         target_force_source=str(args.target_force_array),
+        focus_selection_label=str(args.focus_selection_label),
+        focus_excess_weight=float(args.focus_excess_weight),
     )
     payload.update(
         {

@@ -2837,6 +2837,49 @@ Priority after Stage 86:
 3. Keep `radial_core_s0p6_r0p75_b10` as the local anchor for comparison, but do not promote it to fused-force implementation until it passes broader rattle gates.
 4. Repair or avoid the corrupted `mixed_valid_tw0.75.extxyz` path before claiming validation-set stratification; use train-window diagnostics only as bounded evidence.
 
+
+# Stage 87: C/N Force-Selection Proxy
+
+Stage 87 implements the first Stage-86 priority: add a stratified C/N force-residual proxy so aggregate mixed-label loss cannot hide the non-metal adsorbate failure mode. This is a selection-layer change rather than a new architecture claim. It keeps the TECE route fixed and asks whether the broader rattle failure is already visible in single-step force residuals on the same structures.
+
+Implementation gate:
+
+- Extended `stratify_rtece_force_errors.py` with a C/N-focused selection score.
+- The score is `global_force_MAE + focus_excess_weight * max(0, C_or_N_force_MAE - global_force_MAE)` with default `focus_excess_weight=2.0`.
+- The JSON and Markdown outputs now report `selection_score_mev_a`, `selection_focus_mae_f_mev_a`, and `selection_focus_excess_mae_f_mev_a`.
+- Regression coverage checks that concentrated C/N force error raises the selection score and appears in Markdown.
+
+Stage-87 diagnostic setup:
+
+| route | checkpoint | configs | window | target force arrays | focus label | excess weight |
+|---|---|---|---|---|---|---:|
+| `radial_core_s0p6_r0p75_b10` | Stage-85 best | `mixed_train_tw0.75.extxyz` sliced to `58:106` | 48 configs | `teacher_forces`, `dft_forces` | `C_or_N` | 2.0 |
+
+The slice is the exact Stage-86 broader-rattle window. It contains 3116 atoms; only 147 atoms are C/N, about 4.7% of atoms.
+
+Force-selection proxy results:
+
+| target | global F MAE | C/N F MAE | C/N excess | selection score | CHNO F MAE | not-CHNO F MAE |
+|---|---:|---:|---:|---:|---:|---:|
+| teacher | 76.70 | 485.30 | 408.60 | 893.89 | 445.36 | 36.70 |
+| DFT | 75.41 | 485.39 | 409.98 | 895.37 | 446.84 | 35.11 |
+
+Top element errors are also non-metal dominated. Against DFT, O is 693.50 meV/A, C is 638.79 meV/A, H is 336.38 meV/A, and N is 275.09 meV/A, while most slab/metal elements are much lower. The teacher-force table gives the same ordering within noise.
+
+Stage-87 interpretation against TECE/TACE and the review document:
+
+- The broader rattle failure is already visible in a cheap single-step force proxy. This means future candidate selection does not need to wait for every row to run expensive LBFGS rattle before rejecting rows with severe C/N residual concentration.
+- The issue is not merely teacher mismatch. Teacher and DFT force stratification give almost identical C/N excess: about 409 meV/A above global MAE. This supports the conclusion that the current scalar endpoint has a real C/N local-physics deficit on this OC20NEB window.
+- Aggregate force MAE is misleading here because C/N atoms are a small atom fraction. A row can look acceptable globally while failing the exact population that controls adsorbate relax. This validates the Stage-86 priority to add stratified selection before returning to kernels.
+- The next algorithmic question is now sharper: does targeted C/N close-contact/rattle weighting fix this residual while preserving scalar T4 cost, or do we need a new low-cost C/N-sensitive retained operator beyond the radial core?
+
+Priority after Stage 87:
+
+1. Use the C/N force-selection proxy as a cheap pre-filter for future radial-core or scalar-operator matrices, then confirm finalists with broader rattle.
+2. Run a small algorithmic comparison with the same Stage-87 proxy and Stage-86 rattle window: C/N force-residual weighting or close-contact augmentation versus a low-cost C/N-sensitive scalar retained operator.
+3. Keep graph/kernel work deferred. The current evidence says the dominant failure is operator/data selection for C/N local chemistry, not throughput of the existing scalar endpoint.
+4. Add `start-config` support to force/projection loaders if we need repeated exact-window stratification without writing sliced extxyz artifacts.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
