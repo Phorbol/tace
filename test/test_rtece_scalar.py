@@ -782,6 +782,37 @@ def test_rtece_head_jacobian_weights_mean_normalize(tmp_path):
     assert saved["sample_weights"] == [2.0, 4.0]
 
 
+def test_rtece_force_residual_weights_measure_model_force_error():
+    from benchmarks.oc20neb_tace_mace.make_rtece_projection_weights import force_residual_sample_weight_payload
+
+    predicted = [torch.tensor([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0]], dtype=torch.float64)]
+    reference = [torch.tensor([[0.0, 0.0, 0.0], [0.0, -1.0, 4.0]], dtype=torch.float64)]
+
+    payload = force_residual_sample_weight_payload(
+        predicted,
+        reference,
+        target_force_source="teacher_forces",
+        normalize="none",
+    )
+
+    assert payload["weight_source"] == "rtece_force_residual_l2:teacher_forces"
+    assert payload["sample_weights"] == pytest.approx([1.0, 5.0])
+    assert payload["num_samples"] == 2
+
+
+def test_rtece_force_residual_weights_mean_normalize():
+    from benchmarks.oc20neb_tace_mace.make_rtece_projection_weights import force_residual_sample_weight_payload
+
+    predicted = [torch.tensor([[1.0, 0.0, 0.0], [0.0, 3.0, 0.0]], dtype=torch.float64)]
+    reference = [torch.zeros((2, 3), dtype=torch.float64)]
+
+    payload = force_residual_sample_weight_payload(predicted, reference, target_force_source="dft_forces")
+
+    assert payload["normalization"] == "mean1"
+    assert payload["sample_weights"] == pytest.approx([0.5, 1.5])
+    assert payload["weight_mean"] == pytest.approx(1.0)
+
+
 def test_rtece_projection_loads_sample_weight_json(tmp_path):
     from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import _load_sample_weights_json
 

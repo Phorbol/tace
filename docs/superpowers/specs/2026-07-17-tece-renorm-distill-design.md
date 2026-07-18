@@ -2292,6 +2292,43 @@ Next priority:
 2. Use that residual-aware weighting to rerun the same path-id projection table and check whether it correlates with C/N adsorbate relax RMSD failures.
 3. Only after this sensitivity metric starts predicting accuracy/generalization should we spend GPU on larger edge-path training or graph-backend acceleration.
 
+# Stage 76: Force-Residual Weighted Projection Probe
+
+Stage 76 extends the Stage-75 weight generator from surrogate head sensitivity to label/model-error-side sensitivity. The purpose is to emphasize atoms where the current high-throughput low-rank endpoint actually fails against teacher forces, then ask whether deleted TECE paths explain those failures in the projection metric.
+
+Implementation gate:
+
+- `make_rtece_projection_weights.py` now supports `--weight-mode rtece_force_residual_l2` in addition to `rtece_head_jacobian_l2`.
+- The residual mode loads a target force array from extxyz, currently `teacher_forces` or `dft_forces`, predicts forces with an rTECE checkpoint, computes per-atom `||F_model - F_target||_2`, and emits mean-normalized projection sample weights.
+- Tests cover the pure force-residual payload contract and mean-normalization behavior.
+
+Bounded run on the same 8-config/419-atom Stage-69 subset:
+
+| source checkpoint | target force array | raw residual range | normalized weight range |
+|---|---|---:|---:|
+| Stage-73 `radial` best checkpoint | `teacher_forces` | 0.00193-7.23 | 0.0120-45.08 |
+
+Force-residual weighted projection result joined with Stage-73 GPU benchmarks:
+
+| route | weighted residual | weight source | Stage-73 GPU atoms/s | DFT F MAE | teacher F MAE |
+|---|---:|---|---:|---:|---:|
+| `radial` | 0.1622 | `rtece_force_residual_l2:teacher_forces` | 2.96M | 29.45 | 34.25 |
+| `radial_cavity_vec` | 0.00582 | `rtece_force_residual_l2:teacher_forces` | 1.08M | 35.16 | 38.53 |
+| `radial_cavity_vec_direct` | 2.64e-13 | `rtece_force_residual_l2:teacher_forces` | 1.08M | 34.57 | 39.20 |
+
+Stage-76 interpretation against TECE/TACE and the review document:
+
+- Residual-aware weighting produces a much sharper sample distribution than the Stage-75 head-Jacobian weights: normalized weights span about 0.012-45.1 instead of 0.80-1.11. This is closer to a useful Sobolev-style failure metric because it focuses on atoms where the endpoint model is wrong.
+- Even under this failure-focused metric, `edge.cavity.vector_dot` still greatly reduces projection residual, but the Stage-73 trained `radial_cavity_vec` model is slower and worse in force MAE. Therefore the remaining mismatch is no longer just a raw descriptor metric problem. It points to training/optimization, head capacity, dataset stratification, or physical test distribution as the next bottleneck.
+- The clean theoretical route is now sharper: path deletion cost should be measured with weighted projection, but a path is only Pareto-useful after the training procedure can convert that weighted information into lower force/relax error at acceptable throughput. The current evidence says `radial` remains the path-id high-throughput baseline, while `edge.cavity.vector_dot` needs targeted validation rather than blind widening.
+- This also connects to the user observation about C/N adsorbate relax RMSD: a residual-aware diagnostic can now produce per-atom weights that can be stratified by element or adsorbate class. That is the next practical way to check whether non-metal adsorbates are driving the edge-path need.
+
+Next priority:
+
+1. Add element/adsorbate-class stratification for projection weights and benchmark errors, starting with C/N-containing adsorbates in the OC20NEB subset.
+2. Compare radial vs radial-cavity routes on the high residual-weight atoms rather than only aggregate MAE; if cavity helps there, rerun training with stratified validation/checkpoint selection.
+3. If cavity still fails on the residual-focused subset, prioritize distillation loss/head capacity or physical tests before any graph-backend acceleration.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
