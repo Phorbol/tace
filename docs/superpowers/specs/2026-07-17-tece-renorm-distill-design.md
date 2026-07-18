@@ -1877,6 +1877,48 @@ Stage-62 interpretation against TECE/TACE:
 - The theoretical ordering is now cleaner: direct scalar pair density, element/species chemistry density, cavity edge relations, and low-rank radial edge relations are separate retained TECE groups rather than hidden inside one sketch name.
 - The next decision should compare two priorities from the documents: either formalize the route manifest/path-spec compiler so these variants stop being ad hoc Boolean combinations, or run a small training/benchmark slice for `rtece_species_basis4` and `rtece_cavity_radial_edge_sketch14` after E0/PBC fixes to see whether the semantic repairs actually improve the non-metal adsorbate failure buckets.
 
+
+# Stage 63: Semantic-Repair Smoke Matrix
+
+Stage 63 tests whether the recent review-driven semantic repairs can pass the normal rTECE train/checkpoint/benchmark path and whether their early signal justifies a larger Pareto run. This is deliberately a small smoke matrix, not a final accuracy or throughput claim.
+
+Setup:
+
+| item | value |
+|---|---|
+| Slurm job | `679597` |
+| submission method | generated no-export wrapper, plain `sbatch wrapper` |
+| variants | `rtece_species_basis4`, `rtece_cavity_radial_edge_sketch14` |
+| train labels | `mixed_train_tw0.75.extxyz` |
+| train configs / steps | 16 configs / 4 steps |
+| validation configs | 8 mixed-valid configs |
+| benchmark configs | 32 DFT-valid + 32 teacher-valid configs |
+| hidden / radial | `16,16` / `num_radial=4` |
+| force mode | `autograd` |
+| graph timing | prebuilt batched graph, `includes_graph_construction=false` |
+| GPU | single V100 |
+
+Implementation gate:
+
+- Added `submit_rtece_scalar_matrix.py`, a SAI-safe matrix wrapper generator mirroring the benchmark submit helper.
+- The helper writes parameter overrides as body `export VAR=...` lines and submits only `sbatch wrapper`; it does not use `sbatch --export=ALL,...`.
+- The wrapper also avoids `--mem` and `--cpus-per-task`, matching the SAI constraint recorded in the local skill/memory.
+
+Smoke results:
+
+| variant | DFT F MAE | teacher F MAE | DFT E MAE | atoms/s | peak alloc MB | params | interpretation |
+|---|---:|---:|---:|---:|---:|---:|---|
+| `rtece_species_basis4` | 43.97 | 43.91 | 284.92 | 437666 | 36.7 | 641 | Fast autograd scalar-density chemistry repair, but weak early force/energy signal in this tiny run. |
+| `rtece_cavity_radial_edge_sketch14` | 38.61 | 37.83 | 51.10 | 174361 | 101.0 | 737 | Better early force/energy signal, but much slower because edge/radial sketches still use full autograd and materialized edges. |
+
+Stage-63 interpretation against TECE/TACE:
+
+- The no-export wrapper solved the previous SAI submission failure mode: the job ran on `16v100n08`, entered Python, trained both variants, and produced all benchmark JSON files.
+- The semantic repairs are executable through the normal repository path, not only descriptor unit tests.
+- The early result supports the review logic qualitatively: adding cavity/radial edge information improves force error versus the pure low-rank species-density repair in this smoke setting.
+- It also confirms the hardware warning from the TECE design document: edge/radial relational semantics are not useful for the high-throughput Pareto front unless they are paired with an analytic/fused force path or a route compiler that can keep edge state short-lived. Autograd edge sketches are not a high-throughput endpoint.
+- Next priority should not be a large autograd `cavity_radial_edge_sketch14` sweep. The cleaner next step is either (1) formalize a route/path manifest so these retained groups become explicit compiler objects, or (2) implement an analytic/fused force path for the cheapest chemistry/radial scalar descriptors before scaling benchmark size.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

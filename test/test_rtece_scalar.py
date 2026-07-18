@@ -2416,6 +2416,47 @@ def test_rtece_benchmark_submit_helper_generates_wrapper_without_sbatch_export(t
     assert "rtece_scalar_benchmark.sbatch" in text
 
 
+def test_rtece_matrix_submit_helper_generates_wrapper_without_sbatch_export(tmp_path):
+    from benchmarks.oc20neb_tace_mace.submit_rtece_scalar_matrix import (
+        build_sbatch_command,
+        write_rtece_matrix_wrapper,
+    )
+
+    wrapper = write_rtece_matrix_wrapper(
+        tmp_path,
+        variants="rtece_species_basis4 rtece_cavity_radial_edge_sketch14",
+        run_root="/tmp/rtece-stage63",
+        train_file="/tmp/train.extxyz",
+        train_valid_file="/tmp/valid.extxyz",
+        dft_valid_file="/tmp/dft.extxyz",
+        teacher_valid_file="/tmp/teacher.extxyz",
+        limit_configs=16,
+        valid_limit_configs=8,
+        bench_limit_configs=32,
+        max_steps=4,
+        hidden_channels="16,16",
+        num_radial=4,
+        force_weight=30.0,
+        force_mode="autograd",
+        measure_passes=1,
+        default_dtype="float32",
+    )
+    command = build_sbatch_command(wrapper)
+    text = wrapper.read_text()
+
+    assert "--export" not in command
+    assert "#SBATCH --gpus-per-node=1" in text
+    assert "#SBATCH --qos=flood-1o2gpu" in text
+    assert "--mem" not in text
+    assert "--cpus-per-task" not in text
+    assert "VARIANTS='rtece_species_basis4 rtece_cavity_radial_edge_sketch14'" in text
+    assert "TRAIN_FILE=/tmp/train.extxyz" in text
+    assert "BENCH_LIMIT_CONFIGS=32" in text
+    assert "FORCE_WEIGHT=30.0" in text
+    assert "exec /bin/bash" in text
+    assert "rtece_scalar_matrix.sbatch" in text
+
+
 def test_rtece_matrix_sbatch_forwards_benchmark_force_mode():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
