@@ -72,28 +72,67 @@ def _energy_and_forces(atoms):
     return energy, forces
 
 
+def atoms_to_rtece_graph(
+    atoms,
+    *,
+    cutoff: float,
+    device: torch.device,
+    dtype: torch.dtype,
+    neighborlist_backend: str = "matscipy",
+) -> RTECEGraph:
+    from tace.dataset.neighbour_list import get_neighborhood
+
+    pbc = tuple(bool(x) for x in atoms.pbc)
+    lattice = np.asarray(atoms.cell.array)
+    backend = neighborlist_backend
+    if backend == "matscipy" and not any(pbc) and np.allclose(lattice, 0.0):
+        backend = "ase"
+    edge_index_np, shifts_np, _pbc, lattice_np = get_neighborhood(
+        positions=np.asarray(atoms.positions),
+        cutoff=float(cutoff),
+        pbc=pbc,
+        lattice=lattice,
+        backend=backend,
+    )
+    edge_index_np = np.asarray(edge_index_np, dtype=np.int64)
+    shifts_np = np.asarray(shifts_np, dtype=np.int64)
+    edge_index = torch.tensor(edge_index_np, dtype=torch.long, device=device)
+    z = torch.tensor(atoms.numbers, dtype=torch.long, device=device)
+    pos = torch.tensor(atoms.positions, dtype=dtype, device=device)
+    batch = torch.zeros(len(atoms), dtype=torch.long, device=device)
+    cell = torch.tensor(np.asarray(lattice_np), dtype=dtype, device=device).reshape(1, 3, 3)
+    edge_shifts = torch.tensor(shifts_np, dtype=torch.long, device=device)
+    edge_batch = torch.zeros(edge_index.shape[1], dtype=torch.long, device=device)
+    return RTECEGraph(
+        z=z,
+        pos=pos,
+        edge_index=edge_index,
+        batch=batch,
+        cell=cell,
+        edge_shifts=edge_shifts,
+        edge_batch=edge_batch,
+    )
+
+
 def atoms_to_graph(
     atoms,
     *,
     cutoff: float,
     device: torch.device,
     dtype: torch.dtype,
+    neighborlist_backend: str = "matscipy",
 ) -> tuple[RTECEGraph, torch.Tensor, torch.Tensor]:
-    from ase.neighborlist import neighbor_list
-
-    src, dst = neighbor_list("ij", atoms, cutoff)
-    if len(src) == 0:
-        edge_index_np = np.zeros((2, 0), dtype=np.int64)
-    else:
-        edge_index_np = np.stack([src, dst], axis=0)
-    edge_index = torch.tensor(edge_index_np, dtype=torch.long, device=device)
-    z = torch.tensor(atoms.numbers, dtype=torch.long, device=device)
-    pos = torch.tensor(atoms.positions, dtype=dtype, device=device)
-    batch = torch.zeros(len(atoms), dtype=torch.long, device=device)
+    graph = atoms_to_rtece_graph(
+        atoms,
+        cutoff=cutoff,
+        device=device,
+        dtype=dtype,
+        neighborlist_backend=neighborlist_backend,
+    )
     energy_value, forces_value = _energy_and_forces(atoms)
     energy = torch.tensor([energy_value], dtype=dtype, device=device)
     forces = torch.tensor(forces_value, dtype=dtype, device=device)
-    return RTECEGraph(z=z, pos=pos, edge_index=edge_index, batch=batch), energy, forces
+    return graph, energy, forces
 
 
 def fit_energy_per_atom_shift(
@@ -148,6 +187,7 @@ def load_samples(
     device: torch.device,
     dtype: torch.dtype,
     limit_configs: int | None,
+    neighborlist_backend: str = "matscipy",
 ) -> list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]]:
     import ase.io
 
@@ -155,7 +195,16 @@ def load_samples(
     atoms_list = ase.io.read(str(configs), index=index)
     if not isinstance(atoms_list, list):
         atoms_list = [atoms_list]
-    return [atoms_to_graph(atoms, cutoff=cutoff, device=device, dtype=dtype) for atoms in atoms_list]
+    return [
+        atoms_to_graph(
+            atoms,
+            cutoff=cutoff,
+            device=device,
+            dtype=dtype,
+            neighborlist_backend=neighborlist_backend,
+        )
+        for atoms in atoms_list
+    ]
 
 
 def parse_args() -> argparse.Namespace:
@@ -187,6 +236,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force-weight", type=float, default=10.0)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
     parser.add_argument("--default-dtype", choices=("float32", "float64"), default="float32")
+    parser.add_argument("--neighborlist-backend", choices=("ase", "vesin", "matscipy"), default="matscipy")
     parser.add_argument("--no-fit-energy-shift", action="store_true")
     parser.add_argument("--eval-interval", type=int, default=100)
     parser.add_argument("--disable-best-checkpoint", action="store_true")
@@ -210,6 +260,7 @@ def main() -> None:
         device=device,
         dtype=dtype,
         limit_configs=args.limit_configs,
+        neighborlist_backend=args.neighborlist_backend,
     )
     if not args.no_fit_energy_shift:
         config = replace(config, atomic_energies=fit_atomic_energies(samples))
@@ -223,6 +274,7 @@ def main() -> None:
             device=device,
             dtype=dtype,
             limit_configs=args.valid_limit_configs,
+            neighborlist_backend=args.neighborlist_backend,
         )
         best_checkpoint_path = args.output_dir / "rtece_scalar_best.pt"
     summary = train_steps(
@@ -253,6 +305,7 @@ def main() -> None:
             "force_weight": args.force_weight,
             "device": str(device),
             "default_dtype": args.default_dtype,
+            "neighborlist_backend": args.neighborlist_backend,
             "checkpoint": str(args.output_dir / "rtece_scalar.pt"),
             "best_checkpoint": str(best_checkpoint_path) if best_checkpoint_path is not None else None,
         }

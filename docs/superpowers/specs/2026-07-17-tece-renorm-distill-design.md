@@ -1740,6 +1740,36 @@ Stage-58 interpretation against TECE/TACE:
 - After the review P0 correctness issues are closed, add physics validation beyond aggregate MAE/RMSE: element-pair dimer scans from roughly 0.5x to 5x covalent-radius scale to inspect energy/force smoothness and repulsion behavior, plus train/test structure rattle-and-relax comparisons against original TACE using final energy, force stability, and relaxed RMSD. These tests should be used to judge rTECE generalization and physical usability after the semantic bugs are fixed, not as a substitute for fixing the bugs.
 - Early rattle-and-relax observations suggest rTECE relax RMSD is especially large for non-metal adsorbates such as C/N-containing species. Treat this as an algorithmic diagnostic: bucket relax failures by adsorbate chemistry and local coordination, then test whether low-rank species bases and cavity/radial angular sketches repair those basins. This is consistent with the review concern that a single `Z` moment causes chemical collisions and that current scalar sketches delete too much angular environment for adsorbate bonding.
 
+
+# Stage 59: PBC Graph ABI And TACE Neighbor Provider Alignment
+
+Stage 59 addresses the review P0 that rTECE used periodic neighbor indices without periodic image shifts. This was a physical correctness bug: for PBC structures, `edge_index` alone does not define the displacement. The rTECE graph ABI now carries the same information class as TACE graph data: `cell`, integer `edge_shifts`, and `edge_batch`. The unique displacement convention is now:
+
+```text
+d_e = r_dst(e) - r_src(e) + S_e H_batch(e)
+```
+
+Implementation gate:
+
+- Extended `RTECEGraph` with optional `cell`, `edge_shifts`, and `edge_batch` fields while preserving old no-PBC call sites.
+- Updated `compute_pair_geometry(...)` so every descriptor and analytic force path uses shifted PBC displacements when shift metadata is present.
+- Updated `collate_graphs(...)` and cached position replay to preserve cell/shift metadata across batched graphs.
+- Split training graph construction into `atoms_to_rtece_graph(...)` and `atoms_to_graph(...)`; the former is graph-only and the latter attaches energy/force labels.
+- Replaced rTECE training graph construction with TACE's `tace.dataset.neighbour_list.get_neighborhood`, defaulting to `matscipy` for real periodic data and falling back to `ase` only for zero-cell nonperiodic molecule tests.
+- Added benchmark graph construction backend `matscipy_neighborlist`; `ase_neighborlist` remains a reference/correctness backend and `torch_radius_nopbc` remains the direct-active high-throughput no-PBC backend.
+
+Verification:
+
+- PBC two-atom boundary test confirms shifted distances are 0.2 A rather than the unshifted 4.8 A.
+- Benchmark `matscipy_neighborlist` construction test confirms the same shifted geometry.
+- Full rTECE test file: `82 passed, 1 warning`.
+
+Stage-59 interpretation against TECE/TACE:
+
+- This keeps the task aligned with review P0 #2, not with a side optimization. ASE is no longer the implied main graph route for periodic rTECE; it is a reference backend.
+- The graph-provider design now matches TACE's existing matscipy/PyG data contract closely enough that later high-throughput providers can be swapped under the same ABI.
+- nvalchemi-toolkit-ops remains a candidate GPU neighbor/edge-force provider, but only after this cell/shift ABI is stable. The next model-side review priorities are still chemical low-rank species basis and cavity/radial angular sketches for the non-metal adsorbate failures.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

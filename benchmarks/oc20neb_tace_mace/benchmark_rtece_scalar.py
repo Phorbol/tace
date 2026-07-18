@@ -21,7 +21,7 @@ from benchmarks.oc20neb_tace_mace.benchmark_models import (
     summarize_errors,
 )
 from benchmarks.oc20neb_tace_mace.rtece_scalar_model import RTECEGraph, RTECEScalarConfig, collate_graphs
-from benchmarks.oc20neb_tace_mace.train_rtece_scalar import atoms_to_graph, load_checkpoint
+from benchmarks.oc20neb_tace_mace.train_rtece_scalar import atoms_to_graph, atoms_to_rtece_graph, load_checkpoint
 
 
 def parse_args() -> argparse.Namespace:
@@ -113,7 +113,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--graph-construction-backend",
-        choices=("ase_neighborlist", "torch_radius_nopbc"),
+        choices=("ase_neighborlist", "matscipy_neighborlist", "torch_radius_nopbc"),
         default="ase_neighborlist",
         help="Graph construction backend for initial and timed atom-to-graph builds.",
     )
@@ -535,19 +535,7 @@ def atoms_to_geometry_graph(
     device: torch.device,
     dtype: torch.dtype,
 ) -> RTECEGraph:
-    from ase.neighborlist import neighbor_list
-
-    src, dst = neighbor_list("ij", atoms, cutoff)
-    if len(src) == 0:
-        edge_index_np = np.zeros((2, 0), dtype=np.int64)
-    else:
-        edge_index_np = np.stack([src, dst], axis=0)
-    return RTECEGraph(
-        z=torch.tensor(atoms.numbers, dtype=torch.long, device=device),
-        pos=torch.tensor(atoms.positions, dtype=dtype, device=device),
-        edge_index=torch.tensor(edge_index_np, dtype=torch.long, device=device),
-        batch=torch.zeros(len(atoms), dtype=torch.long, device=device),
-    )
+    return atoms_to_graph(atoms, cutoff=cutoff, device=device, dtype=dtype)[0]
 
 
 def replay_graph_positions(template: RTECEGraph, positions: torch.Tensor) -> RTECEGraph:
@@ -558,6 +546,9 @@ def replay_graph_positions(template: RTECEGraph, positions: torch.Tensor) -> RTE
         pos=positions.to(device=template.pos.device, dtype=template.pos.dtype),
         edge_index=template.edge_index,
         batch=template.batch,
+        cell=template.cell,
+        edge_shifts=template.edge_shifts,
+        edge_batch=template.edge_batch,
     )
 
 
@@ -916,7 +907,9 @@ def build_atom_graph(
     dtype: torch.dtype,
 ) -> RTECEGraph:
     if graph_construction_backend == "ase_neighborlist":
-        return atoms_to_graph(atoms, cutoff=cutoff, device=device, dtype=dtype)[0]
+        return atoms_to_rtece_graph(atoms, cutoff=cutoff, device=device, dtype=dtype, neighborlist_backend="ase")
+    if graph_construction_backend == "matscipy_neighborlist":
+        return atoms_to_rtece_graph(atoms, cutoff=cutoff, device=device, dtype=dtype, neighborlist_backend="matscipy")
     if graph_construction_backend == "torch_radius_nopbc":
         return atoms_to_torch_radius_nopbc_graph(atoms, cutoff=cutoff, device=device, dtype=dtype)
     raise ValueError(f"unknown graph construction backend: {graph_construction_backend}")

@@ -13,6 +13,7 @@ from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
     RTECEScalarConfig,
     RTECEScalarModel,
     collate_graphs,
+    compute_pair_geometry,
     atomic_scalar_descriptors,
     build_rtece_config,
     cell_list_packed_element_density_descriptors,
@@ -143,6 +144,54 @@ def test_build_rtece_config_defines_ordered_variants():
         < descriptor_dim(sketch8)
         < descriptor_dim(sketch16)
     )
+
+
+
+def test_compute_pair_geometry_uses_periodic_edge_shifts():
+    graph = RTECEGraph(
+        z=torch.tensor([1, 1], dtype=torch.long),
+        pos=torch.tensor([[0.1, 0.0, 0.0], [4.9, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=torch.tensor([[0, 1], [1, 0]], dtype=torch.long),
+        batch=torch.zeros(2, dtype=torch.long),
+        cell=torch.eye(3, dtype=torch.float64).unsqueeze(0) * 5.0,
+        edge_shifts=torch.tensor([[-1, 0, 0], [1, 0, 0]], dtype=torch.long),
+        edge_batch=torch.zeros(2, dtype=torch.long),
+    )
+
+    vectors, distances, unit = compute_pair_geometry(graph)
+
+    assert torch.allclose(vectors, torch.tensor([[-0.2, 0.0, 0.0], [0.2, 0.0, 0.0]], dtype=torch.float64))
+    assert torch.allclose(distances, torch.tensor([0.2, 0.2], dtype=torch.float64))
+    assert torch.allclose(unit, torch.tensor([[-1.0, 0.0, 0.0], [1.0, 0.0, 0.0]], dtype=torch.float64))
+
+
+def test_train_atoms_to_graph_preserves_tace_matscipy_periodic_shifts():
+    from ase import Atoms
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import atoms_to_graph
+
+    atoms = Atoms(
+        "H2",
+        positions=[[0.1, 0.0, 0.0], [4.9, 0.0, 0.0]],
+        cell=[5.0, 5.0, 5.0],
+        pbc=True,
+    )
+    atoms.info["energy"] = 0.0
+    atoms.arrays["forces"] = torch.zeros((2, 3), dtype=torch.float64).numpy()
+
+    graph, _energy, _forces = atoms_to_graph(
+        atoms,
+        cutoff=0.5,
+        device=torch.device("cpu"),
+        dtype=torch.float64,
+        neighborlist_backend="matscipy",
+    )
+    _vectors, distances, _unit = compute_pair_geometry(graph)
+
+    assert graph.cell is not None
+    assert graph.edge_shifts is not None
+    assert graph.edge_batch is not None
+    assert graph.edge_index.shape[1] == 2
+    assert torch.allclose(distances, torch.tensor([0.2, 0.2], dtype=torch.float64), atol=1e-12)
 
 
 def test_packed_element_density_descriptors_match_split_descriptors():
@@ -1465,6 +1514,32 @@ def test_cached_topology_update_backend_reuses_edges_and_updates_positions():
     assert backend.rebuild_count == 1
 
 
+
+def test_benchmark_build_atom_graph_supports_tace_matscipy_pbc_backend():
+    from ase import Atoms
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import build_atom_graph
+
+    atoms = Atoms(
+        "H2",
+        positions=[[0.1, 0.0, 0.0], [4.9, 0.0, 0.0]],
+        cell=[5.0, 5.0, 5.0],
+        pbc=True,
+    )
+
+    graph = build_atom_graph(
+        atoms,
+        graph_construction_backend="matscipy_neighborlist",
+        cutoff=0.5,
+        device=torch.device("cpu"),
+        dtype=torch.float64,
+    )
+    _vectors, distances, _unit = compute_pair_geometry(graph)
+
+    assert graph.cell is not None
+    assert graph.edge_shifts is not None
+    assert torch.allclose(distances, torch.tensor([0.2, 0.2], dtype=torch.float64), atol=1e-12)
+
+
 def test_atoms_to_torch_radius_nopbc_graph_builds_direct_edges():
     from ase import Atoms
     from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import atoms_to_torch_radius_nopbc_graph
@@ -1980,6 +2055,7 @@ def test_rtece_benchmark_help_exposes_force_mode():
     assert "--graph-update-backend" in result.stdout
     assert "--graph-update-chunk-configs" in result.stdout
     assert "--graph-construction-backend" in result.stdout
+    assert "matscipy_neighborlist" in result.stdout
     assert "torch_radius_nopbc" in result.stdout
     assert "torch_radius_nopbc_grouped" in result.stdout
     assert "torch_radius_nopbc_grouped_chunked" in result.stdout

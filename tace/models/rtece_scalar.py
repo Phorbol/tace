@@ -181,6 +181,9 @@ class RTECEGraph:
     pos: torch.Tensor
     edge_index: torch.Tensor
     batch: torch.Tensor
+    cell: torch.Tensor | None = None
+    edge_shifts: torch.Tensor | None = None
+    edge_batch: torch.Tensor | None = None
 
 
 def collate_graphs(graphs: list[RTECEGraph]) -> RTECEGraph:
@@ -190,24 +193,48 @@ def collate_graphs(graphs: list[RTECEGraph]) -> RTECEGraph:
     pos_parts = []
     edge_parts = []
     batch_parts = []
+    cell_parts = []
+    edge_shift_parts = []
+    edge_batch_parts = []
+    has_cell = any(graph.cell is not None for graph in graphs)
+    has_edge_shifts = any(graph.edge_shifts is not None for graph in graphs)
     node_offset = 0
     for graph_idx, graph in enumerate(graphs):
         num_nodes = graph.z.shape[0]
         z_parts.append(graph.z)
         pos_parts.append(graph.pos)
         batch_parts.append(torch.full_like(graph.batch, graph_idx))
+        if has_cell:
+            if graph.cell is None:
+                cell_parts.append(graph.pos.new_zeros((1, 3, 3)))
+            else:
+                cell_parts.append(graph.cell.to(device=graph.pos.device, dtype=graph.pos.dtype).reshape(-1, 3, 3)[:1])
         if graph.edge_index.numel() > 0:
             edge_parts.append(graph.edge_index + node_offset)
+            num_edges = graph.edge_index.shape[1]
+            if has_edge_shifts:
+                if graph.edge_shifts is None:
+                    edge_shift_parts.append(graph.edge_index.new_zeros((num_edges, 3)))
+                else:
+                    edge_shift_parts.append(graph.edge_shifts.to(device=graph.edge_index.device, dtype=torch.long))
+            if has_cell or has_edge_shifts:
+                edge_batch_parts.append(torch.full((num_edges,), graph_idx, dtype=torch.long, device=graph.edge_index.device))
         node_offset += num_nodes
     if edge_parts:
         edge_index = torch.cat(edge_parts, dim=1)
     else:
         edge_index = graphs[0].edge_index.new_zeros((2, 0))
+    cell = torch.cat(cell_parts, dim=0) if cell_parts else None
+    edge_shifts = torch.cat(edge_shift_parts, dim=0) if edge_shift_parts else None
+    edge_batch = torch.cat(edge_batch_parts, dim=0) if edge_batch_parts else None
     return RTECEGraph(
         z=torch.cat(z_parts, dim=0),
         pos=torch.cat(pos_parts, dim=0),
         edge_index=edge_index,
         batch=torch.cat(batch_parts, dim=0),
+        cell=cell,
+        edge_shifts=edge_shifts,
+        edge_batch=edge_batch,
     )
 
 
@@ -243,6 +270,13 @@ def add_atomic_reference_energy(
 def compute_pair_geometry(graph: RTECEGraph) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     src, dst = graph.edge_index
     vectors = graph.pos[dst] - graph.pos[src]
+    if graph.cell is not None and graph.edge_shifts is not None and graph.edge_shifts.numel() > 0:
+        edge_batch = graph.edge_batch
+        if edge_batch is None:
+            edge_batch = graph.batch[src]
+        cell = graph.cell.to(device=graph.pos.device, dtype=graph.pos.dtype)
+        shifts = graph.edge_shifts.to(device=graph.pos.device, dtype=graph.pos.dtype)
+        vectors = vectors + torch.einsum("ei,eij->ej", shifts, cell[edge_batch])
     distances = vectors.norm(dim=-1).clamp_min(1e-12)
     unit = vectors / distances[:, None]
     return vectors, distances, unit
@@ -883,7 +917,15 @@ class RTECEScalarModel(torch.nn.Module):
         pos = graph.pos
         if not pos.requires_grad:
             pos = pos.detach().clone().requires_grad_(True)
-            graph = RTECEGraph(z=graph.z, pos=pos, edge_index=graph.edge_index, batch=graph.batch)
+            graph = RTECEGraph(
+                z=graph.z,
+                pos=pos,
+                edge_index=graph.edge_index,
+                batch=graph.batch,
+                cell=graph.cell,
+                edge_shifts=graph.edge_shifts,
+                edge_batch=graph.edge_batch,
+            )
 
         z_scaled = graph.z.to(dtype=pos.dtype, device=pos.device).view(-1, 1)
         z_scaled = z_scaled / float(self.config.max_atomic_number)
