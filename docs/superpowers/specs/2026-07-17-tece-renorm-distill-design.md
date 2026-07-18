@@ -3009,6 +3009,103 @@ Priority after Stage 89:
 3. If using species information again, make it teacher/force-conditioned or pair/radial-conditioned rather than fixed Z-power moments.
 4. Keep graph/provider work deferred until a candidate improves the broader physical score.
 
+## Stage 90: Cavity/Radial Geometry-Conditioned Retained-Path Probe
+
+Stage 90 follows the Stage-89 priority directly. Fixed low-rank species density improved aggregate force MAE but did not reduce the C/N-local residual concentration, so this stage tests geometry-conditioned retained paths: a minimal cavity vector-dot scalar path and a heavier cavity/radial cross-sketch path, both with the same Stage-85 short-range radial core.
+
+Candidate setup:
+
+| job id | route | retained paths | core | train/valid/bench configs | force mode |
+|---:|---|---|---|---|---|
+| 680875 | `radial_core_cavity_vec` | radial_density + cavity_edge_vector_dot + short_range_radial_core | strength 0.6, radius 0.75, beta 10 | 512/128/512 | autograd |
+| 680876 | `rtece_cavity_radial_edge_sketch14_core_s0p6_r0p75_b10` | radial_density + cavity_edge_relations + radial/cross-radial edge sketches + direct radial edge + short_range_radial_core | strength 0.6, radius 0.75, beta 10 | 512/128/512 | autograd |
+
+Aggregate benchmark result:
+
+| route | DFT F MAE | DFT F RMSE | teacher F MAE | atoms/s | peak MB | params |
+|---|---:|---:|---:|---:|---:|---:|
+| Stage-85 `s0p6_r0p75_b10` | 29.08 | 101.12 | 34.21 | 3.08e6 | 178.6 | 449 |
+| Stage-89 `species_basis4_core` | 28.44 | 101.99 | 33.80 | 2.66e6 | 571.9 | 961 |
+| Stage-90 `cavity_vec_core` | 30.63 | 102.76 | 36.15 | 0.83e6 | 1820.1 | 465 |
+| Stage-90 `cavity_radial14_core` | 28.22 | 101.17 | 33.97 | 0.48e6 | 2379.6 | 929 |
+
+Stage-87 exact-window C/N force-selection proxy:
+
+| route | target | global F MAE | C/N F MAE | C/N excess | selection score |
+|---|---|---:|---:|---:|---:|
+| Stage-85 `s0p6_r0p75_b10` | DFT | 75.41 | 485.39 | 409.98 | 895.37 |
+| Stage-89 `species_basis4_core` | DFT | 76.19 | 485.74 | 409.55 | 895.30 |
+| Stage-90 `cavity_vec_core` | DFT | 76.22 | 485.08 | 408.85 | 893.93 |
+| Stage-90 `cavity_radial14_core` | DFT | 73.77 | 488.16 | 414.39 | 902.55 |
+
+Stage-90 dimer probe:
+
+| route | short repulsive pairs | C-N short F | min short dE | max short dE penalty note |
+|---|---:|---:|---:|---|
+| Stage-90 `cavity_vec_core` | 4/4 | -0.2913 | -0.01328 | force sign valid, energy-shape residual worse than Stage-85/89 |
+| Stage-90 `cavity_radial14_core` | 4/4 | -0.1676 | -0.04041 | force sign valid, energy-shape residual much worse |
+
+Stage-90 interpretation against TECE/TACE and the review document:
+
+- The heavier cavity/radial path improves aggregate DFT force MAE to 28.22 meV/A, but it worsens the C/N selection score and costs about 6.5x throughput versus the Stage-85 anchor. It is not a Pareto candidate under the current physical gate.
+- The minimal cavity-vector path slightly improves the C/N proxy score, but the improvement is small and comes with a large throughput and memory penalty. It is evidence that cavity geometry carries some relevant signal, not evidence that this implementation should be promoted.
+- Both Stage-90 rows preserve short-distance repulsive force sign, but both worsen the dimer energy-shape residual. This supports keeping the dimer energy-shape term as a visible scorer component before rattle promotion.
+- Because neither row materially improves the C/N proxy at acceptable cost, running the broader Stage-86 rattle window for both would be a poor priority. The next experiment should combine chemistry and geometry in the smallest path-id route, then use the same Stage-87 proxy before any rattle.
+
+Priority after Stage 90:
+
+1. Do not promote `cavity_radial14_core` despite its aggregate DFT F MAE. It fails the C/N proxy and is too slow for the high-throughput endpoint.
+2. Do not switch to ASE/matscipy/nvalchemi/deepmd graph acceleration as the next isolated task. The review notes graph/PBC ABI issues are real, but current evidence says the dominant blocker is still C/N-local retained-operator physics.
+3. Test the smallest combined chemistry+geometry retained path already supported by the path registry: `atomic.radial_density + atomic.species_basis_density + edge.cavity.vector_dot + short_range_radial_core`.
+4. If that combined path still fails the C/N proxy, the next clean algorithmic step is force/teacher-conditioned species-radial projection or active-set path selection, not another fixed Z-power or broad cavity/radial sweep.
+
+## Stage 91: Species+Cavity Combined Path Submission
+
+Stage 91 starts from the Stage-90 decision without adding new model math. A narrow CLI/Slurm plumbing patch exposes `species_basis_channels` for manifest-driven path-id routes so the existing model registry can train a combined species+cavity route through the normal repository training and inference path.
+
+Submitted candidate:
+
+| job id | route | scalar path ids | species basis | core | train/valid/bench configs |
+|---:|---|---|---:|---|---|
+| 681012 | `species4_cavity_vec_core_s0p6_r0p75_b10` | `atomic.radial_density,atomic.species_basis_density,edge.cavity.vector_dot` | 4 | strength 0.6, radius 0.75, beta 10 | 512/128/512 |
+
+Stage-91 benchmark result:
+
+| route | DFT F MAE | DFT F RMSE | teacher F MAE | atoms/s | peak MB | params |
+|---|---:|---:|---:|---:|---:|---:|
+| Stage-85 `s0p6_r0p75_b10` | 29.08 | 101.12 | 34.21 | 3.08e6 | 178.6 | 449 |
+| Stage-90 `cavity_vec_core` | 30.63 | 102.76 | 36.15 | 0.83e6 | 1820.1 | 465 |
+| Stage-91 `species4_cavity_vec_core` | 23.93 | 100.48 | 30.79 | 0.79e6 | 2020.5 | 977 |
+
+Stage-87 exact-window C/N force-selection proxy:
+
+| route | target | global F MAE | C/N F MAE | C/N excess | selection score |
+|---|---|---:|---:|---:|---:|
+| Stage-85 `s0p6_r0p75_b10` | DFT | 75.41 | 485.39 | 409.98 | 895.37 |
+| Stage-90 `cavity_vec_core` | DFT | 76.22 | 485.08 | 408.85 | 893.93 |
+| Stage-91 `species4_cavity_vec_core` | DFT | 71.87 | 484.49 | 412.62 | 897.11 |
+
+Stage-91 dimer probe:
+
+| route | short repulsive pairs | C-N short F | C-N short dE | C-O short dE | N-H short dE | O-H short dE |
+|---|---:|---:|---:|---:|---:|---:|
+| Stage-91 `species4_cavity_vec_core` | 4/4 | -0.2226 | +0.0595 | +0.0570 | +0.0394 | +0.0375 |
+
+Stage-91 interpretation:
+
+- The combined species+cavity retained path is the first recent row to improve aggregate supervised DFT force MAE substantially and to make the dimer short-distance energy lift positive for all tested C/N/O/H pairs. This means the combined retained information is physically useful.
+- The same row still does not repair the Stage-86 C/N adsorbate basin. Its global force proxy improves, but the C/N excess rises to 412.62 meV/A and the selection score worsens to 897.11. This fails the pre-filter for broader rattle.
+- The route is also much slower than the Stage-85 scalar-core anchor, so it cannot be a high-throughput Pareto endpoint unless later path selection/fusion removes most of the cavity/species overhead.
+- A narrow source-code fix was required because `species_basis_channels` was not exposed through the manifest-driven train/Slurm path. Stage 91 now runs through the normal repository training and benchmark interface, satisfying the user's requirement that rTECE experiments be executable from the repo body rather than ad hoc scripts.
+- Stage 91 exposed a route-contract reporting bug: species+cavity path-id configs contained the cavity descriptor numerically, but `retained_tece_groups` only reported species/core. The source has been fixed so species+cavity manifests report both low-rank species basis and cavity edge scalar sketches.
+
+Priority after Stage 91:
+
+1. Do not run the broader Stage-86 rattle window for Stage91 now. The C/N proxy did not materially improve, so rattle would likely spend GPU/CPU on a row that misses the known hard population.
+2. Keep the positive part of Stage91: combined chemistry+geometry can fix aggregate force and dimer energy shape. The next model step should keep this information but make the retained basis/path selection C/N/force-conditioned.
+3. Implement or use an active-set projection diagnostic that ranks species/radial/cavity path components by teacher/DFT force residual on the Stage-87 C/N slice, then train only the selected low-cost subset. This is closer to TECE renormalized deletion/projection than another fixed Z-power or broad cavity sweep.
+4. Continue deferring graph/backend acceleration until a candidate improves the C/N physical gate. The ASE/matscipy/nvalchemi/deepmd backend question is real but is a P2 execution problem; the current blocker is still P1 retained-operator selection.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

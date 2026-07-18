@@ -30,6 +30,7 @@ MAX_STEPS=${MAX_STEPS:-200}
 LR=${LR:-1e-3}
 HIDDEN_CHANNELS=${HIDDEN_CHANNELS:-64,64}
 NUM_RADIAL=${NUM_RADIAL:-8}
+SPECIES_BASIS_CHANNELS=${SPECIES_BASIS_CHANNELS:-0}
 SEED=${SEED:-0}
 ENERGY_WEIGHT=${ENERGY_WEIGHT:-1.0}
 FORCE_WEIGHT=${FORCE_WEIGHT:-10.0}
@@ -60,6 +61,7 @@ echo "dft_valid_file=${DFT_VALID_FILE}"
 echo "teacher_valid_file=${TEACHER_VALID_FILE}"
 echo "hidden_channels=${HIDDEN_CHANNELS}"
 echo "num_radial=${NUM_RADIAL}"
+echo "species_basis_channels=${SPECIES_BASIS_CHANNELS}"
 echo "scalar_path_ids=${SCALAR_PATH_IDS}"
 echo "seed=${SEED}"
 echo "energy_weight=${ENERGY_WEIGHT}"
@@ -116,6 +118,7 @@ for variant in "${variant_args[@]}"; do
     --lr "${LR}" \
     --hidden-channels "${HIDDEN_CHANNELS}" \
     --num-radial "${NUM_RADIAL}" \
+    --species-basis-channels "${SPECIES_BASIS_CHANNELS}" \
     --seed "${SEED}" \
     --energy-weight "${ENERGY_WEIGHT}" \
     --force-weight "${FORCE_WEIGHT}" \

@@ -92,6 +92,7 @@ def build_training_config(args: argparse.Namespace) -> RTECEScalarConfig:
             scalar_path_ids,
             hidden_channels=hidden_channels,
             num_radial=int(args.num_radial),
+            species_basis_channels=int(getattr(args, "species_basis_channels", 0)),
             **short_range_kwargs,
         )
     return replace(
@@ -285,6 +286,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--hidden-channels", default="64,64")
     parser.add_argument("--num-radial", type=int, default=8)
+    parser.add_argument("--species-basis-channels", type=int, default=0)
     parser.add_argument("--use-short-range-repulsion", action="store_true")
     parser.add_argument("--short-range-repulsion-strength", type=float, default=0.0)
     parser.add_argument("--short-range-repulsion-beta", type=float, default=10.0)
@@ -359,6 +361,7 @@ def main() -> None:
             "atomic_energies": {str(k): float(v) for k, v in (config.atomic_energies or {}).items()},
             "hidden_channels": list(config.hidden_channels),
             "num_radial": config.num_radial,
+            "species_basis_channels": int(config.species_basis_channels),
             "scalar_path_ids": list(config.scalar_path_ids or []),
             "use_short_range_repulsion": bool(config.use_short_range_repulsion),
             "short_range_repulsion_strength": float(config.short_range_repulsion_strength),

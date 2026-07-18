@@ -1262,6 +1262,24 @@ def test_rtece_species_basis_variant_has_route_contract():
     assert "low_rank_neighbor_species_basis" in route["retained_tece_groups"]
 
 
+def test_rtece_species_cavity_path_reports_both_retained_groups():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
+
+    config = build_rtece_config_from_path_ids(
+        "species_cavity_vec",
+        ("atomic.radial_density", "atomic.species_basis_density", "edge.cavity.vector_dot"),
+        species_basis_channels=4,
+    )
+
+    route = rtece_route_contract(config, force_mode="autograd")
+
+    assert "low_rank_neighbor_species_basis" in route["retained_tece_groups"]
+    assert "low_order_atomic_moments" in route["retained_tece_groups"]
+    assert "cavity_edge_relational_scalar_sketches" in route["retained_tece_groups"]
+    assert route["semantic_tier"] == "T3_species_cavity_edge_scalar_sketch"
+    assert route["descriptor_family"] == "species_basis_density_plus_cavity_edge_sketch"
+
+
 def test_density_quadratic_descriptors_are_rotation_invariant():
     config = build_rtece_config("rtece_density_quadratic")
     z = torch.tensor([6, 8, 1], dtype=torch.long)
@@ -1727,6 +1745,31 @@ def test_train_rtece_scalar_builds_config_from_scalar_path_ids():
     assert config.hidden_channels == (8,)
     assert config.num_radial == 3
     assert config.num_edge_sketches == 1
+
+
+def test_train_rtece_scalar_builds_species_cavity_path_id_config():
+    from types import SimpleNamespace
+
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import build_training_config
+
+    args = SimpleNamespace(
+        variant="species_cavity_vec",
+        scalar_path_ids="atomic.radial_density,atomic.species_basis_density,edge.cavity.vector_dot",
+        species_basis_channels=4,
+        hidden_channels="16,16",
+        num_radial=8,
+    )
+
+    config = build_training_config(args)
+
+    assert config.scalar_path_ids == (
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "edge.cavity.vector_dot",
+    )
+    assert config.species_basis_channels == 4
+    assert config.num_edge_sketches == 1
+    assert config.use_cavity_edge_sketches is True
 
 
 def test_train_rtece_scalar_builds_config_with_short_range_repulsive_core():
@@ -3816,6 +3859,7 @@ def test_rtece_matrix_submit_helper_generates_wrapper_without_sbatch_export(tmp_
         hidden_channels="16,16",
         num_radial=4,
         scalar_path_ids="atomic.radial_density,edge.cavity.vector_dot",
+        species_basis_channels=4,
         force_weight=30.0,
         force_focus_elements="C,N",
         force_focus_weight=4.0,
@@ -3836,6 +3880,7 @@ def test_rtece_matrix_submit_helper_generates_wrapper_without_sbatch_export(tmp_
     assert "TRAIN_FILE=/tmp/train.extxyz" in text
     assert "BENCH_LIMIT_CONFIGS=32" in text
     assert "SCALAR_PATH_IDS=atomic.radial_density,edge.cavity.vector_dot" in text
+    assert "SPECIES_BASIS_CHANNELS=4" in text
     assert "FORCE_WEIGHT=30.0" in text
     assert "FORCE_FOCUS_ELEMENTS=C,N" in text
     assert "FORCE_FOCUS_WEIGHT=4.0" in text

@@ -254,6 +254,20 @@ def rtece_route_contract(
         semantic_tier = "T3_low_rank_species_density"
         descriptor_family = "species_basis_density"
         retained.append("low_rank_neighbor_species_basis")
+        if config.use_atomic_moments or config.num_edge_sketches:
+            if config.use_cavity_edge_sketches:
+                semantic_tier = "T3_species_cavity_edge_scalar_sketch"
+                descriptor_family = "species_basis_density_plus_cavity_edge_sketch"
+                retained.extend(
+                    [
+                        "low_order_atomic_moments",
+                        "cavity_edge_relational_scalar_sketches",
+                    ]
+                )
+            else:
+                semantic_tier = "T3_species_atomic_moment_scalar_sketch"
+                descriptor_family = "species_basis_density_plus_atomic_moment_sketch"
+                retained.extend(["low_order_atomic_moments", "edge_relational_scalar_sketches"])
     elif config.use_atomic_moments or config.num_edge_sketches:
         if config.use_cavity_edge_sketches:
             if config.radial_edge_sketch_channels:

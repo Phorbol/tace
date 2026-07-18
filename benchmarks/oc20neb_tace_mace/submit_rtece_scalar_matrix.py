@@ -34,6 +34,7 @@ def write_rtece_matrix_wrapper(
     hidden_channels: str | None = None,
     num_radial: int | None = None,
     scalar_path_ids: str | None = None,
+    species_basis_channels: int | None = None,
     seed: int | None = None,
     energy_weight: float | None = None,
     force_weight: float | None = None,
@@ -68,6 +69,7 @@ def write_rtece_matrix_wrapper(
         _shell_assign("HIDDEN_CHANNELS", hidden_channels),
         _shell_assign("NUM_RADIAL", num_radial),
         _shell_assign("SCALAR_PATH_IDS", scalar_path_ids),
+        _shell_assign("SPECIES_BASIS_CHANNELS", species_basis_channels),
         _shell_assign("SEED", seed),
         _shell_assign("ENERGY_WEIGHT", energy_weight),
         _shell_assign("FORCE_WEIGHT", force_weight),
@@ -128,6 +130,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--hidden-channels", default=None)
     parser.add_argument("--num-radial", type=int, default=None)
     parser.add_argument("--scalar-path-ids", default=None)
+    parser.add_argument("--species-basis-channels", type=int, default=None)
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--energy-weight", type=float, default=None)
     parser.add_argument("--force-weight", type=float, default=None)
@@ -164,6 +167,7 @@ def main() -> None:
         hidden_channels=args.hidden_channels,
         num_radial=args.num_radial,
         scalar_path_ids=args.scalar_path_ids,
+        species_basis_channels=args.species_basis_channels,
         seed=args.seed,
         energy_weight=args.energy_weight,
         force_weight=args.force_weight,
