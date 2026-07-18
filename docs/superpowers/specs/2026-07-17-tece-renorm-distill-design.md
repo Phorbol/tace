@@ -2062,6 +2062,36 @@ Next priority:
 2. Add optional teacher-force or teacher-energy sensitivity weighting to the projection residual once a teacher checkpoint/path cache is available in the same workflow.
 3. Feed the diagnostic rows into the manifest-group Pareto summary so projection residual, MAE/RMSE, and atoms/s appear together for the same route hash.
 
+# Stage 70: Label-Independent Manifest Hash And First Projection Run
+
+Stage 70 fixes a manifest identity issue exposed by the first Stage 69 diagnostic run. Two routes with identical selected path ids and architecture parameters but different human-readable `variant` labels produced different `manifest_hash` values. That contradicted the Stage 65 requirement that manifest grouping compare architecture routes rather than labels.
+
+Implementation gate:
+
+- `rtece_path_manifest()` now preserves `config.variant` in the manifest payload for provenance, but removes it from the hash input. The `manifest_hash` is therefore an architecture/path identity rather than a run label identity.
+- Added a regression test showing that two path-id configs with different variant labels but identical architecture/path specs share the same manifest hash.
+- Re-ran the Stage 69 projection diagnostic on 8 structures from `mixed_train_tw0.75.extxyz` with reference path ids `atomic.radial_density, edge.cavity.vector_dot, edge.direct.radial`.
+
+First bounded diagnostic result on 2026-07-18:
+
+| candidate | dim | deleted paths | relative descriptor residual | interpretation |
+|---|---:|---|---:|---|
+| `radial` | 3 | `edge.cavity.vector_dot`, `edge.direct.radial` | 0.1273 | Deleting both non-radial edge paths leaves a visible descriptor-space projection gap. |
+| `radial_cavity_vec` | 4 | `edge.direct.radial` | 0.00542 | Most of this reference descriptor space is linearly recoverable once the cavity vector-dot path is retained. |
+| `radial_cavity_vec_direct` | 6 | none | 2.1e-13 | Sanity check; identical path route reconstructs itself and now shares the reference manifest hash. |
+
+Stage-70 interpretation against TECE/TACE:
+
+- This directly improves the Pareto/compiler substrate: route grouping is now stable under label changes, which is required for systematic architecture search.
+- The first projection diagnostic suggests that `edge.cavity.vector_dot` captures much more of the selected reference descriptor subspace than direct radial edge channels on this tiny subset. This is not yet an accuracy or force-sensitivity claim, but it gives a rational next candidate order for cheap path-id training/benchmark runs.
+- Because the diagnostic is descriptor-space only, it should be used to prioritize candidates, not to replace DFT/teacher MAE/RMSE or physical relax/dimer tests.
+
+Next priority:
+
+1. Feed projection residual into the summary JSON/Markdown next to manifest groups so descriptor projection, MAE/RMSE, and atoms/s can be read together.
+2. Run a tiny train/benchmark smoke for `radial` vs `radial_cavity_vec` path-id routes only if the training CLI can instantiate path-id configs without reverting to variant names.
+3. Add teacher-force sensitivity weighting after the unweighted descriptor residual is integrated into the route report.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

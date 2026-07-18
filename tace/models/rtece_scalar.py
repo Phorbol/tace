@@ -593,7 +593,11 @@ def rtece_path_manifest(
         "deleted_tece_groups": route["deleted_tece_groups"],
         "compiler_status": "explicit_manifest_not_full_compiler",
     }
-    encoded = json.dumps(manifest_core, sort_keys=True, separators=(",", ":"), allow_nan=False)
+    hash_core = dict(manifest_core)
+    hash_config = dict(hash_core["config"])
+    hash_config.pop("variant", None)
+    hash_core["config"] = hash_config
+    encoded = json.dumps(hash_core, sort_keys=True, separators=(",", ":"), allow_nan=False)
     manifest = dict(manifest_core)
     manifest["manifest_hash"] = hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
     return manifest

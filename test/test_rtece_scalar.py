@@ -688,6 +688,21 @@ def test_rtece_path_id_edge_manifest_reconstructs_selected_edge_paths():
     assert rtece_path_manifest(rebuilt)["manifest_hash"] == manifest["manifest_hash"]
 
 
+def test_rtece_path_manifest_hash_is_independent_of_variant_label():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
+
+    paths = ("atomic.radial_density", "edge.cavity.vector_dot", "edge.direct.radial")
+    left = build_rtece_config_from_path_ids("left_label", paths, num_radial=3)
+    right = build_rtece_config_from_path_ids("right_label", paths, num_radial=3)
+
+    left_manifest = rtece_path_manifest(left)
+    right_manifest = rtece_path_manifest(right)
+
+    assert left_manifest["config"]["variant"] == "left_label"
+    assert right_manifest["config"]["variant"] == "right_label"
+    assert left_manifest["manifest_hash"] == right_manifest["manifest_hash"]
+
+
 def test_rtece_projection_residual_metrics_detects_spanned_and_deleted_components():
     from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import projection_residual_metrics
 
