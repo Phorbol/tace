@@ -2790,8 +2790,140 @@ def test_rtece_summary_markdown_includes_manifest_groups_section():
     markdown = format_markdown([row], baselines=[])
 
     assert "## Manifest Groups" in markdown
-    assert "| manifest | TECE route | variants | retained groups | scalar paths | best atoms/s | best DFT F MAE | best teacher F MAE | rows |" in markdown
+    assert "| manifest | TECE route | variants | retained groups | scalar paths | projection residual | deleted projection paths | projection samples | best atoms/s | best DFT F MAE | best teacher F MAE | rows |" in markdown
     assert f"| {row['tece_path_manifest_hash']} | T3_low_rank_species_density | species_smoke |" in markdown
+
+
+def test_rtece_summary_manifest_groups_attach_projection_residuals():
+    from benchmarks.oc20neb_tace_mace.summarize_tece_distill import (
+        make_student_row,
+        manifest_group_rows,
+    )
+
+    dft = {
+        "model": "rtece_scalar.pt",
+        "variant": "rtece_species_basis4",
+        "force_mode": "autograd",
+        "hidden_channels": [16, 16],
+        "num_radial": 4,
+        "atoms_per_second": 220.0,
+        "configs_per_second": 3.0,
+        "seconds_per_pass": 0.1,
+        "peak_allocated_mb": 36.0,
+        "peak_reserved_mb": 48.0,
+        "num_parameters": 641,
+        "mae_e_mev_atom": 60.0,
+        "rmse_e_mev_atom": 90.0,
+        "mae_f_mev_a": 38.0,
+        "rmse_f_mev_a": 70.0,
+    }
+    teacher = dict(dft)
+    teacher["mae_f_mev_a"] = 37.0
+    row = make_student_row("species_smoke", dft_benchmark=dft, teacher_benchmark=teacher)
+    projection_rows = [
+        {
+            "candidate": "species_projection",
+            "candidate_manifest_hash": row["tece_path_manifest_hash"],
+            "relative_residual": 0.0125,
+            "deleted_scalar_path_ids": ["edge.direct.radial"],
+            "num_samples": 128,
+        }
+    ]
+
+    groups = manifest_group_rows([row], projection_rows=projection_rows)
+
+    assert groups[0]["projection_relative_residual"] == 0.0125
+    assert groups[0]["projection_deleted_scalar_path_ids"] == ["edge.direct.radial"]
+    assert groups[0]["projection_num_samples"] == 128
+
+
+def test_rtece_summary_manifest_groups_keep_zero_projection_residual_as_best():
+    from benchmarks.oc20neb_tace_mace.summarize_tece_distill import (
+        make_student_row,
+        manifest_group_rows,
+    )
+
+    dft = {
+        "model": "rtece_scalar.pt",
+        "variant": "rtece_species_basis4",
+        "force_mode": "autograd",
+        "hidden_channels": [16, 16],
+        "num_radial": 4,
+        "atoms_per_second": 220.0,
+        "configs_per_second": 3.0,
+        "seconds_per_pass": 0.1,
+        "peak_allocated_mb": 36.0,
+        "peak_reserved_mb": 48.0,
+        "num_parameters": 641,
+        "mae_e_mev_atom": 60.0,
+        "rmse_e_mev_atom": 90.0,
+        "mae_f_mev_a": 38.0,
+        "rmse_f_mev_a": 70.0,
+    }
+    teacher = dict(dft)
+    teacher["mae_f_mev_a"] = 37.0
+    row = make_student_row("species_smoke", dft_benchmark=dft, teacher_benchmark=teacher)
+    projection_rows = [
+        {
+            "candidate_manifest_hash": row["tece_path_manifest_hash"],
+            "relative_residual": 0.0,
+            "deleted_scalar_path_ids": [],
+        },
+        {
+            "candidate_manifest_hash": row["tece_path_manifest_hash"],
+            "relative_residual": 0.2,
+            "deleted_scalar_path_ids": ["edge.direct.radial"],
+        },
+    ]
+
+    groups = manifest_group_rows([row], projection_rows=projection_rows)
+
+    assert groups[0]["projection_relative_residual"] == 0.0
+    assert groups[0]["projection_deleted_scalar_path_ids"] == []
+
+
+def test_rtece_summary_markdown_includes_projection_residuals_in_manifest_groups():
+    from benchmarks.oc20neb_tace_mace.summarize_tece_distill import (
+        format_markdown,
+        make_student_row,
+    )
+
+    dft = {
+        "model": "rtece_scalar.pt",
+        "variant": "rtece_species_basis4",
+        "force_mode": "autograd",
+        "hidden_channels": [16, 16],
+        "num_radial": 4,
+        "atoms_per_second": 220.0,
+        "configs_per_second": 3.0,
+        "seconds_per_pass": 0.1,
+        "peak_allocated_mb": 36.0,
+        "peak_reserved_mb": 48.0,
+        "num_parameters": 641,
+        "mae_e_mev_atom": 60.0,
+        "rmse_e_mev_atom": 90.0,
+        "mae_f_mev_a": 38.0,
+        "rmse_f_mev_a": 70.0,
+    }
+    teacher = dict(dft)
+    teacher["mae_f_mev_a"] = 37.0
+    row = make_student_row("species_smoke", dft_benchmark=dft, teacher_benchmark=teacher)
+    projection_rows = [
+        {
+            "candidate": "species_projection",
+            "candidate_manifest_hash": row["tece_path_manifest_hash"],
+            "relative_residual": 0.0125,
+            "deleted_scalar_path_ids": ["edge.direct.radial"],
+            "num_samples": 128,
+        }
+    ]
+
+    markdown = format_markdown([row], baselines=[], projection_rows=projection_rows)
+
+    assert "projection residual" in markdown
+    assert "deleted projection paths" in markdown
+    assert "0.013" in markdown
+    assert "edge.direct.radial" in markdown
 
 
 def test_rtece_matrix_sbatch_separates_training_and_benchmark_validation_files():

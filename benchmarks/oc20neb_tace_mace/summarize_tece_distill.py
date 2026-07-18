@@ -6,7 +6,12 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import sys
 from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from tace.models.rtece_scalar import RTECEScalarConfig, build_rtece_config, rtece_path_manifest, rtece_route_contract
 
@@ -185,8 +190,46 @@ def _join_limited(values: list[str], *, limit: int = 6) -> str:
     return ", ".join(shown) + f", +{len(values) - limit} more"
 
 
-def manifest_group_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+def load_projection_diagnostic_rows(paths: list[Path]) -> list[dict[str, Any]]:
+    rows = []
+    for path in paths:
+        payload = load_json(path)
+        for row in payload.get("rows", []):
+            item = dict(row)
+            item["projection_diagnostic"] = str(path)
+            rows.append(item)
+    return rows
+
+
+def _projection_residual_value(row: dict[str, Any] | None) -> float:
+    if row is None or row.get("relative_residual") is None:
+        return 1.0e30
+    try:
+        return float(row["relative_residual"])
+    except (TypeError, ValueError):
+        return 1.0e30
+
+
+def _projection_rows_by_manifest(projection_rows: list[dict[str, Any]] | None) -> dict[str, dict[str, Any]]:
+    by_manifest: dict[str, dict[str, Any]] = {}
+    for row in projection_rows or []:
+        manifest_hash = row.get("candidate_manifest_hash")
+        if manifest_hash is None:
+            continue
+        key = str(manifest_hash)
+        current = by_manifest.get(key)
+        if current is None or _projection_residual_value(row) < _projection_residual_value(current):
+            by_manifest[key] = row
+    return by_manifest
+
+
+def manifest_group_rows(
+    rows: list[dict[str, Any]],
+    *,
+    projection_rows: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = {}
+    projection_by_manifest = _projection_rows_by_manifest(projection_rows)
     for row in rows:
         manifest_hash = row.get("tece_path_manifest_hash") or f"missing:{row.get('variant', 'unknown')}"
         grouped.setdefault(str(manifest_hash), []).append(row)
@@ -199,6 +242,7 @@ def manifest_group_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         atoms_values = _finite_values(group_rows, "atoms_per_second")
         dft_force_values = _finite_values(group_rows, "dft_f_mae_mev_a")
         teacher_force_values = _finite_values(group_rows, "teacher_f_mae_mev_a")
+        projection = projection_by_manifest.get(manifest_hash)
         groups.append({
             "manifest_hash": manifest_hash,
             "semantic_tier": route.get("semantic_tier"),
@@ -218,6 +262,10 @@ def manifest_group_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             "best_atoms_per_second": max(atoms_values) if atoms_values else None,
             "best_dft_f_mae_mev_a": min(dft_force_values) if dft_force_values else None,
             "best_teacher_f_mae_mev_a": min(teacher_force_values) if teacher_force_values else None,
+            "projection_relative_residual": projection.get("relative_residual") if projection else None,
+            "projection_deleted_scalar_path_ids": list(projection.get("deleted_scalar_path_ids") or []) if projection else [],
+            "projection_num_samples": projection.get("num_samples") if projection else None,
+            "projection_candidate": projection.get("candidate") if projection else None,
         })
     return sorted(
         groups,
@@ -266,25 +314,33 @@ def append_front_section(lines: list[str], title: str, rows: list[dict[str, Any]
         )
 
 
-def append_manifest_group_section(lines: list[str], rows: list[dict[str, Any]]) -> None:
-    groups = manifest_group_rows(rows)
+def append_manifest_group_section(
+    lines: list[str],
+    rows: list[dict[str, Any]],
+    *,
+    projection_rows: list[dict[str, Any]] | None = None,
+) -> None:
+    groups = manifest_group_rows(rows, projection_rows=projection_rows)
     if not groups:
         return
     lines.extend([
         "",
         "## Manifest Groups",
         "",
-        "| manifest | TECE route | variants | retained groups | scalar paths | best atoms/s | best DFT F MAE | best teacher F MAE | rows |",
-        "|---|---|---|---|---|---:|---:|---:|---:|",
+        "| manifest | TECE route | variants | retained groups | scalar paths | projection residual | deleted projection paths | projection samples | best atoms/s | best DFT F MAE | best teacher F MAE | rows |",
+        "|---|---|---|---|---|---:|---|---:|---:|---:|---:|---:|",
     ])
     for group in groups:
         lines.append(
-            "| {manifest} | {route} | {variants} | {retained} | {paths} | {atoms} | {df} | {tf} | {rows} |".format(
+            "| {manifest} | {route} | {variants} | {retained} | {paths} | {projection} | {deleted_projection} | {projection_samples} | {atoms} | {df} | {tf} | {rows} |".format(
                 manifest=fmt(group.get("manifest_hash")),
                 route=fmt(group.get("semantic_tier")),
                 variants=_join_limited(group.get("variants") or [], limit=4),
                 retained=_join_limited(group.get("retained_tece_groups") or [], limit=4),
                 paths=_join_limited(group.get("scalar_path_ids") or [], limit=5),
+                projection=fmt(group.get("projection_relative_residual")),
+                deleted_projection=_join_limited(group.get("projection_deleted_scalar_path_ids") or [], limit=4),
+                projection_samples=fmt(group.get("projection_num_samples"), digits=0),
                 atoms=fmt(group.get("best_atoms_per_second")),
                 df=fmt(group.get("best_dft_f_mae_mev_a")),
                 tf=fmt(group.get("best_teacher_f_mae_mev_a")),
@@ -293,7 +349,12 @@ def append_manifest_group_section(lines: list[str], rows: list[dict[str, Any]]) 
         )
 
 
-def format_markdown(rows: list[dict[str, Any]], *, baselines: list[dict[str, Any]]) -> str:
+def format_markdown(
+    rows: list[dict[str, Any]],
+    *,
+    baselines: list[dict[str, Any]],
+    projection_rows: list[dict[str, Any]] | None = None,
+) -> str:
     lines = [
         "# TECE Distillation Matrix Summary",
         "",
@@ -322,7 +383,7 @@ def format_markdown(rows: list[dict[str, Any]], *, baselines: list[dict[str, Any
         )
     append_front_section(lines, "## DFT Force Pareto Front", rows, "dft_f_mae_mev_a")
     append_front_section(lines, "## Teacher Force Pareto Front", rows, "teacher_f_mae_mev_a")
-    append_manifest_group_section(lines, rows)
+    append_manifest_group_section(lines, rows, projection_rows=projection_rows)
     if baselines:
         lines.extend([
             "",
@@ -373,6 +434,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--student", action="append", type=parse_student_arg, default=[])
     parser.add_argument("--baseline", action="append", type=parse_baseline_arg, default=[])
+    parser.add_argument("--projection-diagnostic", action="append", type=Path, default=[])
     parser.add_argument("--output-md", type=Path, required=True)
     parser.add_argument("--output-json", type=Path, required=True)
     return parser.parse_args()
@@ -393,9 +455,11 @@ def main() -> None:
         item = load_json(path)
         item["name"] = name
         baselines.append(item)
+    projection_rows = load_projection_diagnostic_rows(args.projection_diagnostic)
     payload = {
         "students": rows,
-        "manifest_groups": manifest_group_rows(rows),
+        "projection_diagnostics": projection_rows,
+        "manifest_groups": manifest_group_rows(rows, projection_rows=projection_rows),
         "dft_force_pareto_front": pareto_front_rows(rows, error_key="dft_f_mae_mev_a"),
         "teacher_force_pareto_front": pareto_front_rows(rows, error_key="teacher_f_mae_mev_a"),
         "baselines": baselines,
@@ -403,7 +467,7 @@ def main() -> None:
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
     args.output_md.parent.mkdir(parents=True, exist_ok=True)
     args.output_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
-    args.output_md.write_text(format_markdown(rows, baselines=baselines), encoding="utf-8")
+    args.output_md.write_text(format_markdown(rows, baselines=baselines, projection_rows=projection_rows), encoding="utf-8")
     print(args.output_md)
     print(args.output_json)
 

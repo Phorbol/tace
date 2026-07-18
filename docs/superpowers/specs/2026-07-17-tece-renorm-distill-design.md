@@ -2092,6 +2092,42 @@ Next priority:
 2. Run a tiny train/benchmark smoke for `radial` vs `radial_cavity_vec` path-id routes only if the training CLI can instantiate path-id configs without reverting to variant names.
 3. Add teacher-force sensitivity weighting after the unweighted descriptor residual is integrated into the route report.
 
+# Stage 71: Projection Residuals In Pareto Summary
+
+Stage 71 closes the Stage-70 reporting loop by attaching bounded descriptor projection diagnostics to the same manifest groups used by the TECE/TACE Pareto summary. This is a compiler-methodology change: it does not train a new model or change a checkpoint, but it makes architecture projection error visible next to MAE/RMSE and throughput for the same path-manifest hash.
+
+Implementation gate:
+
+- `summarize_tece_distill.py` now accepts repeated `--projection-diagnostic` JSON files emitted by `analyze_rtece_projection_error.py`.
+- Summary JSON now preserves raw `projection_diagnostics` rows and enriches each `manifest_groups` row with `projection_relative_residual`, `projection_deleted_scalar_path_ids`, `projection_num_samples`, and `projection_candidate` when the diagnostic `candidate_manifest_hash` matches the group hash.
+- Markdown manifest-group tables now include projection residual, deleted projection paths, and projection sample count next to best atoms/s, DFT force MAE, and teacher force MAE.
+- If multiple projection rows target the same manifest hash, the summary keeps the lowest relative residual and correctly treats `0.0` as a valid best residual, not as a missing value.
+- Direct execution of `summarize_tece_distill.py --help` now follows the same repository-root import path convention as the other rTECE benchmark scripts.
+
+Verification on 2026-07-18:
+
+- `python -m py_compile benchmarks/oc20neb_tace_mace/summarize_tece_distill.py` passed.
+- `python benchmarks/oc20neb_tace_mace/summarize_tece_distill.py --help` passed and exposes `--projection-diagnostic`.
+- Focused summary/projection tests passed: 13 passed, 94 deselected.
+- Generated `runs/oc20neb_tace_mace/rtece-stage71-combined-summary/direct_active_projection_summary.{json,md}` from the Stage-39 direct-active front and Stage-69 projection diagnostic.
+
+Real-artifact check:
+
+- The generated Stage-71 manifest groups all report `projection_relative_residual = null` because the Stage-39 direct-active Pareto rows are element-density routes, while the Stage-69/70 diagnostic candidates are path-id routes over `atomic.radial_density`, `edge.cavity.vector_dot`, and `edge.direct.radial`.
+- This is a useful negative integration result: the summary join works by manifest hash, but the current projection diagnostic has not yet been run for the already trained element-density front, and the diagnostic path-id candidates have not yet been trained/benchmarked.
+
+Stage-71 interpretation against TECE/TACE:
+
+- This implements the acceptance-standard requirement to separate projection error from training/distillation error in the report layer. A candidate route can now be read as: retained scalar paths, deleted path groups, descriptor-space residual, best observed DFT/teacher force error, and hardware throughput.
+- The join key is the label-independent path manifest hash from Stage 70, so the report compares architecture routes rather than arbitrary run names.
+- The residual is still unweighted descriptor-space reconstruction error. It is useful for path prioritization, but it is not yet teacher-force sensitivity, Hessian-aware Sobolev error, or Schur-complement downfolding.
+
+Next priority:
+
+1. Make the training CLI instantiate selected path-id configs, then run tiny `radial` versus `radial_cavity_vec` train/benchmark smoke tests so the Stage-69 projection residuals and observed MAE/throughput share manifest hashes.
+2. If path-id training is blocked by analytic/fused backend layout constraints, first implement an explicit autograd-only path-id training/evaluation contract and keep fused backends guarded.
+3. Add teacher-force sensitivity weighting to the projection diagnostic only after the unweighted path-id route report joins cleanly with trained benchmark rows.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
