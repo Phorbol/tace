@@ -1590,6 +1590,30 @@ Stage-53 interpretation against TECE/TACE:
 - Next priority: implement the Stage52 cell-list fused descriptor/force contract as a real backend and benchmark it against `triton_padded` and `triton_counted`. The model semantics and existing Triton kernels have now moved to core; the remaining gap is the fused cell-list runtime.
 
 
+# Stage 54: rTECE Route And Workflow Contract
+
+Stage 54 addresses the model-repository structure problem exposed after Stage53. Moving `RTECEScalarModel` into `tace.models` made rTECE importable as a formal endpoint, but training, inference, checkpoint metadata, and Pareto reporting were still partly benchmark-shaped. This made the TECE/TACE degradation route implicit in code names rather than explicit in the model artifact.
+
+Implementation gate:
+
+- Added `rtece_route_contract(...)` under `tace.models.rtece_scalar`. It maps `(RTECEScalarConfig, force_mode, graph backend)` to a machine-readable TECE route: semantic tier, descriptor family, retained and deleted TECE groups, descriptor width, force realization, descriptor realization, graph semantics, graph construction/update backend, edge-state lifetime, and Pareto axes.
+- Added `tace.models.rtece_workflow` with `save_checkpoint`, `load_checkpoint`, `predict`, `loss_for_batch`, `evaluate_loss`, and `train_steps`. Checkpoints now store `tece_route` metadata with config and weights.
+- Exported core workflow functions from `tace.models` as `save_rtece_checkpoint`, `load_rtece_checkpoint`, `predict_rtece`, `rtece_loss_for_batch`, `evaluate_rtece_loss`, and `train_rtece_steps`.
+- Refactored `benchmarks/oc20neb_tace_mace/train_rtece_scalar.py` to reuse the core workflow. Historical benchmark/profile scripts keep the two-value `load_checkpoint(...)` wrapper, while `load_checkpoint_with_metadata` points to the core metadata-aware API.
+- Updated the distillation matrix summary to include the TECE route column, so Pareto rows report semantic degradation and runtime realization together with error and throughput.
+
+Verification:
+
+- Targeted workflow/contract tests: `5 passed, 63 deselected, 1 warning`.
+- Full rTECE test file: `68 passed, 1 warning`.
+
+Stage-54 interpretation against TECE/TACE:
+
+- This is not a new MAE/RMSE or throughput point. It is a route-contract stage that makes the model compiler hypothesis auditable in normal repository code.
+- The original TECE design-space note says the relevant hardware variable is not parameter count but edge bytes, kernel work, scatter, communication, latency, and especially how long equivariant edge/node state survives. The new route contract records those choices explicitly: retained scalar density groups, deleted persistent equivariant state groups, force realization, graph backend, and edge-state lifetime.
+- This answers the structural concern that rTECE was only a benchmark artifact. The current scalar endpoint can now be trained, checkpointed, loaded, and used for inference through `tace.models`, and its artifacts carry the semantic degradation route needed for systematic Pareto comparison.
+- The priority after this stage should not drift back to hidden-size tuning. The next clean experiment remains the Stage52 fused cell-list descriptor/force backend for the element-density scalar endpoint, benchmarked against `torch_radius_nopbc_triton_padded` and `torch_radius_nopbc_triton_counted` with the same route metadata attached.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

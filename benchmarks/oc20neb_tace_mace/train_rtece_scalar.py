@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from dataclasses import asdict, replace
+from dataclasses import replace
 from pathlib import Path
 import sys
 
@@ -14,11 +14,18 @@ if str(REPO_ROOT) not in sys.path:
 import numpy as np
 import torch
 
-from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
+from tace.models.rtece_scalar import (
     RTECEGraph,
     RTECEScalarConfig,
     RTECEScalarModel,
     build_rtece_config,
+)
+from tace.models.rtece_workflow import (
+    evaluate_loss,
+    load_checkpoint as load_checkpoint_with_metadata,
+    loss_for_batch,
+    save_checkpoint,
+    train_steps,
 )
 
 
@@ -38,22 +45,13 @@ def parse_hidden_channels(value: str) -> tuple[int, ...]:
     return channels
 
 
-def save_checkpoint(path: Path, model: RTECEScalarModel, config: RTECEScalarConfig) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    torch.save({"config": asdict(config), "state_dict": model.state_dict()}, path)
-
-
 def load_checkpoint(
-    path: Path,
+    path: str | Path,
     *,
     dtype: torch.dtype = torch.float32,
     device: str | torch.device = "cpu",
 ) -> tuple[RTECEScalarModel, RTECEScalarConfig]:
-    payload = torch.load(path, map_location=device)
-    config = RTECEScalarConfig(**payload["config"])
-    model = RTECEScalarModel(config).to(device=device, dtype=dtype)
-    model.load_state_dict(payload["state_dict"])
-    model.eval()
+    model, config, _metadata = load_checkpoint_with_metadata(path, dtype=dtype, device=device)
     return model, config
 
 
@@ -112,120 +110,6 @@ def fit_energy_per_atom_shift(
         raise ValueError("cannot fit energy shift for zero atoms")
     return total_energy / float(total_atoms)
 
-
-def loss_for_batch(
-    model: RTECEScalarModel,
-    graph: RTECEGraph,
-    ref_energy: torch.Tensor,
-    ref_forces: torch.Tensor,
-    *,
-    energy_weight: float = 1.0,
-    force_weight: float = 10.0,
-) -> torch.Tensor:
-    out = model(graph)
-    natoms = graph.z.numel()
-    e_loss = ((out["energy"] - ref_energy) / natoms).pow(2).mean()
-    f_loss = (out["forces"] - ref_forces).pow(2).mean()
-    return float(energy_weight) * e_loss + float(force_weight) * f_loss
-
-
-def evaluate_loss(
-    model: RTECEScalarModel,
-    samples: list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]],
-    *,
-    energy_weight: float = 1.0,
-    force_weight: float = 10.0,
-) -> float:
-    if not samples:
-        raise ValueError("evaluate_loss requires at least one sample")
-    was_training = model.training
-    model.eval()
-    losses = []
-    for graph, energy, forces in samples:
-        losses.append(
-            float(
-                loss_for_batch(
-                    model,
-                    graph,
-                    energy,
-                    forces,
-                    energy_weight=energy_weight,
-                    force_weight=force_weight,
-                )
-                .detach()
-                .cpu()
-            )
-        )
-    if was_training:
-        model.train()
-    return float(sum(losses) / len(losses))
-
-
-def train_steps(
-    model: RTECEScalarModel,
-    samples: list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]],
-    *,
-    max_steps: int,
-    lr: float,
-    valid_samples: list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]] | None = None,
-    eval_interval: int = 0,
-    best_checkpoint_path: Path | None = None,
-    config: RTECEScalarConfig | None = None,
-    energy_weight: float = 1.0,
-    force_weight: float = 10.0,
-) -> dict[str, float | int | None]:
-    if not samples:
-        raise ValueError("train_steps requires at least one sample")
-    if best_checkpoint_path is not None and config is None:
-        raise ValueError("config is required when best_checkpoint_path is set")
-    model.train()
-    opt = torch.optim.AdamW(model.parameters(), lr=lr)
-    final_loss: float | None = None
-    best_valid_loss: float | None = None
-    best_step: int | None = None
-    for step in range(max_steps):
-        graph, energy, forces = samples[step % len(samples)]
-        opt.zero_grad(set_to_none=True)
-        loss = loss_for_batch(
-            model,
-            graph,
-            energy,
-            forces,
-            energy_weight=energy_weight,
-            force_weight=force_weight,
-        )
-        loss.backward()
-        opt.step()
-        final_loss = float(loss.detach().cpu())
-        step_num = step + 1
-        if valid_samples is not None and eval_interval > 0 and step_num % eval_interval == 0:
-            valid_loss = evaluate_loss(
-                model,
-                valid_samples,
-                energy_weight=energy_weight,
-                force_weight=force_weight,
-            )
-            if best_valid_loss is None or valid_loss < best_valid_loss:
-                best_valid_loss = valid_loss
-                best_step = step_num
-                if best_checkpoint_path is not None:
-                    save_checkpoint(best_checkpoint_path, model, config)
-    if valid_samples is not None and best_valid_loss is None:
-        best_valid_loss = evaluate_loss(
-            model,
-            valid_samples,
-            energy_weight=energy_weight,
-            force_weight=force_weight,
-        )
-        best_step = max_steps
-        if best_checkpoint_path is not None:
-            save_checkpoint(best_checkpoint_path, model, config)
-    return {
-        "steps": max_steps,
-        "final_loss": final_loss,
-        "best_valid_loss": best_valid_loss,
-        "best_step": best_step,
-    }
 
 
 def load_samples(

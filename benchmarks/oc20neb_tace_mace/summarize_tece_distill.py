@@ -8,9 +8,48 @@ import json
 from pathlib import Path
 from typing import Any
 
+from tace.models.rtece_scalar import RTECEScalarConfig, build_rtece_config, rtece_route_contract
+
 
 def load_json(path: str | Path) -> dict[str, Any]:
     return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
+def _rtece_config_from_benchmark(variant: str, benchmark: dict[str, Any]) -> RTECEScalarConfig | None:
+    model_variant = benchmark.get("variant")
+    force_mode = benchmark.get("force_mode", "autograd")
+    if model_variant is None:
+        if variant.startswith("rtece_pair") or "pair" in variant:
+            model_variant = "rtece_pair"
+        elif "element" in variant or "radial" in variant or "element" in force_mode:
+            model_variant = "rtece_element_density"
+        elif "quadratic" in variant:
+            model_variant = "rtece_density_quadratic"
+        elif "vector" in variant:
+            model_variant = "rtece_vector_moments"
+    if model_variant is None:
+        return None
+    try:
+        config = build_rtece_config(str(model_variant))
+    except ValueError:
+        return None
+    hidden = benchmark.get("hidden_channels") or config.hidden_channels
+    if isinstance(hidden, list):
+        hidden = tuple(int(x) for x in hidden)
+    num_radial = int(benchmark.get("num_radial") or config.num_radial)
+    return RTECEScalarConfig(
+        variant=config.variant,
+        cutoff=float(benchmark.get("cutoff") or config.cutoff),
+        num_radial=num_radial,
+        hidden_channels=hidden,
+        max_atomic_number=int(benchmark.get("max_atomic_number") or config.max_atomic_number),
+        use_element_density=config.use_element_density,
+        use_density_quadratic=config.use_density_quadratic,
+        use_vector_moments=config.use_vector_moments,
+        use_atomic_moments=config.use_atomic_moments,
+        num_edge_sketches=config.num_edge_sketches,
+        energy_per_atom_shift=float(benchmark.get("energy_per_atom_shift") or config.energy_per_atom_shift),
+    )
 
 
 def make_student_row(
@@ -19,13 +58,26 @@ def make_student_row(
     dft_benchmark: dict[str, Any],
     teacher_benchmark: dict[str, Any],
 ) -> dict[str, Any]:
+    force_mode = dft_benchmark.get("force_mode", "autograd")
+    graph_construction_backend = dft_benchmark.get("graph_construction_backend")
+    graph_update_backend = dft_benchmark.get("graph_update_backend")
+    config = _rtece_config_from_benchmark(variant, dft_benchmark)
+    route = None
+    if config is not None:
+        route = rtece_route_contract(
+            config,
+            force_mode=force_mode,
+            graph_construction_backend=graph_construction_backend,
+            graph_update_backend=graph_update_backend,
+        )
     return {
         "variant": variant,
         "atoms_per_second": dft_benchmark.get("atoms_per_second"),
         "configs_per_second": dft_benchmark.get("configs_per_second"),
-        "force_mode": dft_benchmark.get("force_mode", "autograd"),
-        "graph_construction_backend": dft_benchmark.get("graph_construction_backend"),
-        "graph_update_backend": dft_benchmark.get("graph_update_backend"),
+        "force_mode": force_mode,
+        "graph_construction_backend": graph_construction_backend,
+        "graph_update_backend": graph_update_backend,
+        "tece_route": route,
         "hidden_channels": dft_benchmark.get("hidden_channels"),
         "num_radial": dft_benchmark.get("num_radial"),
         "seconds_per_pass": dft_benchmark.get("seconds_per_pass"),
@@ -107,13 +159,14 @@ def append_front_section(lines: list[str], title: str, rows: list[dict[str, Any]
         "",
         title,
         "",
-        "| variant | graph backend | force mode | atoms/s | DFT F MAE | teacher F MAE | params |",
-        "|---|---|---|---:|---:|---:|---:|",
+        "| variant | TECE route | graph backend | force mode | atoms/s | DFT F MAE | teacher F MAE | params |",
+        "|---|---|---|---|---:|---:|---:|---:|",
     ])
     for row in front:
         lines.append(
-            "| {variant} | {graph_backend} | {force_mode} | {atoms} | {df} | {tf} | {params} |".format(
+            "| {variant} | {route} | {graph_backend} | {force_mode} | {atoms} | {df} | {tf} | {params} |".format(
                 variant=row["variant"],
+                route=fmt((row.get("tece_route") or {}).get("semantic_tier")),
                 graph_backend=fmt(row.get("graph_construction_backend")),
                 force_mode=fmt(row.get("force_mode")),
                 atoms=fmt(row.get("atoms_per_second")),
@@ -130,13 +183,14 @@ def format_markdown(rows: list[dict[str, Any]], *, baselines: list[dict[str, Any
         "",
         "## Students",
         "",
-        "| variant | graph backend | force mode | atoms/s | configs/s | peak alloc MB | params | teacher E MAE | teacher F MAE | DFT E MAE | DFT F MAE |",
-        "|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| variant | TECE route | graph backend | force mode | atoms/s | configs/s | peak alloc MB | params | teacher E MAE | teacher F MAE | DFT E MAE | DFT F MAE |",
+        "|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         lines.append(
-            "| {variant} | {graph_backend} | {force_mode} | {atoms} | {configs} | {mem} | {params} | {te} | {tf} | {de} | {df} |".format(
+            "| {variant} | {route} | {graph_backend} | {force_mode} | {atoms} | {configs} | {mem} | {params} | {te} | {tf} | {de} | {df} |".format(
                 variant=row["variant"],
+                route=fmt((row.get("tece_route") or {}).get("semantic_tier")),
                 graph_backend=fmt(row.get("graph_construction_backend")),
                 force_mode=fmt(row.get("force_mode")),
                 atoms=fmt(row.get("atoms_per_second")),

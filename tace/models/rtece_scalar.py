@@ -53,6 +53,110 @@ def descriptor_dim(config: RTECEScalarConfig) -> int:
     return dim
 
 
+def rtece_route_contract(
+    config: RTECEScalarConfig,
+    *,
+    force_mode: str = "autograd",
+    graph_construction_backend: str | None = None,
+    graph_update_backend: str | None = None,
+) -> dict[str, object]:
+    retained = ["radial_density"]
+    deleted = [
+        "persistent_equivariant_node_state",
+        "persistent_equivariant_edge_state",
+        "edge_tensor_product_channel_mixing",
+        "multi_layer_equivariant_message_passing",
+    ]
+    if config.use_element_density:
+        semantic_tier = "T3_element_conditioned_scalar_density"
+        descriptor_family = "element_density"
+        retained.append("neighbor_element_density")
+    elif config.use_density_quadratic:
+        semantic_tier = "T3_scalar_density_quadratic"
+        descriptor_family = "density_quadratic"
+        retained.append("local_scalar_density_square")
+    elif config.use_vector_moments:
+        semantic_tier = "T3_vector_moment_scalarization"
+        descriptor_family = "vector_moment_norm"
+        retained.append("low_order_vector_moment_norm")
+    elif config.use_atomic_moments or config.num_edge_sketches:
+        semantic_tier = "T3_atomic_moment_scalar_sketch"
+        descriptor_family = "atomic_moment_sketch"
+        retained.extend(["low_order_atomic_moments", "edge_relational_scalar_sketches"])
+    else:
+        semantic_tier = "T4_scalar_pair_density"
+        descriptor_family = "pair_density"
+
+    descriptor_realization = "pytorch_edge_scatter"
+    force_realization = "autograd_conservative"
+    fused_descriptor = False
+    fused_force = False
+    if force_mode in {"analytic_pair", "analytic_density", "analytic_element_packed"}:
+        force_realization = "analytic_scalar_chain_rule"
+    if force_mode == "analytic_element_packed":
+        descriptor_realization = "packed_pytorch_scatter"
+    if force_mode == "analytic_pair_triton_force":
+        force_realization = "triton_fused_force"
+        fused_force = True
+    if force_mode == "analytic_element_triton_force":
+        force_realization = "triton_fused_force"
+        fused_force = True
+    if force_mode == "analytic_element_triton_descriptor_force":
+        descriptor_realization = "triton_fused_edge_descriptor"
+        force_realization = "triton_fused_descriptor_force"
+        fused_descriptor = True
+        fused_force = True
+
+    backend = graph_update_backend or graph_construction_backend
+    if backend and "torch_radius_nopbc" in backend:
+        graph_semantics = "direct_active_nopbc"
+    elif backend == "ase_neighborlist":
+        graph_semantics = "ase_neighborlist_pbc"
+    else:
+        graph_semantics = "prebuilt_edge_index"
+
+    if graph_update_backend == "cached_topology":
+        edge_state_lifetime = "persistent_cached_edge_index"
+    elif graph_update_backend and "triton_counted" in graph_update_backend:
+        edge_state_lifetime = "counted_exact_edge_buffer"
+    elif graph_update_backend and "triton_padded" in graph_update_backend:
+        edge_state_lifetime = "padded_triton_edge_buffer"
+    elif graph_update_backend and "cell" in graph_update_backend:
+        edge_state_lifetime = "streaming_cell_candidates"
+    elif graph_update_backend:
+        edge_state_lifetime = "runtime_materialized_edge_index"
+    elif graph_construction_backend:
+        edge_state_lifetime = "prebuilt_materialized_edge_index"
+    else:
+        edge_state_lifetime = "caller_supplied_edge_index"
+
+    pareto_axes = ["semantic_projection", "scalar_head_capacity", "force_realization"]
+    if graph_construction_backend or graph_update_backend:
+        pareto_axes.append("topology_provider")
+    if fused_descriptor or fused_force:
+        pareto_axes.append("kernel_fusion")
+
+    return {
+        "semantic_tier": semantic_tier,
+        "descriptor_family": descriptor_family,
+        "retained_tece_groups": retained,
+        "deleted_tece_groups": deleted,
+        "descriptor_dim": descriptor_dim(config),
+        "num_radial": int(config.num_radial),
+        "hidden_channels": list(config.hidden_channels),
+        "force_mode": force_mode,
+        "force_realization": force_realization,
+        "descriptor_realization": descriptor_realization,
+        "fused_descriptor": fused_descriptor,
+        "fused_force": fused_force,
+        "graph_semantics": graph_semantics,
+        "graph_construction_backend": graph_construction_backend,
+        "graph_update_backend": graph_update_backend,
+        "edge_state_lifetime": edge_state_lifetime,
+        "pareto_axes": pareto_axes,
+    }
+
+
 @dataclass
 class RTECEGraph:
     z: torch.Tensor
@@ -673,4 +777,5 @@ __all__ = [
     "atomic_scalar_descriptors",
     "edge_relational_sketches",
     "rtece_descriptors",
+    "rtece_route_contract",
 ]

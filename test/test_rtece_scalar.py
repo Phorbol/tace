@@ -18,6 +18,7 @@ from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
     edge_relational_sketches,
     packed_element_density_descriptors,
     rtece_descriptors,
+    rtece_route_contract,
 )
 
 
@@ -33,8 +34,6 @@ def rotation_z(theta: float) -> torch.Tensor:
 def complete_directed_edges(num_nodes: int) -> torch.Tensor:
     edges = [(i, j) for i in range(num_nodes) for j in range(num_nodes) if i != j]
     return torch.tensor(edges, dtype=torch.long).t().contiguous()
-
-
 
 
 def test_rtece_scalar_model_has_formal_tace_models_entrypoint():
@@ -54,8 +53,6 @@ def test_rtece_scalar_model_has_formal_tace_models_entrypoint():
     assert core_packed_descriptors is benchmark_rtece.packed_element_density_descriptors
 
 
-
-
 def test_rtece_triton_kernels_have_formal_tace_models_entrypoint():
     from benchmarks.oc20neb_tace_mace import rtece_triton_kernels as benchmark_kernels
     from tace.models import rtece_triton_kernels as core_kernels
@@ -65,6 +62,41 @@ def test_rtece_triton_kernels_have_formal_tace_models_entrypoint():
     assert core_kernels.element_density_forces_triton is benchmark_kernels.element_density_forces_triton
     assert core_kernels.direct_radius_padded_edges_triton is benchmark_kernels.direct_radius_padded_edges_triton
     assert core_kernels.direct_radius_counted_edges_triton is benchmark_kernels.direct_radius_counted_edges_triton
+
+
+def test_rtece_route_contract_classifies_semantic_and_runtime_degradation():
+    pair = rtece_route_contract(
+        RTECEScalarConfig(variant="rtece_pair"),
+        force_mode="analytic_pair",
+        graph_construction_backend="torch_radius_nopbc",
+    )
+    element = rtece_route_contract(
+        RTECEScalarConfig(
+            variant="rtece_element_density",
+            use_element_density=True,
+            num_radial=8,
+            hidden_channels=(24, 24),
+        ),
+        force_mode="analytic_element_triton_descriptor_force",
+        graph_construction_backend="torch_radius_nopbc",
+        graph_update_backend="torch_radius_nopbc_triton_counted",
+    )
+
+    assert pair["semantic_tier"] == "T4_scalar_pair_density"
+    assert pair["descriptor_family"] == "pair_density"
+    assert pair["force_realization"] == "analytic_scalar_chain_rule"
+    assert pair["fused_force"] is False
+    assert pair["graph_semantics"] == "direct_active_nopbc"
+    assert "persistent_equivariant_edge_state" in pair["deleted_tece_groups"]
+
+    assert element["semantic_tier"] == "T3_element_conditioned_scalar_density"
+    assert element["descriptor_family"] == "element_density"
+    assert element["descriptor_realization"] == "triton_fused_edge_descriptor"
+    assert element["force_realization"] == "triton_fused_descriptor_force"
+    assert element["fused_descriptor"] is True
+    assert element["fused_force"] is True
+    assert element["edge_state_lifetime"] == "counted_exact_edge_buffer"
+    assert "neighbor_element_density" in element["retained_tece_groups"]
 
 
 def test_build_rtece_config_defines_ordered_variants():
@@ -241,6 +273,7 @@ def test_element_density_descriptors_are_rotation_invariant_and_element_sensitiv
     assert torch.allclose(desc, desc_rot, atol=1e-10, rtol=1e-10)
     assert not torch.allclose(desc, desc_changed, atol=1e-10, rtol=1e-10)
 
+
 def test_density_quadratic_descriptors_are_rotation_invariant():
     config = build_rtece_config("rtece_density_quadratic")
     z = torch.tensor([6, 8, 1], dtype=torch.long)
@@ -325,7 +358,6 @@ def test_atomic_scalar_descriptors_are_rotation_invariant():
     assert torch.allclose(desc, desc_rot, atol=1e-10, rtol=1e-10)
 
 
-
 def test_edge_relational_sketches_are_rotation_invariant():
     config = build_rtece_config("rtece_edge_sketch8")
     z = torch.tensor([6, 8, 1, 1], dtype=torch.long)
@@ -356,7 +388,6 @@ def test_edge_relational_sketches_are_rotation_invariant():
     assert sketches.shape == (4, config.num_edge_sketches)
     assert torch.allclose(sketches, sketches_rot, atol=1e-10, rtol=1e-10)
     assert torch.allclose(full, full_rot, atol=1e-10, rtol=1e-10)
-
 
 
 def test_rtece_scalar_model_returns_conservative_forces():
@@ -414,6 +445,58 @@ def test_rtece_scalar_model_energy_is_permutation_invariant_for_complete_graph()
     assert torch.allclose(e, e_perm, atol=1e-10, rtol=1e-10)
 
 
+def test_core_rtece_workflow_saves_loads_and_predicts_with_route_metadata(tmp_path):
+    from tace.models.rtece_workflow import load_checkpoint, predict, save_checkpoint
+
+    config = RTECEScalarConfig(
+        variant="rtece_element_density",
+        use_element_density=True,
+        hidden_channels=(8,),
+        num_radial=4,
+    )
+    model = RTECEScalarModel(config).double().eval()
+    path = tmp_path / "core_rtece.pt"
+    graph = RTECEGraph(
+        z=torch.tensor([6, 8], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=torch.tensor([[0, 1], [1, 0]], dtype=torch.long),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+
+    save_checkpoint(
+        path,
+        model,
+        config,
+        force_mode="analytic_density",
+        graph_construction_backend="torch_radius_nopbc",
+    )
+    loaded_model, loaded_config, metadata = load_checkpoint(path, dtype=torch.float64)
+    prediction = predict(
+        loaded_model,
+        graph,
+        force_mode="autograd",
+        graph_construction_backend="torch_radius_nopbc",
+        include_route=True,
+    )
+
+    assert loaded_config == config
+    assert metadata["tece_route"]["semantic_tier"] == "T3_element_conditioned_scalar_density"
+    assert metadata["tece_route"]["force_realization"] == "analytic_scalar_chain_rule"
+    assert prediction["energy"].shape == (1,)
+    assert prediction["forces"].shape == (2, 3)
+    assert prediction["tece_route"]["force_realization"] == "autograd_conservative"
+
+
+def test_rtece_benchmark_training_reuses_core_workflow_api():
+    from benchmarks.oc20neb_tace_mace import train_rtece_scalar
+    from tace.models import rtece_workflow
+
+    assert train_rtece_scalar.save_checkpoint is rtece_workflow.save_checkpoint
+    assert train_rtece_scalar.load_checkpoint_with_metadata is rtece_workflow.load_checkpoint
+    assert train_rtece_scalar.loss_for_batch is rtece_workflow.loss_for_batch
+    assert train_rtece_scalar.evaluate_loss is rtece_workflow.evaluate_loss
+    assert train_rtece_scalar.train_steps is rtece_workflow.train_steps
+
 
 def test_rtece_checkpoint_roundtrip(tmp_path):
     from benchmarks.oc20neb_tace_mace.train_rtece_scalar import save_checkpoint, load_checkpoint
@@ -427,7 +510,6 @@ def test_rtece_checkpoint_roundtrip(tmp_path):
 
     assert loaded_config.variant == "rtece_pair"
     assert isinstance(loaded_model, RTECEScalarModel)
-
 
 
 def test_rtece_tiny_training_step_reduces_finite_loss(tmp_path):
@@ -453,7 +535,6 @@ def test_rtece_tiny_training_step_reduces_finite_loss(tmp_path):
 
     assert summary["steps"] == 2
     assert torch.isfinite(torch.tensor(summary["final_loss"]))
-
 
 
 def test_rtece_benchmark_row_is_summary_compatible():
@@ -533,7 +614,6 @@ def test_rtece_scripts_are_directly_executable():
         assert result.returncode == 0, result.stderr
 
 
-
 def test_collate_graphs_matches_individual_energies():
     config = build_rtece_config("rtece_edge_sketch8")
     model = RTECEScalarModel(config).double().eval()
@@ -559,7 +639,6 @@ def test_collate_graphs_matches_individual_energies():
 
     assert batched.shape == (2,)
     assert torch.allclose(batched, torch.cat([e1, e2]), atol=1e-10, rtol=1e-10)
-
 
 
 def test_energy_per_atom_shift_adds_zeroth_order_energy():
@@ -607,7 +686,6 @@ def test_fit_energy_per_atom_shift_uses_total_energy_per_total_atom():
     assert fit_energy_per_atom_shift(samples) == 1.6
 
 
-
 def test_train_steps_saves_best_validation_checkpoint(tmp_path):
     from ase import Atoms
     from benchmarks.oc20neb_tace_mace.train_rtece_scalar import atoms_to_graph, load_checkpoint, train_steps
@@ -637,6 +715,7 @@ def test_train_steps_saves_best_validation_checkpoint(tmp_path):
     assert isinstance(loaded_model, RTECEScalarModel)
     assert summary["best_step"] in (1, 2)
     assert torch.isfinite(torch.tensor(summary["best_valid_loss"]))
+
 
 def test_pair_analytic_forces_match_autograd_forces():
     config = RTECEScalarConfig(
@@ -1124,7 +1203,6 @@ def test_atoms_to_torch_radius_nopbc_graph_builds_direct_edges():
     assert graph.edge_index.tolist() == [[0, 1], [1, 0]]
 
 
-
 def test_cell_list_oracle_work_metadata_counts_candidate_and_active_pairs():
     from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import cell_list_oracle_work_metadata
     from benchmarks.oc20neb_tace_mace.rtece_scalar_model import RTECEGraph
@@ -1158,7 +1236,6 @@ def test_cell_list_oracle_work_metadata_counts_candidate_and_active_pairs():
     assert metadata["max_cell_occupancy"] == 2
     assert metadata["candidate_to_padded_ratio"] == 8 / 18
     assert metadata["candidate_to_active_ratio"] == 8 / 6
-
 
 
 def test_torch_radius_nopbc_grouped_matches_loop_edges():
@@ -1708,6 +1785,44 @@ def test_rtece_benchmark_row_preserves_force_mode():
     assert row["num_radial"] == 4
 
 
+def test_rtece_summary_attaches_tece_route_contract():
+    from benchmarks.oc20neb_tace_mace.summarize_tece_distill import (
+        format_markdown,
+        make_student_row,
+    )
+
+    dft = {
+        "model": "rtece_scalar.pt",
+        "variant": "rtece_element_density",
+        "force_mode": "analytic_element_triton_descriptor_force",
+        "graph_construction_backend": "torch_radius_nopbc",
+        "graph_update_backend": "torch_radius_nopbc_triton_counted",
+        "hidden_channels": [24, 24],
+        "num_radial": 8,
+        "atoms_per_second": 50929958.0,
+        "configs_per_second": 83000.0,
+        "seconds_per_pass": 0.1,
+        "peak_allocated_mb": 212.1,
+        "peak_reserved_mb": 240.0,
+        "num_parameters": 1057,
+        "mae_e_mev_atom": 1400.0,
+        "rmse_e_mev_atom": 2000.0,
+        "mae_f_mev_a": 30.19,
+        "rmse_f_mev_a": 111.5,
+    }
+    teacher = dict(dft)
+    teacher["mae_f_mev_a"] = 35.84
+
+    row = make_student_row("radial8h24", dft_benchmark=dft, teacher_benchmark=teacher)
+    markdown = format_markdown([row], baselines=[])
+
+    assert row["tece_route"]["semantic_tier"] == "T3_element_conditioned_scalar_density"
+    assert row["tece_route"]["force_realization"] == "triton_fused_descriptor_force"
+    assert row["tece_route"]["edge_state_lifetime"] == "counted_exact_edge_buffer"
+    assert "| variant | TECE route | graph backend | force mode |" in markdown
+    assert "| radial8h24 | T3_element_conditioned_scalar_density" in markdown
+
+
 def test_rtece_summary_preserves_graph_construction_backend():
     from benchmarks.oc20neb_tace_mace.summarize_tece_distill import (
         format_markdown,
@@ -1738,8 +1853,8 @@ def test_rtece_summary_preserves_graph_construction_backend():
     markdown = format_markdown([row], baselines=[])
 
     assert row["graph_construction_backend"] == "torch_radius_nopbc"
-    assert "| variant | graph backend | force mode |" in markdown
-    assert "| radial4h16 | torch_radius_nopbc | analytic_element_triton_descriptor_force |" in markdown
+    assert "| variant | TECE route | graph backend | force mode |" in markdown
+    assert "| radial4h16 | T3_element_conditioned_scalar_density | torch_radius_nopbc | analytic_element_triton_descriptor_force |" in markdown
 
 
 def test_rtece_matrix_sbatch_separates_training_and_benchmark_validation_files():
@@ -1749,6 +1864,7 @@ def test_rtece_matrix_sbatch_separates_training_and_benchmark_validation_files()
     assert "TRAIN_VALID_FILE=${TRAIN_VALID_FILE:-${DFT_VALID_FILE}}" in script
     assert '--valid-file "${TRAIN_VALID_FILE}"' in script
     assert '--configs "${DFT_VALID_FILE}"' in script
+
 
 def test_rtece_matrix_sbatch_forwards_benchmark_force_mode():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
