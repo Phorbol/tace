@@ -842,6 +842,40 @@ def test_rtece_projection_weight_stratification_rejects_misaligned_weights():
         stratify_symbol_weights(symbols=["C", "N"], weights=[1.0])
 
 
+def test_rtece_dimer_scan_distances_follow_covalent_radius_scale():
+    from benchmarks.oc20neb_tace_mace.dimer_scan_rtece import dimer_distances_from_covalent_radii
+
+    distances = dimer_distances_from_covalent_radii("C", "N", num_points=4, min_scale=0.5, max_scale=5.0)
+
+    assert len(distances) == 4
+    assert distances[0] == pytest.approx(0.5 * (0.76 + 0.71))
+    assert distances[-1] == pytest.approx(5.0 * (0.76 + 0.71))
+    assert distances == sorted(distances)
+
+
+def test_rtece_dimer_scan_summary_reports_smoothness_and_nonfinite_counts():
+    from benchmarks.oc20neb_tace_mace.dimer_scan_rtece import summarize_dimer_scan_rows
+
+    rows = [
+        {"distance_a": 1.0, "energy_eV": -1.0, "force_parallel_ev_a": 0.5, "max_force_norm_ev_a": 0.5},
+        {"distance_a": 2.0, "energy_eV": -1.4, "force_parallel_ev_a": 0.2, "max_force_norm_ev_a": 0.2},
+        {"distance_a": 3.0, "energy_eV": -1.3, "force_parallel_ev_a": -0.1, "max_force_norm_ev_a": 0.1},
+    ]
+
+    summary = summarize_dimer_scan_rows(rows)
+
+    assert summary["num_points"] == 3
+    assert summary["num_nonfinite_energy"] == 0
+    assert summary["num_nonfinite_force"] == 0
+    assert summary["energy_range_eV"] == pytest.approx(0.4)
+    assert summary["max_abs_force_ev_a"] == pytest.approx(0.5)
+    assert summary["max_abs_energy_step_eV"] == pytest.approx(0.4)
+    assert summary["max_abs_force_step_ev_a"] == pytest.approx(0.3)
+    assert summary["short_minus_long_energy_eV"] == pytest.approx(0.3)
+    assert summary["short_force_parallel_ev_a"] == pytest.approx(0.5)
+    assert summary["short_force_repulsive"] is False
+
+
 def test_rtece_force_error_stratification_reports_element_and_focus_groups():
     from benchmarks.oc20neb_tace_mace.stratify_rtece_force_errors import stratify_symbol_force_errors
 

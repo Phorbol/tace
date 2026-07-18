@@ -2419,6 +2419,45 @@ Next priority:
 2. Add rattle+relax comparison grouped by `C_or_N`/`CHNO` versus metal-only or `not_CHNO` structures, using final RMSD and convergence failures, not only single-step force MAE.
 3. Only after the physical tests identify the missing semantic block should we consider a new TECE path beyond radial or `edge.cavity.vector_dot`.
 
+# Stage 79: CHNO Dimer Scan Physical Probe
+
+Stage 79 starts the physical-generalization harness requested by the review path and by the user observation about C/N adsorbate relax failures. This is not a throughput benchmark and not an absolute energy comparison because the rTECE energy reference is still a fitted atomic-energy/offset convention. The useful signal is the shape of the energy/force curve under an extreme geometry scan: finite values, smooth adjacent steps, and whether the shortest separation has a repulsive force direction.
+
+Implementation gate:
+
+- Added `dimer_scan_rtece.py`.
+- The script constructs isolated dimers with distances from `min_scale` to `max_scale` times the ASE covalent-radius sum, defaulting to the requested 0.5-5 range.
+- It loads an rTECE checkpoint through `tace.models.rtece_workflow.load_checkpoint`, builds graphs through the existing `atoms_to_rtece_graph`, predicts through `tace.models.rtece_workflow.predict`, and emits JSON plus Markdown.
+- Summary rows report finite/nonfinite counts, energy range, maximum force, adjacent energy/force jumps, shortest-distance minus longest-distance energy, shortest-distance force sign, and a `short_force_repulsive` boolean. For the x-axis dimer convention, atom 0 repulsion means negative x force.
+- Regression tests cover the covalent-radius distance grid and the dimer smoothness/short-range summary contract.
+
+Bounded Stage-79 run on Stage-73 checkpoints, CPU autograd, four CHNO dimers, 12 points each:
+
+| route | pair | short distance A | short-long dE eV | short force eV/A | short repulsive | max abs force eV/A | max dE step eV | max dF step eV/A |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| `radial` | C-N | 0.735 | -0.0207 | 0.0204 | 0 | 0.0246 | 0.0140 | 0.0142 |
+| `radial` | C-O | 0.710 | -0.0212 | 0.0200 | 0 | 0.0247 | 0.0134 | 0.0134 |
+| `radial` | N-H | 0.510 | -0.0253 | 0.0169 | 0 | 0.0247 | 0.0101 | 0.0102 |
+| `radial` | O-H | 0.485 | -0.0257 | 0.0165 | 0 | 0.0248 | 0.00950 | 0.00960 |
+| `radial_cavity_vec` | C-N | 0.735 | 0.00110 | -0.00575 | 1 | 0.00879 | 0.00472 | 0.00695 |
+| `radial_cavity_vec` | C-O | 0.710 | 0.00126 | -0.00552 | 1 | 0.00872 | 0.00470 | 0.00654 |
+| `radial_cavity_vec` | N-H | 0.510 | 0.00215 | -0.00406 | 1 | 0.00890 | 0.00351 | 0.00501 |
+| `radial_cavity_vec` | O-H | 0.485 | 0.00226 | -0.00382 | 1 | 0.00881 | 0.00343 | 0.00478 |
+
+Stage-79 interpretation against TECE/TACE and the review document:
+
+- Both routes are numerically finite and smooth on this bounded dimer scan. There are no NaN/Inf failures and adjacent energy/force jumps are small.
+- The `radial` route has the wrong short-range sign on all four CHNO pairs: the closest distance is lower in energy than the far distance and atom 0 force points toward atom 1. This is a direct physical-generalization failure, consistent with the Stage-78 C/N/CHNO force-error concentration.
+- The `radial_cavity_vec` route flips the short-range force sign to repulsive for all four pairs and reduces the energy/force jump metrics, so the cavity vector path contains some useful geometric information. However, the repulsion is extremely weak: only about 0.004-0.006 eV/A at 0.5 covalent-radius scale and about 0.001-0.002 eV short-range energy lift. This is not a physically adequate close-contact prior.
+- Therefore Stage 79 partially reopens the cavity-vector route, but only as a physical-shape signal, not as a Pareto candidate. Stage 78 still says it does not improve aggregate or C/N force MAE in the trained checkpoint. The correct next step is to test whether the same sign/weak-repulsion issue appears in rattle+relax and then decide whether the missing TECE block is a short-range radial repulsive core, data augmentation, or a stratified loss, instead of blindly widening edge paths.
+- This also sharpens the theoretical route: for high-throughput T3/T4 endpoints, a scalarized TECE model may need an explicit low-cost short-range two-body core as part of the renormalized retained operator basis. That is a clean TECE degradation axis because it preserves scalar streaming cost while restoring a physically necessary deleted high-curvature response.
+
+Next priority:
+
+1. Implement the bounded rattle+relax harness using the same Stage-73 checkpoints and `C_or_N`/`CHNO` grouping, reporting convergence, final RMSD, and force spikes.
+2. If rattle+relax confirms short-range collapse or weak CHNO restoration, add a controlled candidate T4 operator: a cheap radial repulsive-core path or dimer-augmented loss, then measure whether it fixes dimer/rattle behavior without destroying the high-throughput endpoint.
+3. Keep low-level graph/kernel acceleration behind these physical checks; the current bottleneck is physical closure of the scalarized retained operator, not ASE graph construction.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
