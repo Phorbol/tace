@@ -1804,6 +1804,41 @@ Stage-60 interpretation against TECE/TACE:
 - It does not address edge self-leakage or radial-channel averaging. The next review-aligned architecture tasks remain cavity edge moments and low-rank radial/cross-radial sketches.
 - After the remaining review P0 bugs are fixed, the dimer-scan and rattle/relax validation suite should bucket errors by element pair and adsorbate chemistry to test whether this species-basis repair specifically improves C/N and other non-metal adsorbate basins.
 
+
+# Stage 61: Cavity Edge Sketches For Self-Edge Leakage Repair
+
+Stage 61 addresses review P0 #4: the original `rtece_edge_sketch8/16` relational descriptors used full atomic moments on both sides of an edge. For an edge `j -> i`, the target moment contains the edge's own direct contribution:
+
+```text
+A_i = A_{i\j} + a_ij.
+```
+
+Therefore terms intended to describe edge/environment relations, such as `u_ij dot v_i` or `u_ij^T Q_i u_ij`, also contain a direct radial pair component from the same edge. This is not a symmetry violation, but it breaks clean TECE body-order and source-target relational bookkeeping.
+
+The new `rtece_cavity_edge_sketch8` variant keeps the old edge sketch variants for checkpoint compatibility and adds a cavity version of the same eight scalar slots. For each edge it uses
+
+```text
+A_{i cavity} = A_i - a_ij,
+A_{j cavity} = A_j - a_ji,
+```
+
+for vector and quadrupole relational terms, while the last two direct radial slots remain explicit pair/radial paths. This follows the review recommendation to separate `direct_edge` from `cavity_i/cavity_j` semantics rather than letting them leak into one feature.
+
+Implementation gate:
+
+- Added `use_cavity_edge_sketches` to `RTECEScalarConfig` and `build_rtece_config("rtece_cavity_edge_sketch8")`.
+- Updated `edge_relational_sketches(...)` so the cavity variant subtracts the current directed edge from target-side moments and the reciprocal edge contribution from source-side moments when a reverse edge exists.
+- Added route-contract metadata: `T3_cavity_edge_scalar_sketch`, `cavity_atomic_moment_sketch`, `cavity_edge_relational_scalar_sketches`, and `direct_edge_radial_path`.
+- Exposed the variant in the training CLI and summary inference path.
+- Fixed summary config reconstruction so `species_basis_channels` and `use_cavity_edge_sketches` are preserved when rebuilding route contracts.
+- Added a regression test where an isolated two-atom reciprocal pair has nonzero full-moment edge sketches but zero cavity environment terms, with direct radial terms unchanged.
+
+Stage-61 interpretation against TECE/TACE:
+
+- This is a model-semantics repair, not a throughput optimization. It makes the edge path closer to a true rTECE relational scalar projection with auditable retained/deleted operator groups.
+- The old full-moment edge sketch remains available as a compatibility/control variant. New experiments should prefer the cavity variant when testing edge-relational semantics.
+- This stage does not fix review #5: vector/quadrupole radial channels are still averaged before edge contraction. The next architecture priority should be low-rank radial/cross-radial sketches, ideally in a form that can later be selected by teacher covariance or force-weighted sensitivity.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

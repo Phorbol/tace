@@ -103,6 +103,12 @@ def test_rtece_route_contract_classifies_semantic_and_runtime_degradation():
     assert element["edge_state_lifetime"] == "counted_exact_edge_buffer"
     assert "neighbor_element_density" in element["retained_tece_groups"]
 
+    cavity = rtece_route_contract(build_rtece_config("rtece_cavity_edge_sketch8"))
+    assert cavity["semantic_tier"] == "T3_cavity_edge_scalar_sketch"
+    assert cavity["descriptor_family"] == "cavity_atomic_moment_sketch"
+    assert "cavity_edge_relational_scalar_sketches" in cavity["retained_tece_groups"]
+    assert "direct_edge_radial_path" in cavity["retained_tece_groups"]
+
 
 def test_build_rtece_config_defines_ordered_variants():
     pair = build_rtece_config("rtece_pair")
@@ -111,6 +117,7 @@ def test_build_rtece_config_defines_ordered_variants():
     vector = build_rtece_config("rtece_vector_moments")
     atomic = build_rtece_config("rtece_atomic_moments")
     sketch8 = build_rtece_config("rtece_edge_sketch8")
+    cavity8 = build_rtece_config("rtece_cavity_edge_sketch8")
     sketch16 = build_rtece_config("rtece_edge_sketch16")
 
     assert pair.variant == "rtece_pair"
@@ -133,6 +140,10 @@ def test_build_rtece_config_defines_ordered_variants():
     assert atomic.num_edge_sketches == 0
     assert sketch8.use_atomic_moments is True
     assert sketch8.num_edge_sketches == 8
+    assert cavity8.use_atomic_moments is True
+    assert cavity8.use_cavity_edge_sketches is True
+    assert cavity8.num_edge_sketches == 8
+    assert descriptor_dim(cavity8) == descriptor_dim(sketch8)
     assert sketch16.use_atomic_moments is True
     assert sketch16.num_edge_sketches == 16
     assert (
@@ -508,7 +519,10 @@ def test_atomic_scalar_descriptors_are_rotation_invariant():
 
 
 def test_edge_relational_sketches_are_rotation_invariant():
-    config = build_rtece_config("rtece_edge_sketch8")
+    configs = [
+        build_rtece_config("rtece_edge_sketch8"),
+        build_rtece_config("rtece_cavity_edge_sketch8"),
+    ]
     z = torch.tensor([6, 8, 1, 1], dtype=torch.long)
     pos = torch.tensor(
         [
@@ -529,14 +543,36 @@ def test_edge_relational_sketches_are_rotation_invariant():
         batch=batch,
     )
 
-    sketches = edge_relational_sketches(graph, config)
-    sketches_rot = edge_relational_sketches(rotated, config)
-    full = rtece_descriptors(graph, config)
-    full_rot = rtece_descriptors(rotated, config)
+    for config in configs:
+        sketches = edge_relational_sketches(graph, config)
+        sketches_rot = edge_relational_sketches(rotated, config)
+        full = rtece_descriptors(graph, config)
+        full_rot = rtece_descriptors(rotated, config)
 
-    assert sketches.shape == (4, config.num_edge_sketches)
-    assert torch.allclose(sketches, sketches_rot, atol=1e-10, rtol=1e-10)
-    assert torch.allclose(full, full_rot, atol=1e-10, rtol=1e-10)
+        assert sketches.shape == (4, config.num_edge_sketches)
+        assert torch.allclose(sketches, sketches_rot, atol=1e-10, rtol=1e-10)
+        assert torch.allclose(full, full_rot, atol=1e-10, rtol=1e-10)
+
+
+def test_cavity_edge_sketches_remove_self_edge_leakage_for_isolated_pair():
+    full_config = build_rtece_config("rtece_edge_sketch8")
+    cavity_config = build_rtece_config("rtece_cavity_edge_sketch8")
+    z = torch.tensor([6, 8], dtype=torch.long)
+    pos = torch.tensor([[0.0, 0.0, 0.0], [0.8, 0.0, 0.0]], dtype=torch.float64)
+    edge_index = torch.tensor([[0, 1], [1, 0]], dtype=torch.long)
+    graph = RTECEGraph(
+        z=z,
+        pos=pos,
+        edge_index=edge_index,
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+
+    full = edge_relational_sketches(graph, full_config)
+    cavity = edge_relational_sketches(graph, cavity_config)
+
+    assert not torch.allclose(full[:, :6], torch.zeros_like(full[:, :6]))
+    assert torch.allclose(cavity[:, :6], torch.zeros_like(cavity[:, :6]), atol=1e-12, rtol=1e-12)
+    assert torch.allclose(cavity[:, 6:], full[:, 6:], atol=1e-12, rtol=1e-12)
 
 
 def test_rtece_scalar_model_returns_conservative_forces():
@@ -2237,6 +2273,33 @@ def test_rtece_summary_attaches_tece_route_contract():
     assert row["tece_route"]["edge_state_lifetime"] == "counted_exact_edge_buffer"
     assert "| variant | TECE route | graph backend | force mode |" in markdown
     assert "| radial8h24 | T3_element_conditioned_scalar_density" in markdown
+
+
+def test_rtece_summary_reconstructs_species_and_cavity_routes():
+    from benchmarks.oc20neb_tace_mace.summarize_tece_distill import make_student_row
+
+    dft = {
+        "model": "rtece_scalar.pt",
+        "atoms_per_second": 1.0,
+        "configs_per_second": 1.0,
+        "seconds_per_pass": 1.0,
+        "peak_allocated_mb": 1.0,
+        "peak_reserved_mb": 1.0,
+        "num_parameters": 1,
+        "mae_e_mev_atom": 1.0,
+        "rmse_e_mev_atom": 1.0,
+        "mae_f_mev_a": 1.0,
+        "rmse_f_mev_a": 1.0,
+    }
+    teacher = dict(dft)
+
+    species = make_student_row("rtece_species_basis4", dft_benchmark=dft, teacher_benchmark=teacher)
+    cavity = make_student_row("rtece_cavity_edge_sketch8", dft_benchmark=dft, teacher_benchmark=teacher)
+
+    assert species["tece_route"]["semantic_tier"] == "T3_low_rank_species_density"
+    assert "low_rank_neighbor_species_basis" in species["tece_route"]["retained_tece_groups"]
+    assert cavity["tece_route"]["semantic_tier"] == "T3_cavity_edge_scalar_sketch"
+    assert "cavity_edge_relational_scalar_sketches" in cavity["tece_route"]["retained_tece_groups"]
 
 
 def test_rtece_summary_preserves_graph_construction_backend():

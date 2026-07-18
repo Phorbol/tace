@@ -20,6 +20,7 @@ class RTECEScalarConfig:
     use_atomic_moments: bool = False
     species_basis_channels: int = 0
     num_edge_sketches: int = 0
+    use_cavity_edge_sketches: bool = False
     energy_per_atom_shift: float = 0.0
     atomic_energies: Mapping[int, float] | None = None
 
@@ -39,6 +40,13 @@ def build_rtece_config(variant: str) -> RTECEScalarConfig:
         return RTECEScalarConfig(variant=variant, species_basis_channels=4)
     if variant == "rtece_edge_sketch8":
         return RTECEScalarConfig(variant=variant, use_atomic_moments=True, num_edge_sketches=8)
+    if variant == "rtece_cavity_edge_sketch8":
+        return RTECEScalarConfig(
+            variant=variant,
+            use_atomic_moments=True,
+            num_edge_sketches=8,
+            use_cavity_edge_sketches=True,
+        )
     if variant == "rtece_edge_sketch16":
         return RTECEScalarConfig(variant=variant, use_atomic_moments=True, num_edge_sketches=16)
     raise ValueError(f"unknown rTECE scalar variant {variant!r}")
@@ -91,9 +99,20 @@ def rtece_route_contract(
         descriptor_family = "species_basis_density"
         retained.append("low_rank_neighbor_species_basis")
     elif config.use_atomic_moments or config.num_edge_sketches:
-        semantic_tier = "T3_atomic_moment_scalar_sketch"
-        descriptor_family = "atomic_moment_sketch"
-        retained.extend(["low_order_atomic_moments", "edge_relational_scalar_sketches"])
+        if config.use_cavity_edge_sketches:
+            semantic_tier = "T3_cavity_edge_scalar_sketch"
+            descriptor_family = "cavity_atomic_moment_sketch"
+            retained.extend(
+                [
+                    "low_order_atomic_moments",
+                    "cavity_edge_relational_scalar_sketches",
+                    "direct_edge_radial_path",
+                ]
+            )
+        else:
+            semantic_tier = "T3_atomic_moment_scalar_sketch"
+            descriptor_family = "atomic_moment_sketch"
+            retained.extend(["low_order_atomic_moments", "edge_relational_scalar_sketches"])
     else:
         semantic_tier = "T4_scalar_pair_density"
         descriptor_family = "pair_density"
@@ -514,10 +533,30 @@ def edge_relational_sketches(graph: RTECEGraph, config: RTECEScalarConfig) -> to
     radial = compute_radial_features(distances, config)
     moments = compute_atomic_moments(graph, config)
     src, dst = graph.edge_index
-    vi = moments["vector"][dst].mean(dim=1)
-    vj = moments["vector"][src].mean(dim=1)
-    qi = moments["quadrupole"][dst].mean(dim=1)
-    qj = moments["quadrupole"][src].mean(dim=1)
+    vector_channels_i = moments["vector"][dst]
+    vector_channels_j = moments["vector"][src]
+    quadrupole_channels_i = moments["quadrupole"][dst]
+    quadrupole_channels_j = moments["quadrupole"][src]
+    if config.use_cavity_edge_sketches:
+        quad_unit = unit[:, :, None] * unit[:, None, :] - torch.eye(
+            3,
+            device=graph.pos.device,
+            dtype=graph.pos.dtype,
+        )[None, :, :] / 3.0
+        edge_vector = radial[:, :, None] * unit[:, None, :]
+        edge_quadrupole = radial[:, :, None, None] * quad_unit[:, None, :, :]
+        vector_channels_i = vector_channels_i - edge_vector
+        quadrupole_channels_i = quadrupole_channels_i - edge_quadrupole
+        num_nodes = graph.z.shape[0]
+        edge_codes = src * num_nodes + dst
+        reverse_codes = dst * num_nodes + src
+        has_reverse = torch.isin(reverse_codes, edge_codes).to(dtype=graph.pos.dtype, device=graph.pos.device)
+        vector_channels_j = vector_channels_j + has_reverse[:, None, None] * edge_vector
+        quadrupole_channels_j = quadrupole_channels_j - has_reverse[:, None, None, None] * edge_quadrupole
+    vi = vector_channels_i.mean(dim=1)
+    vj = vector_channels_j.mean(dim=1)
+    qi = quadrupole_channels_i.mean(dim=1)
+    qj = quadrupole_channels_j.mean(dim=1)
     base = torch.stack(
         [
             (vi * vj).sum(dim=-1),

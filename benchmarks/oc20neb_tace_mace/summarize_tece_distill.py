@@ -29,6 +29,8 @@ def _rtece_config_from_benchmark(variant: str, benchmark: dict[str, Any]) -> RTE
             model_variant = "rtece_vector_moments"
         elif "species" in variant:
             model_variant = "rtece_species_basis4"
+        elif "cavity" in variant:
+            model_variant = "rtece_cavity_edge_sketch8"
     if model_variant is None:
         return None
     try:
@@ -52,7 +54,9 @@ def _rtece_config_from_benchmark(variant: str, benchmark: dict[str, Any]) -> RTE
         use_density_quadratic=config.use_density_quadratic,
         use_vector_moments=config.use_vector_moments,
         use_atomic_moments=config.use_atomic_moments,
+        species_basis_channels=config.species_basis_channels,
         num_edge_sketches=config.num_edge_sketches,
+        use_cavity_edge_sketches=config.use_cavity_edge_sketches,
         energy_per_atom_shift=float(benchmark.get("energy_per_atom_shift") or config.energy_per_atom_shift),
         atomic_energies=atomic_energies,
     )
