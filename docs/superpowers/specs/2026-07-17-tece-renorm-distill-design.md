@@ -2620,6 +2620,69 @@ Next priority after Stage 82:
 3. Add targeted dimer or close-contact augmentation only after the radius/strength grid shows whether the fixed prior can be calibrated without new data.
 4. Implement analytic/fused radial-core forces only after a calibrated core survives the dimer + rattle + MAE gates. The graph/provider path should then be addressed inside the review-mandated PBC edge-vector/force/virial ABI, not as an isolated ASE replacement.
 
+# Stage 83: Radial-Core Radius Calibration
+
+Stage 83 follows directly from Stage 82 rather than opening a new architecture branch. Stage 82 showed that `radius_scale=1.0` can strongly improve C/N rattle RMSD but makes the core too stiff and worsens force MAE. The review-aligned question for this stage is whether the same T4 short-range retained operator can be calibrated by shortening its radial support, keeping the TECE scalar endpoint and training workflow unchanged.
+
+Submitted and completed jobs:
+
+| job id | route | strength | radius scale | beta | scalar paths | train/valid/bench configs | force mode |
+|---:|---|---:|---:|---:|---|---|---|
+| 680322 | `radial_core_s0p4_r0p85` | 0.4 | 0.85 | 20.0 | `atomic.radial_density` | 512/128/512 | `autograd` |
+| 680326 | `radial_core_s0p6_r0p85` | 0.6 | 0.85 | 20.0 | `atomic.radial_density` | 512/128/512 | `autograd` |
+| 680323 | `radial_core_s0p8_r0p85` | 0.8 | 0.85 | 20.0 | `atomic.radial_density` | 512/128/512 | `autograd` |
+| 680327 | `radial_core_s0p6_r0p75` | 0.6 | 0.75 | 20.0 | `atomic.radial_density` | 512/128/512 | `autograd` |
+
+All jobs were submitted through self-contained wrappers with parameters exported inside the wrapper body; no command-line `sbatch --export` was used.
+
+Training and benchmark rows:
+
+| route | best step | best valid loss | DFT E MAE | DFT F MAE | DFT F RMSE | teacher F MAE | atoms/s |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Stage-73 `radial` baseline | 200 | NA | 191.39 | 29.45 | 120.02 | 34.25 | 2.96e6 |
+| Stage-82 `radial_core_s0p6` r=1.0 | 300 | 0.6201 | 171.40 | 44.38 | 115.82 | 48.22 | 2.98e6 |
+| Stage-83 `s0p4_r0p85` | 100 | 0.5390 | 168.03 | 29.00 | 101.07 | 34.15 | 3.07e6 |
+| Stage-83 `s0p6_r0p85` | 100 | 0.5388 | 168.04 | 29.00 | 101.06 | 34.15 | 3.08e6 |
+| Stage-83 `s0p8_r0p85` | 100 | 0.5389 | 168.04 | 29.02 | 101.06 | 34.17 | 2.99e6 |
+| Stage-83 `s0p6_r0p75` | 100 | 0.5399 | 168.02 | 29.08 | 101.13 | 34.21 | 3.07e6 |
+
+Stage-79 dimer probe on trained checkpoints:
+
+| route | short repulsive pairs | C-N short F | C-N short dE | N-H short F | N-H short dE | max short-range abs F |
+|---|---:|---:|---:|---:|---:|---:|
+| Stage-73 `radial` baseline | 0/4 | +0.0204 | -0.0207 | +0.0169 | -0.0253 | 0.0248 |
+| Stage-83 `s0p4_r0p85` | 4/4 | -0.2396 | +0.0159 | -0.1928 | -0.00221 | 0.2396 |
+| Stage-83 `s0p6_r0p85` | 4/4 | -0.3425 | +0.0423 | -0.2642 | +0.0105 | 0.3425 |
+| Stage-83 `s0p8_r0p85` | 4/4 | -0.4454 | +0.0687 | -0.3356 | +0.0232 | 0.4454 |
+| Stage-83 `s0p6_r0p75` | 4/4 | -0.2541 | +0.00357 | -0.2023 | -0.00804 | 0.2541 |
+
+Stage-80 strict rattle+relax probe on `mixed_train_tw0.75.extxyz`, `start=58`, `limit=4`, `rattle_std=0.03 A`, `fmax=0.01`, `max_steps=10`:
+
+| route | DFT F MAE | converged frac | all mean final RMSD A | C/N mean final RMSD A | CHNO-no-CN final RMSD A | max fmax eV/A |
+|---|---:|---:|---:|---:|---:|---:|
+| Stage-73 `radial` baseline | 29.45 | 0.25 | 0.2331 | 0.2578 | 0.1591 | 0.0473 |
+| Stage-82 `radial_core_s0p6` r=1.0 | 44.38 | 0.00 | 0.1730 | 0.1283 | 0.3070 | 0.5309 |
+| Stage-82 `radial_core_s1p0` r=1.0 | 61.53 | 0.00 | 0.1456 | 0.1199 | 0.2228 | 0.8797 |
+| Stage-83 `s0p4_r0p85` | 29.00 | 0.00 | 0.1825 | 0.2219 | 0.0642 | 0.4087 |
+| Stage-83 `s0p6_r0p85` | 29.00 | 0.00 | 0.2092 | 0.2572 | 0.0650 | 0.4172 |
+| Stage-83 `s0p8_r0p85` | 29.02 | 0.00 | 0.1771 | 0.2143 | 0.0654 | 0.3345 |
+| Stage-83 `s0p6_r0p75` | 29.08 | 0.00 | 0.1798 | 0.1804 | 0.1778 | 0.3386 |
+
+Stage-83 interpretation against TECE/TACE and the review document:
+
+- Shortening the radial-core support is Pareto-positive for aggregate single-step accuracy. All Stage-83 rows recover Stage-73-level DFT force MAE while keeping the short-distance dimer force repulsive for all four CHNO pairs.
+- The force-spike and relax tradeoff is still not closed. Compared with Stage-82 `s0p6` at `radius_scale=1.0`, the best Stage-83 rows reduce max fmax from 0.5309 to about 0.334-0.409 eV/A and recover force MAE, but they lose much of the C/N relax gain. The best current balance is `s0p6_r0p75`: DFT F MAE 29.08 meV/A, all RMSD 0.1798 A, C/N RMSD 0.1804 A, and max fmax 0.3386 eV/A.
+- `s0p6_r0p85` is not useful despite good benchmark MAE: C/N RMSD returns to the Stage-73 baseline. This confirms that aggregate MAE/RMSE alone is not sufficient for this problem and supports the review demand for stratified physical diagnostics.
+- The clean theoretical conclusion is now stronger: the radial core is a real retained T4 operator in the TECE degradation hierarchy, but the operator must be selected by a multi-objective score that includes dimer sign/shape, C/N relax RMSD, and force-spike control. It cannot be tuned by aggregate supervised loss alone.
+- Graph/provider acceleration remains a real deployment axis, but Stage 83 again says the immediate blocker is the calibrated physical closure of the scalar endpoint. Kernel work should wait until a candidate survives these physics gates.
+
+Next priority after Stage 83:
+
+1. Add a stratified checkpoint-selection/evaluation summary that combines DFT force MAE, dimer pass/fail, C/N rattle RMSD, and max fmax into an explicit Pareto score. This is the missing measurement layer between TECE retained paths and architecture choice.
+2. Run a narrow follow-up around the current best balance: `strength=0.6-0.9`, `radius_scale=0.70-0.80`, and possibly lower `beta` to smooth force spikes without losing dimer repulsion.
+3. Only after this score identifies a stable candidate should we implement analytic radial-core force and re-enter the high-throughput fused/backend track.
+4. Do not change low-level graph builders as the next isolated task; when resumed, graph work should be tied to the review P0 PBC edge-vector/force/virial ABI.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
