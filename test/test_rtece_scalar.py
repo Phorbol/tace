@@ -2029,6 +2029,16 @@ def test_rtece_matrix_sbatch_separates_training_and_benchmark_validation_files()
     assert '--configs "${DFT_VALID_FILE}"' in script
 
 
+def test_rtece_benchmark_sbatch_forwards_graph_backend_controls():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_benchmark.sbatch").read_text()
+
+    assert "GRAPH_CONSTRUCTION_BACKEND=${GRAPH_CONSTRUCTION_BACKEND:-torch_radius_nopbc}" in script
+    assert "GRAPH_UPDATE_BACKEND=${GRAPH_UPDATE_BACKEND:-ase_neighborlist}" in script
+    assert '--graph-construction-backend "${GRAPH_CONSTRUCTION_BACKEND}"' in script
+    assert '--graph-update-backend "${GRAPH_UPDATE_BACKEND}"' in script
+
+
 def test_rtece_matrix_sbatch_forwards_benchmark_force_mode():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()

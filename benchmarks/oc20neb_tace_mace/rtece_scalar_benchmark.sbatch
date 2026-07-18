@@ -25,6 +25,8 @@ START_CONFIG=${START_CONFIG:-0}
 MEASURE_PASSES=${MEASURE_PASSES:-10}
 DEFAULT_DTYPE=${DEFAULT_DTYPE:-float32}
 FORCE_MODE=${FORCE_MODE:-autograd}
+GRAPH_CONSTRUCTION_BACKEND=${GRAPH_CONSTRUCTION_BACKEND:-torch_radius_nopbc}
+GRAPH_UPDATE_BACKEND=${GRAPH_UPDATE_BACKEND:-ase_neighborlist}
 
 mkdir -p /home/gengjianrui/bin/logs "${OUT_DIR}"
 cd "${TACE_ROOT}"
@@ -37,6 +39,8 @@ echo "host=$(hostname)"
 echo "out_dir=${OUT_DIR}"
 echo "model=${MODEL}"
 echo "force_mode=${FORCE_MODE}"
+echo "graph_construction_backend=${GRAPH_CONSTRUCTION_BACKEND}"
+echo "graph_update_backend=${GRAPH_UPDATE_BACKEND}"
 echo "start_config=${START_CONFIG}"
 "${TACE_PYTHON}" -V
 nvidia-smi -L
@@ -53,6 +57,8 @@ for limit in "${limit_args[@]}"; do
     --limit-configs "${limit}" \
     --measure-passes "${MEASURE_PASSES}" \
     --force-mode "${FORCE_MODE}" \
+    --graph-construction-backend "${GRAPH_CONSTRUCTION_BACKEND}" \
+    --graph-update-backend "${GRAPH_UPDATE_BACKEND}" \
     --device cuda \
     --default-dtype "${DEFAULT_DTYPE}"
 done
