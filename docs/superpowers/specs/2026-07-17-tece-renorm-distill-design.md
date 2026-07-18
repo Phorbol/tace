@@ -1670,6 +1670,39 @@ Stage-56 interpretation against TECE/TACE:
 - The route is cleaner than another graph-update backend because the descriptor and force semantics now flow from the scalar TECE statistics directly, not through a persistent edge tensor.
 - The next priority is to run this backend on a CUDA node against `analytic_element_triton_descriptor_force`, then replace the padded pair-slot iterator with real cell-list candidate streaming if the result confirms that padded candidate work remains the bottleneck.
 
+
+# Stage 57: GPU Validation Harness And Slurm Cancellation
+
+Stage 57 prepared the benchmark path needed to validate Stage56 on a GPU. The reusable `rtece_scalar_benchmark.sbatch` script now forwards `GRAPH_CONSTRUCTION_BACKEND` and `GRAPH_UPDATE_BACKEND` to `benchmark_rtece_scalar.py`, with direct-active `torch_radius_nopbc` as the default graph construction backend. This matters because the direct-padded streaming backend must be compared against the existing edge-index Triton descriptor/force path under the same no-PBC direct-active semantics.
+
+Implementation gate:
+
+- Added `GRAPH_CONSTRUCTION_BACKEND=${GRAPH_CONSTRUCTION_BACKEND:-torch_radius_nopbc}` and `GRAPH_UPDATE_BACKEND=${GRAPH_UPDATE_BACKEND:-ase_neighborlist}` to `rtece_scalar_benchmark.sbatch`.
+- Forwarded both values into the benchmark CLI.
+- Added a test that locks the sbatch graph-backend contract.
+
+Verification:
+
+- Targeted sbatch test: `1 passed, 73 deselected, 1 warning`.
+- Full rTECE test file after the harness change: `74 passed, 1 warning`.
+
+GPU validation attempts:
+
+| job | mode | requested shape | state |
+|---:|---|---|---|
+| 679358 | `analytic_element_triton_descriptor_force` | 1x V100, `flood-1o2gpu`, 1024 configs, 5 passes | `CANCELLED by 0` after 1 s |
+| 679359 | `analytic_element_direct_padded_descriptor_force` | 1x V100, `flood-1o2gpu`, 1024 configs, 5 passes | `CANCELLED by 0` after 1 s |
+| 679362 | direct-padded retry | 1x V100, `rush-1o2gpu` | cancelled manually after Slurm reported QOS not permitted on `16V100` |
+| 679363 | edge-index Triton retry | 4x V100, `rush-gpu`, 256 configs, 2 passes | `CANCELLED by 0` after 2 s |
+| 679364 | direct-padded retry | 4x V100, `rush-gpu`, 256 configs, 2 passes | `CANCELLED by 0` after 2 s |
+| 679366 | direct-padded shape retry | 4x V100, `rush-gpu`, `ntasks=4`, 64 configs, 1 pass | `CANCELLED by 0` after 2 s |
+
+Stage-57 interpretation against TECE/TACE:
+
+- This is not a model or backend negative result. The jobs did not create stdout/stderr and did not produce benchmark JSON, so Python did not reach the rTECE benchmark path.
+- The TECE route priority remains unchanged: direct-padded streaming needs CUDA numeric/throughput validation against edge-index Triton; if padded work remains the bottleneck, the next runtime renormalization is true cell-list candidate streaming.
+- The practical next step is to use a known-good SAI sbatch template or an interactive compute allocation to run the exact benchmark commands, instead of continuing blind Slurm submissions from the cancelled script.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
