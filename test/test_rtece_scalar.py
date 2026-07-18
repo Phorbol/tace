@@ -14,6 +14,7 @@ from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
     RTECEScalarModel,
     collate_graphs,
     compute_pair_geometry,
+    compute_atomic_moments,
     atomic_scalar_descriptors,
     build_rtece_config,
     cell_list_packed_element_density_descriptors,
@@ -520,6 +521,99 @@ def test_rtece_route_registry_has_formal_tace_models_entrypoint():
     assert core_available_rtece_variants is benchmark_rtece.available_rtece_variants
     assert core_build_rtece_config_from_manifest is benchmark_rtece.build_rtece_config_from_manifest
     assert core_rtece_variant_registry is benchmark_rtece.rtece_variant_registry
+
+
+def test_rtece_path_id_config_drives_atomic_descriptor_order_and_dim():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
+
+    config = build_rtece_config_from_path_ids(
+        "rtece_path_density_square_vector",
+        ("atomic.radial_density", "atomic.density_square", "atomic.vector_norm"),
+        num_radial=4,
+        hidden_channels=(8,),
+    )
+    graph = RTECEGraph(
+        z=torch.tensor([6, 1, 8], dtype=torch.long),
+        pos=torch.tensor(
+            [[0.0, 0.0, 0.0], [0.6, 0.0, 0.0], [0.0, 0.8, 0.0]],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    moments = compute_atomic_moments(graph, config)
+    descriptors = rtece_descriptors(graph, config)
+
+    assert config.scalar_path_ids == ("atomic.radial_density", "atomic.density_square", "atomic.vector_norm")
+    assert config.use_density_quadratic is True
+    assert config.use_vector_moments is True
+    assert config.use_atomic_moments is False
+    assert descriptor_dim(config) == 12
+    assert descriptors.shape == (3, 12)
+    assert torch.allclose(descriptors[:, :4], moments["density"])
+    assert torch.allclose(descriptors[:, 4:8], moments["density"].square())
+    assert torch.allclose(descriptors[:, 8:12], (moments["vector"] ** 2).sum(dim=-1))
+
+
+def test_rtece_path_id_manifest_reconstructs_selected_atomic_paths():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
+        build_rtece_config_from_manifest,
+        build_rtece_config_from_path_ids,
+    )
+
+    config = build_rtece_config_from_path_ids(
+        "rtece_path_species_density",
+        ("atomic.radial_density", "atomic.species_basis_density"),
+        num_radial=3,
+        species_basis_channels=2,
+    )
+    manifest = rtece_path_manifest(config)
+    rebuilt = build_rtece_config_from_manifest(manifest)
+
+    assert [path["id"] for path in manifest["scalar_paths"]] == [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+    ]
+    assert manifest["config"]["scalar_path_ids"] == ["atomic.radial_density", "atomic.species_basis_density"]
+    assert rebuilt == config
+    assert rtece_path_manifest(rebuilt)["manifest_hash"] == manifest["manifest_hash"]
+
+
+def test_rtece_path_id_constructor_rejects_edge_paths_until_edge_compiler_exists():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
+
+    with pytest.raises(ValueError, match="atomic scalar"):
+        build_rtece_config_from_path_ids(
+            "rtece_path_edge_cavity",
+            ("atomic.radial_density", "edge.cavity.vector_dot"),
+        )
+
+
+def test_rtece_path_id_constructor_has_formal_tace_models_entrypoint():
+    from benchmarks.oc20neb_tace_mace import rtece_scalar_model as benchmark_rtece
+    from tace.models import build_rtece_config_from_path_ids as core_build_rtece_config_from_path_ids
+
+    assert core_build_rtece_config_from_path_ids is benchmark_rtece.build_rtece_config_from_path_ids
+
+
+def test_rtece_path_id_custom_order_rejects_packed_element_descriptor_backend():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
+
+    config = build_rtece_config_from_path_ids(
+        "rtece_path_element_first",
+        ("atomic.element_density", "atomic.radial_density"),
+        num_radial=2,
+    )
+    graph = RTECEGraph(
+        z=torch.tensor([6, 1], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(2),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+
+    with pytest.raises(ValueError, match="canonical radial/element path order"):
+        packed_element_density_descriptors(graph, config)
 
 
 def test_rtece_species_basis_variant_has_route_contract():

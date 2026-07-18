@@ -24,8 +24,19 @@ class RTECEScalarConfig:
     num_edge_sketches: int = 0
     use_cavity_edge_sketches: bool = False
     radial_edge_sketch_channels: int = 0
+    scalar_path_ids: tuple[str, ...] | None = None
     energy_per_atom_shift: float = 0.0
     atomic_energies: Mapping[int, float] | None = None
+
+
+_ATOMIC_SCALAR_PATH_IDS = {
+    "atomic.radial_density",
+    "atomic.element_density",
+    "atomic.species_basis_density",
+    "atomic.density_square",
+    "atomic.vector_norm",
+    "atomic.quadrupole_norm",
+}
 
 
 _RTECE_VARIANT_CONFIG_KWARGS: dict[str, dict[str, object]] = {
@@ -63,6 +74,52 @@ def build_rtece_config(variant: str) -> RTECEScalarConfig:
     return RTECEScalarConfig(variant=variant, **kwargs)
 
 
+def build_rtece_config_from_path_ids(
+    variant: str,
+    scalar_path_ids: tuple[str, ...] | list[str],
+    *,
+    cutoff: float = 5.0,
+    num_radial: int = 8,
+    hidden_channels: tuple[int, ...] = (64, 64),
+    max_atomic_number: int = 100,
+    species_basis_channels: int = 0,
+    energy_per_atom_shift: float = 0.0,
+    atomic_energies: Mapping[int, float] | None = None,
+) -> RTECEScalarConfig:
+    paths = tuple(str(path_id) for path_id in scalar_path_ids)
+    if not paths:
+        raise ValueError("at least one scalar path id is required")
+    unsupported = [path_id for path_id in paths if path_id not in _ATOMIC_SCALAR_PATH_IDS]
+    if unsupported:
+        raise ValueError(
+            "build_rtece_config_from_path_ids currently supports atomic scalar path ids only; "
+            f"unsupported paths: {unsupported}"
+        )
+    if "atomic.radial_density" not in paths:
+        raise ValueError("atomic.radial_density is required as the base scalar path")
+    if "atomic.species_basis_density" in paths and species_basis_channels <= 0:
+        raise ValueError("species_basis_channels must be positive for atomic.species_basis_density")
+
+    return RTECEScalarConfig(
+        variant=variant,
+        cutoff=float(cutoff),
+        num_radial=int(num_radial),
+        hidden_channels=tuple(int(value) for value in hidden_channels),
+        max_atomic_number=int(max_atomic_number),
+        use_element_density="atomic.element_density" in paths,
+        use_density_quadratic="atomic.density_square" in paths,
+        use_vector_moments="atomic.vector_norm" in paths,
+        use_atomic_moments="atomic.quadrupole_norm" in paths,
+        species_basis_channels=int(species_basis_channels) if "atomic.species_basis_density" in paths else 0,
+        num_edge_sketches=0,
+        use_cavity_edge_sketches=False,
+        radial_edge_sketch_channels=0,
+        scalar_path_ids=paths,
+        energy_per_atom_shift=float(energy_per_atom_shift),
+        atomic_energies=atomic_energies,
+    )
+
+
 def build_rtece_config_from_manifest(manifest: Mapping[str, Any]) -> RTECEScalarConfig:
     if manifest.get("schema_version") != "rtece_path_manifest.v1":
         raise ValueError("expected rtece_path_manifest.v1 manifest")
@@ -88,10 +145,31 @@ def build_rtece_config_from_manifest(manifest: Mapping[str, Any]) -> RTECEScalar
         num_edge_sketches=int(payload.get("num_edge_sketches", 0)),
         use_cavity_edge_sketches=bool(payload.get("use_cavity_edge_sketches", False)),
         radial_edge_sketch_channels=int(payload.get("radial_edge_sketch_channels", 0)),
+        scalar_path_ids=tuple(str(path_id) for path_id in payload["scalar_path_ids"])
+        if "scalar_path_ids" in payload
+        else None,
     )
 
 
+def _scalar_path_descriptor_dim(path_id: str, config: RTECEScalarConfig) -> int:
+    if path_id in {
+        "atomic.radial_density",
+        "atomic.element_density",
+        "atomic.density_square",
+        "atomic.vector_norm",
+        "atomic.quadrupole_norm",
+    }:
+        return int(config.num_radial)
+    if path_id == "atomic.species_basis_density":
+        if config.species_basis_channels <= 0:
+            raise ValueError("atomic.species_basis_density requires species_basis_channels > 0")
+        return int(config.num_radial) * int(config.species_basis_channels)
+    raise ValueError(f"unsupported scalar path id {path_id!r}")
+
+
 def descriptor_dim(config: RTECEScalarConfig) -> int:
+    if config.scalar_path_ids is not None:
+        return sum(_scalar_path_descriptor_dim(path_id, config) for path_id in config.scalar_path_ids)
     dim = config.num_radial
     if config.use_element_density:
         dim += config.num_radial
@@ -286,7 +364,7 @@ def _scalar_path_spec(
 
 
 def _config_manifest_payload(config: RTECEScalarConfig) -> dict[str, object]:
-    return {
+    payload: dict[str, object] = {
         "variant": config.variant,
         "cutoff": float(config.cutoff),
         "num_radial": int(config.num_radial),
@@ -302,6 +380,9 @@ def _config_manifest_payload(config: RTECEScalarConfig) -> dict[str, object]:
         "radial_edge_sketch_channels": int(config.radial_edge_sketch_channels),
         "energy_reference": "per_element_atomic_energies" if config.atomic_energies else ("global_per_atom_shift" if config.energy_per_atom_shift else "none"),
     }
+    if config.scalar_path_ids is not None:
+        payload["scalar_path_ids"] = list(config.scalar_path_ids)
+    return payload
 
 
 def rtece_path_manifest(
@@ -471,6 +552,13 @@ def rtece_path_manifest(
                 cost_group="direct_pair_radial",
             )
         )
+
+    if config.scalar_path_ids is not None:
+        scalar_paths_by_id = {str(path["id"]): path for path in scalar_paths}
+        missing_paths = [path_id for path_id in config.scalar_path_ids if path_id not in scalar_paths_by_id]
+        if missing_paths:
+            raise ValueError(f"scalar path ids are not available for this config: {missing_paths}")
+        scalar_paths = [scalar_paths_by_id[path_id] for path_id in config.scalar_path_ids]
 
     manifest_core: dict[str, Any] = {
         "schema_version": "rtece_path_manifest.v1",
@@ -708,12 +796,59 @@ def compute_atomic_moments(graph: RTECEGraph, config: RTECEScalarConfig) -> dict
     }
 
 
+def _atomic_scalar_path_descriptors(
+    path_ids: tuple[str, ...],
+    *,
+    density: torch.Tensor,
+    element_density: torch.Tensor | None = None,
+    species_density: torch.Tensor | None = None,
+    vector_norm: torch.Tensor | None = None,
+    quadrupole_norm: torch.Tensor | None = None,
+) -> torch.Tensor:
+    parts = []
+    for path_id in path_ids:
+        if path_id == "atomic.radial_density":
+            parts.append(density)
+        elif path_id == "atomic.element_density":
+            if element_density is None:
+                raise ValueError("element_density is required for atomic.element_density")
+            parts.append(element_density)
+        elif path_id == "atomic.species_basis_density":
+            if species_density is None:
+                raise ValueError("species_density is required for atomic.species_basis_density")
+            parts.append(species_density)
+        elif path_id == "atomic.density_square":
+            parts.append(density.square())
+        elif path_id == "atomic.vector_norm":
+            if vector_norm is None:
+                raise ValueError("vector_norm is required for atomic.vector_norm")
+            parts.append(vector_norm)
+        elif path_id == "atomic.quadrupole_norm":
+            if quadrupole_norm is None:
+                raise ValueError("quadrupole_norm is required for atomic.quadrupole_norm")
+            parts.append(quadrupole_norm)
+        else:
+            raise ValueError(f"unsupported atomic scalar path id {path_id!r}")
+    if not parts:
+        return density.new_zeros((density.shape[0], 0))
+    return torch.cat(parts, dim=-1) if len(parts) > 1 else parts[0]
+
+
 def density_scalar_descriptors(
     density: torch.Tensor,
     config: RTECEScalarConfig,
     element_density: torch.Tensor | None = None,
     vector_norm: torch.Tensor | None = None,
 ) -> torch.Tensor:
+    if config.scalar_path_ids is not None:
+        return _atomic_scalar_path_descriptors(
+            config.scalar_path_ids,
+            density=density,
+            element_density=element_density if config.use_element_density else None,
+            species_density=element_density if config.species_basis_channels else None,
+            vector_norm=vector_norm,
+        )
+
     parts = [density]
     if config.use_element_density:
         if element_density is None:
@@ -739,6 +874,11 @@ def _validate_packed_element_density_config(config: RTECEScalarConfig, name: str
         raise ValueError(f"{name} only supports density plus element density")
     if config.use_atomic_moments or config.num_edge_sketches:
         raise ValueError(f"{name} only supports scalar density descriptors")
+    if config.scalar_path_ids is not None and config.scalar_path_ids != (
+        "atomic.radial_density",
+        "atomic.element_density",
+    ):
+        raise ValueError(f"{name} requires canonical radial/element path order")
 
 
 def _cell_list_directed_edges_nopbc(graph: RTECEGraph, cutoff: float) -> tuple[torch.Tensor, torch.Tensor]:
@@ -819,6 +959,17 @@ def atomic_scalar_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> t
     moments = compute_atomic_moments(graph, config)
     density = moments["density"]
     vector_norm = (moments["vector"] ** 2).sum(dim=-1)
+    quadrupole_norm = (moments["quadrupole"] ** 2).sum(dim=(-1, -2))
+    if config.scalar_path_ids is not None:
+        return _atomic_scalar_path_descriptors(
+            config.scalar_path_ids,
+            density=density,
+            element_density=moments["element_density"],
+            species_density=moments["species_density"],
+            vector_norm=vector_norm,
+            quadrupole_norm=quadrupole_norm,
+        )
+
     density_desc = density_scalar_descriptors(
         density,
         config,
@@ -827,7 +978,6 @@ def atomic_scalar_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> t
     )
     if not config.use_atomic_moments:
         return density_desc
-    quadrupole_norm = (moments["quadrupole"] ** 2).sum(dim=(-1, -2))
     return torch.cat([density_desc, vector_norm, quadrupole_norm], dim=-1)
 
 
@@ -1363,6 +1513,7 @@ __all__ = [
     "available_rtece_variants",
     "build_rtece_config",
     "build_rtece_config_from_manifest",
+    "build_rtece_config_from_path_ids",
     "descriptor_dim",
     "collate_graphs",
     "compute_pair_geometry",

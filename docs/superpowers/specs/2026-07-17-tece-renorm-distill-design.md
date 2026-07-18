@@ -1988,6 +1988,32 @@ Next priority:
 2. After that, add the first projection-error diagnostic: compare a route's retained descriptor covariance/teacher-force sensitivity against deleted path groups on a bounded OC20NEB subset.
 3. Keep GPU benchmark scaling focused on registered routes with analytic/fused force backends; avoid large autograd edge-sketch sweeps until the path group has a viable inference backend.
 
+# Stage 67: Atomic Scalar Path-Id Constructor
+
+Stage 67 implements the first executable path-spec constructor rather than another variant-string alias. The scope is deliberately atomic scalar paths only: these paths already have exact descriptor dimensions and feature-order semantics in the current rTECE scalar endpoint, while edge/cavity paths still need their internal basis functions split before they can honestly be selected one-by-one.
+
+Implementation gate:
+
+- Added `RTECEScalarConfig.scalar_path_ids`, used only when a route is constructed from explicit scalar path ids. Legacy registered variants keep `scalar_path_ids=None` and preserve their existing behavior.
+- Added `build_rtece_config_from_path_ids(...)`, currently accepting atomic scalar path ids: `atomic.radial_density`, `atomic.element_density`, `atomic.species_basis_density`, `atomic.density_square`, `atomic.vector_norm`, and `atomic.quadrupole_norm`.
+- `descriptor_dim(config)` now sums selected path dimensions when `scalar_path_ids` is present.
+- `atomic_scalar_descriptors()` and `density_scalar_descriptors()` now assemble descriptors in the selected path-id order, so path ids drive actual feature layout, not only metadata.
+- `rtece_path_manifest()` filters scalar path specs to the selected path list and stores `scalar_path_ids` in the manifest config payload; `build_rtece_config_from_manifest()` reconstructs this selected-path config.
+- Packed/fused element-density descriptor paths now reject custom path-id orders unless they match the canonical `(atomic.radial_density, atomic.element_density)` layout, preventing silent descriptor-order mismatches.
+- The constructor is exported from the formal `tace.models` entrypoint and the benchmark shim.
+
+Stage-67 interpretation against TECE/TACE:
+
+- This is the first point where selected TECE scalar path ids control the real deployed descriptor dimension and feature assembly order. That moves the code beyond Boolean feature switches for the atomic scalar endpoint.
+- It is still not the full route compiler. Edge relational paths are not yet individually selectable because `edge_relational_sketches()` still emits a bundled sketch vector, and teacher-conditioned path selection/downfolding is not implemented.
+- The clean next step is to split edge/cavity sketch construction into named basis functions so edge scalar path ids can drive descriptor assembly the same way atomic path ids now do. After that, projection-error diagnostics can compare retained/deleted path groups directly.
+
+Next priority:
+
+1. Factor `edge_relational_sketches()` into stable named edge basis functions and make selected edge scalar path ids control their columns.
+2. Add a bounded projection-error diagnostic over registered/path-id routes before scaling more training, because the acceptance criterion requires separating projection error from distillation/optimization error.
+3. Keep backend guards explicit: any fused or analytic backend with fixed descriptor layout must reject incompatible path-id order.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
