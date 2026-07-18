@@ -99,6 +99,7 @@ def parse_args() -> argparse.Namespace:
             "torch_radius_nopbc_grouped_chunked",
             "torch_radius_nopbc_grouped_by_size",
             "torch_radius_nopbc_ragged",
+            "torch_radius_nopbc_triton_padded",
         ),
         default="ase_neighborlist",
         help="Graph update backend used when trajectory replay invalidates the cached graph.",
@@ -261,6 +262,10 @@ def direct_radius_backend_static_metadata(
         num_chunks = 1 if num_configs else 0
         max_chunk_configs = num_configs
         padded_pair_slots = int(num_configs * max_atoms * max_atoms)
+    elif backend_name == "torch_radius_nopbc_triton_padded":
+        num_chunks = 1 if num_configs else 0
+        max_chunk_configs = num_configs
+        padded_pair_slots = int(num_configs * max_atoms * max_atoms)
     elif backend_name == "torch_radius_nopbc_grouped_chunked":
         if chunk_configs < 1:
             raise ValueError(f"chunk_configs must be positive, got {chunk_configs}")
@@ -324,6 +329,7 @@ def make_graph_update_backend(
         "torch_radius_nopbc_grouped_chunked",
         "torch_radius_nopbc_grouped_by_size",
         "torch_radius_nopbc_ragged",
+        "torch_radius_nopbc_triton_padded",
     }:
         if template_graph is None:
             raise ValueError(f"{backend_name} graph update backend requires a template graph")
@@ -334,6 +340,7 @@ def make_graph_update_backend(
             "torch_radius_nopbc_grouped": torch_radius_nopbc_grouped_graph,
             "torch_radius_nopbc_grouped_by_size": torch_radius_nopbc_grouped_by_size_graph,
             "torch_radius_nopbc_ragged": torch_radius_nopbc_ragged_graph,
+            "torch_radius_nopbc_triton_padded": torch_radius_nopbc_triton_padded_graph,
         }
         if backend_name == "torch_radius_nopbc_grouped_chunked":
             return GraphUpdateBackend(
@@ -664,6 +671,40 @@ def torch_radius_nopbc_ragged_graph(template: RTECEGraph, positions: torch.Tenso
                 device=template.edge_index.device,
                 dtype=template.edge_index.dtype,
             )
+    return RTECEGraph(
+        z=template.z,
+        pos=pos,
+        edge_index=edge_index,
+        batch=template.batch,
+    )
+
+
+def torch_radius_nopbc_triton_padded_graph(template: RTECEGraph, positions: torch.Tensor, *, cutoff: float) -> RTECEGraph:
+    if cutoff <= 0.0:
+        raise ValueError(f"cutoff must be positive, got {cutoff}")
+    if tuple(positions.shape) != tuple(template.pos.shape):
+        raise ValueError(f"positions shape {tuple(positions.shape)} does not match graph shape {tuple(template.pos.shape)}")
+    pos = positions.to(device=template.pos.device, dtype=template.pos.dtype)
+    if pos.device.type != "cuda" or pos.dtype != torch.float32:
+        return torch_radius_nopbc_grouped_graph(template, positions, cutoff=cutoff)
+    batch = template.batch
+    if batch.ndim != 1 or batch.shape[0] != template.z.shape[0]:
+        raise ValueError("template batch must be a one-dimensional tensor with one entry per atom")
+    if batch.numel() == 0:
+        edge_index = template.edge_index.new_zeros((2, 0))
+    else:
+        if torch.any(batch[1:] < batch[:-1]):
+            raise ValueError("template batch must be sorted by configuration")
+        _, counts = torch.unique_consecutive(batch, return_counts=True)
+        starts = torch.cat([batch.new_zeros(1), counts.cumsum(dim=0)[:-1]])
+        from benchmarks.oc20neb_tace_mace.rtece_triton_kernels import direct_radius_padded_edges_triton
+
+        edge_index = direct_radius_padded_edges_triton(
+            pos=pos,
+            counts=counts.to(device=pos.device),
+            starts=starts.to(device=pos.device),
+            cutoff=float(cutoff),
+        ).to(device=template.edge_index.device, dtype=template.edge_index.dtype)
     return RTECEGraph(
         z=template.z,
         pos=pos,

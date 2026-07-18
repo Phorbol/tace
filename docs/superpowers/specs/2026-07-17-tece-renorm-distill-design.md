@@ -1424,6 +1424,38 @@ Stage-47 interpretation against TECE/TACE:
 - The fused/cell-list provider requirement is now stronger and more specific. It must generate active edges or feed descriptor/force kernels without materializing either padded distance/mask tensors or ragged all-pair index tensors.
 - This fits the TECE/TACE system-renormalization thesis: after semantic projection and fused scalar descriptors, the remaining deployment bottleneck is not parameter count or model architecture. It is the runtime representation of local edge topology and its lifetime in memory.
 
+
+# Stage 48: Triton Padded Direct-Radius Provider
+
+Stage 48 tested the Stage-47 conclusion that the next useful provider step must move below Python/Torch tensor reshaping. The new `torch_radius_nopbc_triton_padded` backend preserves direct-active semantics, but scans padded candidate slots inside a Triton kernel and writes active directed edges with an atomic counter. It deliberately keeps the padded candidate space for this first lower-level test; the question is whether avoiding long-lived PyTorch distance/mask/ragged-index tensors is enough to improve the provider front.
+
+Implementation gate:
+
+- Added `direct_radius_padded_edges_triton(...)` and a Triton `_direct_radius_padded_edges_kernel`.
+- Added `torch_radius_nopbc_triton_padded_graph(...)` with CPU/non-float32 fallback to the grouped backend, and exposed `--graph-update-backend torch_radius_nopbc_triton_padded`.
+- Added tests that the backend matches loop edges through the CPU fallback, that factory metadata is recorded, and that CLI help exposes the backend.
+- The tests were first run red on missing function/factory/CLI choice; after implementation and one kernel compile fix, the full rTECE scalar test file passed with 58 tests.
+
+GPU setup: radial8h24 `rtece_element_density`, direct-active initial graph, DFT valid `:1024`, 59193 atoms, one V100, float32, `--force-mode auto`, forced invalid cache with `trajectory_skin_margin=0.002`, `trajectory_displacement_std=0.001`, 20 force steps and 10 update events.
+
+| update backend | mode | atom-step/s | update total s | peak alloc MB | padded pair slots | padding overhead | directed edges | DFT F MAE |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| `torch_radius_nopbc_grouped` | update-only | 68,486,684 | 0.012020 | 241.3 | 7,750,656 | 2.095 | 825,584 | n/a |
+| `torch_radius_nopbc_grouped_chunked` chunk256 | update-only | 48,274,213 | 0.020571 | 110.0 | 6,211,328 | 1.679 | 825,584 | n/a |
+| `torch_radius_nopbc_ragged` | update-only | 39,868,611 | 0.025378 | 383.9 | 3,699,489 | 1.000 | 825,584 | n/a |
+| `torch_radius_nopbc_triton_padded` | update-only | 141,308,212 | 0.004430 | 255.0 | 7,750,656 | 2.095 | 825,584 | n/a |
+| `torch_radius_nopbc_grouped` | model+updates | 26,536,430 | 0.012534 | 263.1 | 7,750,656 | 2.095 | 825,584 | 33.18 |
+| `torch_radius_nopbc_grouped_chunked` chunk256 | model+updates | 23,294,254 | 0.021821 | 130.5 | 6,211,328 | 1.679 | 825,584 | 33.18 |
+| `torch_radius_nopbc_ragged` | model+updates | 21,688,771 | 0.025748 | 405.9 | 3,699,489 | 1.000 | 825,584 | 33.18 |
+| `torch_radius_nopbc_triton_padded` | model+updates | 37,057,631 | 0.003897 | 276.8 | 7,750,656 | 2.095 | 825,584 | 33.18 |
+
+Stage-48 interpretation against TECE/TACE:
+
+- This is a positive provider-renormalization result. It does not change the scalar rTECE model, descriptor, checkpoint, graph semantics, or force path. It changes only the runtime realization of direct-radius topology update.
+- The result validates the Stage-47 diagnosis: the dominant problem was not only pair-slot count. PyTorch tensor materialization for masks and ragged indices was a first-class bottleneck. Moving candidate filtering and active-edge writing into Triton raises update-only throughput to 141M atom-step/s and model+updates to 37.1M atom-step/s.
+- The provider front changes again. `torch_radius_nopbc_triton_padded` is now the high-throughput invalid-cache update backend. `chunk256` remains a lower-memory fallback, but no longer the balanced throughput point when memory permits.
+- The next clean target is not another Torch backend. It is a counted/two-pass Triton provider or cell-list provider that keeps the lower-level kernel execution path while avoiding full preallocation of a `2 x padded_pair_slots` int64 edge buffer. That would combine Stage48 speed with Stage46/47 memory discipline.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
