@@ -203,6 +203,51 @@ def test_cell_list_packed_element_density_descriptors_match_direct_radius_edges(
     assert torch.allclose(fused, direct, atol=1e-10, rtol=1e-10)
 
 
+def test_cell_list_packed_element_density_forces_match_packed_and_ignore_edge_index():
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import torch_radius_nopbc_graph
+
+    config = RTECEScalarConfig(
+        variant="rtece_element_density",
+        cutoff=1.1,
+        num_radial=4,
+        hidden_channels=(8,),
+        use_element_density=True,
+    )
+    model = RTECEScalarModel(config).double().eval()
+    z = torch.tensor([6, 8, 1, 7, 1], dtype=torch.long)
+    batch = torch.tensor([0, 0, 0, 1, 1], dtype=torch.long)
+    pos = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [0.7, 0.1, 0.0],
+            [1.4, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+            [0.8, 0.0, 0.0],
+        ],
+        dtype=torch.float64,
+    )
+    template = RTECEGraph(
+        z=z,
+        pos=pos,
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=batch,
+    )
+    direct_graph = torch_radius_nopbc_graph(template, pos, cutoff=config.cutoff)
+    bogus_graph = RTECEGraph(
+        z=z,
+        pos=pos,
+        edge_index=complete_directed_edges(5),
+        batch=batch,
+    )
+
+    packed = model.forward_element_density_packed_analytic_forces(direct_graph)
+    cell_list = model.forward_element_density_cell_list_packed_analytic_forces(bogus_graph)
+
+    assert torch.allclose(cell_list["energy"], packed["energy"], atol=1e-10, rtol=1e-10)
+    assert torch.allclose(cell_list["atomic_energy"], packed["atomic_energy"], atol=1e-10, rtol=1e-10)
+    assert torch.allclose(cell_list["forces"], packed["forces"], atol=1e-10, rtol=1e-10)
+
+
 def test_cell_list_packed_element_density_descriptors_ignore_input_edge_index():
     config = RTECEScalarConfig(
         variant="rtece_element_density",
@@ -443,6 +488,37 @@ def test_rtece_scalar_model_energy_is_permutation_invariant_for_complete_graph()
     e_perm = model(graph_perm)["energy"]
 
     assert torch.allclose(e, e_perm, atol=1e-10, rtol=1e-10)
+
+
+def test_core_rtece_workflow_predicts_cell_list_descriptor_force_mode():
+    from tace.models.rtece_workflow import predict
+
+    config = RTECEScalarConfig(
+        variant="rtece_element_density",
+        cutoff=1.0,
+        num_radial=4,
+        hidden_channels=(8,),
+        use_element_density=True,
+    )
+    model = RTECEScalarModel(config).double().eval()
+    graph = RTECEGraph(
+        z=torch.tensor([6, 8], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+
+    out = predict(
+        model,
+        graph,
+        force_mode="analytic_element_cell_list_descriptor_force",
+        include_route=True,
+    )
+
+    assert out["energy"].shape == (1,)
+    assert out["forces"].shape == (2, 3)
+    assert out["tece_route"]["descriptor_realization"] == "cell_list_fused_descriptor_oracle"
+    assert out["tece_route"]["edge_state_lifetime"] == "streaming_cell_candidates_oracle"
 
 
 def test_core_rtece_workflow_saves_loads_and_predicts_with_route_metadata(tmp_path):

@@ -1614,6 +1614,36 @@ Stage-54 interpretation against TECE/TACE:
 - This answers the structural concern that rTECE was only a benchmark artifact. The current scalar endpoint can now be trained, checkpointed, loaded, and used for inference through `tace.models`, and its artifacts carry the semantic degradation route needed for systematic Pareto comparison.
 - The priority after this stage should not drift back to hidden-size tuning. The next clean experiment remains the Stage52 fused cell-list descriptor/force backend for the element-density scalar endpoint, benchmarked against `torch_radius_nopbc_triton_padded` and `torch_radius_nopbc_triton_counted` with the same route metadata attached.
 
+
+# Stage 55: Cell-List Descriptor+Force Oracle Entry
+
+Stage 55 converts the Stage52 cell-list descriptor oracle into a real, explicit rTECE force mode. It is still a PyTorch/CPU-oriented oracle rather than a high-throughput Triton or nvalchemi-style kernel, but it is now reachable from the formal model, workflow API, and benchmark CLI.
+
+Implementation gate:
+
+- Added `RTECEScalarModel.forward_element_density_cell_list_packed_analytic_forces(...)`. The method ignores caller-supplied `edge_index`, constructs direct-active no-PBC pairs from batch-sorted positions using the Stage52 cell-list semantics, accumulates packed `[rho, rho_z]` descriptors, and applies the same conservative descriptor-gradient force chain rule as `forward_element_density_packed_analytic_forces(...)`.
+- Added workflow dispatch for `analytic_element_cell_list_descriptor_force` and benchmark CLI support for the same force mode.
+- Extended `rtece_route_contract(...)` so this mode reports `cell_list_fused_descriptor_oracle`, `cell_list_analytic_descriptor_force`, `direct_active_nopbc`, and `streaming_cell_candidates_oracle`.
+- Added tests that first failed on the missing method/force mode, then verified that the cell-list force path matches packed edge-list energy, atomic energy, and forces while ignoring a bogus input edge list.
+
+Verification:
+
+- Targeted Stage55 tests: `2 passed, 68 deselected, 1 warning`.
+- Full rTECE test file: `70 passed, 1 warning`.
+
+CPU oracle smoke, using the existing `rtece-stage23-radial4-hidden16` checkpoint and first 8 OC20NEB teacher-valid configs:
+
+| mode | atoms/s | seconds/pass | DFT F MAE meV/A | DFT F RMSE meV/A |
+|---|---:|---:|---:|---:|
+| `analytic_element_cell_list_descriptor_force` | 4028.8 | 0.099286 | 52.099328 | 96.659877 |
+| `analytic_element_packed` | 2093.3 | 0.191085 | 52.099328 | 96.659877 |
+
+Stage-55 interpretation against TECE/TACE:
+
+- This is a semantic/backend closure stage, not a new GPU Pareto point. The smoke confirms identical force error to the materialized packed edge-list path on the tested window.
+- The TECE design-space claim is sharpened: for the T3 element-density scalar endpoint, retained information is the scalar radial and neighbor-element density statistics; the public edge list is not part of the model semantics. It is only one runtime realization.
+- Therefore the next high-value implementation target is a fused GPU cell-list descriptor+force backend that preserves this exact route contract while removing materialized edge-list lifetime and padded candidate scans. NVIDIA nvalchemi-toolkit-ops or DeepMD edge-force/edge-virial code can be backend references, but the algorithmic target is now fixed by the route contract and tests.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
