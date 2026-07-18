@@ -16,11 +16,10 @@ triton, tl = _load_triton()
 
 
 @triton.jit
-def _direct_radius_padded_edges_kernel(
+def _direct_radius_count_edges_kernel(
     pos,
     counts,
     starts,
-    edge_index,
     edge_count,
     num_graphs: tl.constexpr,
     max_count: tl.constexpr,
@@ -51,10 +50,51 @@ def _direct_radius_padded_edges_kernel(
     vy = sy - dy
     vz = sz - dz
     inside = valid & ((vx * vx + vy * vy + vz * vz) < cutoff_sq)
+    hits = tl.sum(tl.where(inside, 1, 0), axis=0)
+    tl.atomic_add(edge_count, hits, sem="relaxed")
+
+
+@triton.jit
+def _direct_radius_padded_edges_kernel(
+    pos,
+    counts,
+    starts,
+    edge_index,
+    edge_count,
+    num_graphs: tl.constexpr,
+    max_count: tl.constexpr,
+    total_slots: tl.constexpr,
+    edge_stride: tl.constexpr,
+    cutoff_sq: tl.constexpr,
+    block_size: tl.constexpr,
+):
+    offsets = tl.program_id(0) * block_size + tl.arange(0, block_size)
+    mask = offsets < total_slots
+    slots_per_graph = max_count * max_count
+    graph = offsets // slots_per_graph
+    local_pair = offsets - graph * slots_per_graph
+    src_local = local_pair // max_count
+    dst_local = local_pair - src_local * max_count
+    count = tl.load(counts + graph, mask=mask & (graph < num_graphs), other=0)
+    start = tl.load(starts + graph, mask=mask & (graph < num_graphs), other=0)
+    valid = mask & (graph < num_graphs) & (src_local < count) & (dst_local < count) & (src_local != dst_local)
+    src = start + src_local
+    dst = start + dst_local
+
+    sx = tl.load(pos + src * 3 + 0, mask=valid, other=0.0)
+    sy = tl.load(pos + src * 3 + 1, mask=valid, other=0.0)
+    sz = tl.load(pos + src * 3 + 2, mask=valid, other=0.0)
+    dx = tl.load(pos + dst * 3 + 0, mask=valid, other=0.0)
+    dy = tl.load(pos + dst * 3 + 1, mask=valid, other=0.0)
+    dz = tl.load(pos + dst * 3 + 2, mask=valid, other=0.0)
+    vx = sx - dx
+    vy = sy - dy
+    vz = sz - dz
+    inside = valid & ((vx * vx + vy * vy + vz * vz) < cutoff_sq)
     counter_ptrs = edge_count + tl.zeros((block_size,), dtype=tl.int64)
     out = tl.atomic_add(counter_ptrs, 1, sem="relaxed", mask=inside)
     tl.store(edge_index + out, src, mask=inside)
-    tl.store(edge_index + total_slots + out, dst, mask=inside)
+    tl.store(edge_index + edge_stride + out, dst, mask=inside)
 
 
 def direct_radius_padded_edges_triton(
@@ -96,12 +136,77 @@ def direct_radius_padded_edges_triton(
         int(num_graphs),
         int(max_count),
         int(total_slots),
+        int(total_slots),
         float(cutoff) * float(cutoff),
         int(block_size),
         num_warps=4,
     )
     count = int(edge_count.detach().cpu())
     return edge_index[:, :count]
+
+
+def direct_radius_counted_edges_triton(
+    *,
+    pos: torch.Tensor,
+    counts: torch.Tensor,
+    starts: torch.Tensor,
+    cutoff: float,
+    block_size: int = 256,
+) -> torch.Tensor:
+    if pos.device.type != "cuda":
+        raise RuntimeError("Triton counted direct-radius edge provider requires CUDA positions")
+    if pos.dtype != torch.float32:
+        raise RuntimeError("Triton counted direct-radius edge provider currently supports float32 positions only")
+    if counts.device.type != "cuda" or starts.device.type != "cuda":
+        raise RuntimeError("Triton counted direct-radius edge provider requires CUDA counts and starts")
+    if counts.dtype != torch.long or starts.dtype != torch.long:
+        raise RuntimeError("Triton counted direct-radius edge provider requires int64 counts and starts")
+    if not pos.is_contiguous():
+        pos = pos.contiguous()
+    counts = counts.contiguous()
+    starts = starts.contiguous()
+    num_graphs = int(counts.numel())
+    if num_graphs == 0:
+        return torch.empty((2, 0), device=pos.device, dtype=torch.long)
+    max_count = int(counts.max().detach().cpu())
+    if max_count <= 1:
+        return torch.empty((2, 0), device=pos.device, dtype=torch.long)
+    total_slots = int(num_graphs * max_count * max_count)
+    edge_count = torch.zeros((), device=pos.device, dtype=torch.long)
+    grid = (triton.cdiv(total_slots, block_size),)
+    _direct_radius_count_edges_kernel[grid](
+        pos,
+        counts,
+        starts,
+        edge_count,
+        int(num_graphs),
+        int(max_count),
+        int(total_slots),
+        float(cutoff) * float(cutoff),
+        int(block_size),
+        num_warps=4,
+    )
+    count = int(edge_count.detach().cpu())
+    if count == 0:
+        return torch.empty((2, 0), device=pos.device, dtype=torch.long)
+
+    edge_index = torch.empty((2, count), device=pos.device, dtype=torch.long)
+    edge_count.zero_()
+    _direct_radius_padded_edges_kernel[grid](
+        pos,
+        counts,
+        starts,
+        edge_index,
+        edge_count,
+        int(num_graphs),
+        int(max_count),
+        int(total_slots),
+        int(count),
+        float(cutoff) * float(cutoff),
+        int(block_size),
+        num_warps=4,
+    )
+    return edge_index
 
 
 @triton.jit
