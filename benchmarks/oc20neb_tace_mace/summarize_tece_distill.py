@@ -21,6 +21,11 @@ def _rtece_config_from_benchmark(variant: str, benchmark: dict[str, Any]) -> RTE
     if model_variant is None:
         if variant.startswith("rtece_pair") or "pair" in variant:
             model_variant = "rtece_pair"
+        elif "cavity" in variant:
+            if "radial" in variant:
+                model_variant = "rtece_cavity_radial_edge_sketch14"
+            else:
+                model_variant = "rtece_cavity_edge_sketch8"
         elif "element" in variant or "radial" in variant or "element" in force_mode:
             model_variant = "rtece_element_density"
         elif "quadratic" in variant:
@@ -57,6 +62,7 @@ def _rtece_config_from_benchmark(variant: str, benchmark: dict[str, Any]) -> RTE
         species_basis_channels=config.species_basis_channels,
         num_edge_sketches=config.num_edge_sketches,
         use_cavity_edge_sketches=config.use_cavity_edge_sketches,
+        radial_edge_sketch_channels=config.radial_edge_sketch_channels,
         energy_per_atom_shift=float(benchmark.get("energy_per_atom_shift") or config.energy_per_atom_shift),
         atomic_energies=atomic_energies,
     )

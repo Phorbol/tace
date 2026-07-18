@@ -221,6 +221,7 @@ def parse_args() -> argparse.Namespace:
             "rtece_species_basis4",
             "rtece_edge_sketch8",
             "rtece_cavity_edge_sketch8",
+            "rtece_cavity_radial_edge_sketch14",
             "rtece_edge_sketch16",
         ),
     )

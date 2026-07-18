@@ -19,6 +19,7 @@ from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
     cell_list_packed_element_density_descriptors,
     descriptor_dim,
     edge_relational_sketches,
+    _project_radial_edge_channels,
     packed_element_density_descriptors,
     rtece_descriptors,
     rtece_route_contract,
@@ -109,6 +110,12 @@ def test_rtece_route_contract_classifies_semantic_and_runtime_degradation():
     assert "cavity_edge_relational_scalar_sketches" in cavity["retained_tece_groups"]
     assert "direct_edge_radial_path" in cavity["retained_tece_groups"]
 
+    radial_cavity = rtece_route_contract(build_rtece_config("rtece_cavity_radial_edge_sketch14"))
+    assert radial_cavity["semantic_tier"] == "T3_cavity_radial_edge_scalar_sketch"
+    assert radial_cavity["descriptor_family"] == "cavity_radial_atomic_moment_sketch"
+    assert "low_rank_radial_edge_moment_sketches" in radial_cavity["retained_tece_groups"]
+    assert "cross_radial_edge_invariants" in radial_cavity["retained_tece_groups"]
+
 
 def test_build_rtece_config_defines_ordered_variants():
     pair = build_rtece_config("rtece_pair")
@@ -118,6 +125,7 @@ def test_build_rtece_config_defines_ordered_variants():
     atomic = build_rtece_config("rtece_atomic_moments")
     sketch8 = build_rtece_config("rtece_edge_sketch8")
     cavity8 = build_rtece_config("rtece_cavity_edge_sketch8")
+    radial_cavity14 = build_rtece_config("rtece_cavity_radial_edge_sketch14")
     sketch16 = build_rtece_config("rtece_edge_sketch16")
 
     assert pair.variant == "rtece_pair"
@@ -144,6 +152,11 @@ def test_build_rtece_config_defines_ordered_variants():
     assert cavity8.use_cavity_edge_sketches is True
     assert cavity8.num_edge_sketches == 8
     assert descriptor_dim(cavity8) == descriptor_dim(sketch8)
+    assert radial_cavity14.use_atomic_moments is True
+    assert radial_cavity14.use_cavity_edge_sketches is True
+    assert radial_cavity14.radial_edge_sketch_channels == 2
+    assert radial_cavity14.num_edge_sketches == 14
+    assert descriptor_dim(radial_cavity14) > descriptor_dim(cavity8)
     assert sketch16.use_atomic_moments is True
     assert sketch16.num_edge_sketches == 16
     assert (
@@ -522,6 +535,7 @@ def test_edge_relational_sketches_are_rotation_invariant():
     configs = [
         build_rtece_config("rtece_edge_sketch8"),
         build_rtece_config("rtece_cavity_edge_sketch8"),
+        build_rtece_config("rtece_cavity_radial_edge_sketch14"),
     ]
     z = torch.tensor([6, 8, 1, 1], dtype=torch.long)
     pos = torch.tensor(
@@ -552,6 +566,18 @@ def test_edge_relational_sketches_are_rotation_invariant():
         assert sketches.shape == (4, config.num_edge_sketches)
         assert torch.allclose(sketches, sketches_rot, atol=1e-10, rtol=1e-10)
         assert torch.allclose(full, full_rot, atol=1e-10, rtol=1e-10)
+
+
+def test_radial_edge_projection_preserves_shell_information_lost_by_mean():
+    channels_a = torch.tensor([[[1.0], [1.0], [0.0], [0.0]]], dtype=torch.float64)
+    channels_b = torch.tensor([[[0.0], [0.0], [1.0], [1.0]]], dtype=torch.float64)
+
+    assert torch.allclose(channels_a.mean(dim=1), channels_b.mean(dim=1))
+    projected_a = _project_radial_edge_channels(channels_a, 2)
+    projected_b = _project_radial_edge_channels(channels_b, 2)
+
+    assert projected_a.shape == (1, 2, 1)
+    assert not torch.allclose(projected_a, projected_b)
 
 
 def test_cavity_edge_sketches_remove_self_edge_leakage_for_isolated_pair():
@@ -2295,11 +2321,18 @@ def test_rtece_summary_reconstructs_species_and_cavity_routes():
 
     species = make_student_row("rtece_species_basis4", dft_benchmark=dft, teacher_benchmark=teacher)
     cavity = make_student_row("rtece_cavity_edge_sketch8", dft_benchmark=dft, teacher_benchmark=teacher)
+    radial_cavity = make_student_row(
+        "rtece_cavity_radial_edge_sketch14",
+        dft_benchmark=dft,
+        teacher_benchmark=teacher,
+    )
 
     assert species["tece_route"]["semantic_tier"] == "T3_low_rank_species_density"
     assert "low_rank_neighbor_species_basis" in species["tece_route"]["retained_tece_groups"]
     assert cavity["tece_route"]["semantic_tier"] == "T3_cavity_edge_scalar_sketch"
     assert "cavity_edge_relational_scalar_sketches" in cavity["tece_route"]["retained_tece_groups"]
+    assert radial_cavity["tece_route"]["semantic_tier"] == "T3_cavity_radial_edge_scalar_sketch"
+    assert "cross_radial_edge_invariants" in radial_cavity["tece_route"]["retained_tece_groups"]
 
 
 def test_rtece_summary_preserves_graph_construction_backend():

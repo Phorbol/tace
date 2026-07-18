@@ -1839,6 +1839,44 @@ Stage-61 interpretation against TECE/TACE:
 - The old full-moment edge sketch remains available as a compatibility/control variant. New experiments should prefer the cavity variant when testing edge-relational semantics.
 - This stage does not fix review #5: vector/quadrupole radial channels are still averaged before edge contraction. The next architecture priority should be low-rank radial/cross-radial sketches, ideally in a form that can later be selected by teacher covariance or force-weighted sensitivity.
 
+
+# Stage 62: Low-Rank Radial Edge Sketches
+
+Stage 62 addresses review P0 #5: even after the Stage 61 cavity repair, edge sketches still collapsed vector and quadrupole radial channels by `mean(dim=1)` before forming edge-relational scalars. That made near-shell and mid/far-shell orientation information indistinguishable whenever they shared the same radial average.
+
+The new `rtece_cavity_radial_edge_sketch14` variant keeps the Stage 61 cavity semantics and replaces the single radial mean with two fixed low-rank radial shell projections. For a radial-channel moment `A_{in}` it now forms
+
+```text
+A_{ik} = mean_{n in shell k} A_{in},  k = 1,2,
+```
+
+then keeps sparse same-shell and cross-shell edge invariants for vector and quadrupole moments, plus direct radial slots. This is the fixed-projection version of the review's recommended
+
+```text
+A_tilde_{iklm} = sum_n U_kn A_{inlm},  K << N_r.
+```
+
+Implementation gate:
+
+- Added `radial_edge_sketch_channels` to `RTECEScalarConfig`.
+- Added `build_rtece_config("rtece_cavity_radial_edge_sketch14")` with two radial sketch channels and fourteen edge scalar slots.
+- Added `_project_radial_edge_channels(...)`, which preserves shell information that a full radial mean collapses.
+- Added sparse cross-radial vector and quadrupole edge terms while retaining explicit direct radial slots.
+- Added route-contract metadata: `T3_cavity_radial_edge_scalar_sketch`, `cavity_radial_atomic_moment_sketch`, `low_rank_radial_edge_moment_sketches`, and `cross_radial_edge_invariants`.
+- Exposed the variant in training CLI and summary inference, and preserved the new radial sketch field when summary rebuilds route configs.
+
+Verification gate:
+
+- A regression test constructs two artificial radial-channel tensors with identical full radial mean but different two-shell projections.
+- Existing edge-sketch rotation invariance now covers `rtece_cavity_radial_edge_sketch14` as well as the full and cavity controls.
+- Summary route reconstruction now confirms the radial-cavity variant is not misclassified as historical `element_density` just because the variant name contains `radial`.
+
+Stage-62 interpretation against TECE/TACE:
+
+- This is still a hand-fixed projection, not the final teacher-SVD/POD radial compiler. Its value is to make the missing TECE radial-rank axis explicit in the executable model and route manifest.
+- The theoretical ordering is now cleaner: direct scalar pair density, element/species chemistry density, cavity edge relations, and low-rank radial edge relations are separate retained TECE groups rather than hidden inside one sketch name.
+- The next decision should compare two priorities from the documents: either formalize the route manifest/path-spec compiler so these variants stop being ad hoc Boolean combinations, or run a small training/benchmark slice for `rtece_species_basis4` and `rtece_cavity_radial_edge_sketch14` after E0/PBC fixes to see whether the semantic repairs actually improve the non-metal adsorbate failure buckets.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

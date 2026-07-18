@@ -21,6 +21,7 @@ class RTECEScalarConfig:
     species_basis_channels: int = 0
     num_edge_sketches: int = 0
     use_cavity_edge_sketches: bool = False
+    radial_edge_sketch_channels: int = 0
     energy_per_atom_shift: float = 0.0
     atomic_energies: Mapping[int, float] | None = None
 
@@ -46,6 +47,14 @@ def build_rtece_config(variant: str) -> RTECEScalarConfig:
             use_atomic_moments=True,
             num_edge_sketches=8,
             use_cavity_edge_sketches=True,
+        )
+    if variant == "rtece_cavity_radial_edge_sketch14":
+        return RTECEScalarConfig(
+            variant=variant,
+            use_atomic_moments=True,
+            num_edge_sketches=14,
+            use_cavity_edge_sketches=True,
+            radial_edge_sketch_channels=2,
         )
     if variant == "rtece_edge_sketch16":
         return RTECEScalarConfig(variant=variant, use_atomic_moments=True, num_edge_sketches=16)
@@ -100,15 +109,28 @@ def rtece_route_contract(
         retained.append("low_rank_neighbor_species_basis")
     elif config.use_atomic_moments or config.num_edge_sketches:
         if config.use_cavity_edge_sketches:
-            semantic_tier = "T3_cavity_edge_scalar_sketch"
-            descriptor_family = "cavity_atomic_moment_sketch"
-            retained.extend(
-                [
-                    "low_order_atomic_moments",
-                    "cavity_edge_relational_scalar_sketches",
-                    "direct_edge_radial_path",
-                ]
-            )
+            if config.radial_edge_sketch_channels:
+                semantic_tier = "T3_cavity_radial_edge_scalar_sketch"
+                descriptor_family = "cavity_radial_atomic_moment_sketch"
+                retained.extend(
+                    [
+                        "low_order_atomic_moments",
+                        "cavity_edge_relational_scalar_sketches",
+                        "low_rank_radial_edge_moment_sketches",
+                        "cross_radial_edge_invariants",
+                        "direct_edge_radial_path",
+                    ]
+                )
+            else:
+                semantic_tier = "T3_cavity_edge_scalar_sketch"
+                descriptor_family = "cavity_atomic_moment_sketch"
+                retained.extend(
+                    [
+                        "low_order_atomic_moments",
+                        "cavity_edge_relational_scalar_sketches",
+                        "direct_edge_radial_path",
+                    ]
+                )
         else:
             semantic_tier = "T3_atomic_moment_scalar_sketch"
             descriptor_family = "atomic_moment_sketch"
@@ -525,6 +547,39 @@ def atomic_scalar_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> t
 
 
 
+def _project_radial_edge_channels(channels: torch.Tensor, num_sketches: int) -> torch.Tensor:
+    if num_sketches <= 0:
+        return channels.mean(dim=1)
+    if channels.ndim < 2:
+        raise ValueError("radial edge channels must include a radial dimension")
+    num_radial = int(channels.shape[1])
+    if num_sketches > num_radial:
+        raise ValueError("radial edge sketch channels cannot exceed num_radial")
+    chunks = torch.tensor_split(channels, int(num_sketches), dim=1)
+    return torch.stack([chunk.mean(dim=1) for chunk in chunks], dim=1)
+
+
+def _radial_edge_relational_base(
+    vi: torch.Tensor,
+    vj: torch.Tensor,
+    qi: torch.Tensor,
+    qj: torch.Tensor,
+    unit: torch.Tensor,
+    radial: torch.Tensor,
+) -> torch.Tensor:
+    num_sketches = int(vi.shape[1])
+    pairs = [(i, i) for i in range(num_sketches)]
+    pairs.extend((i, j) for i in range(num_sketches) for j in range(num_sketches) if i != j)
+    terms = []
+    terms.extend((vi[:, i] * vj[:, j]).sum(dim=-1) for i, j in pairs)
+    terms.extend((qi[:, i] * qj[:, j]).sum(dim=(-1, -2)) for i, j in pairs)
+    terms.extend((unit * vi[:, i]).sum(dim=-1) for i in range(num_sketches))
+    terms.extend((unit * vj[:, i]).sum(dim=-1) for i in range(num_sketches))
+    terms.append(radial[:, 0])
+    terms.append(radial[:, min(1, radial.shape[1] - 1)])
+    return torch.stack(terms, dim=-1)
+
+
 def edge_relational_sketches(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
     if config.num_edge_sketches <= 0:
         return graph.pos.new_zeros((graph.z.shape[0], 0))
@@ -553,23 +608,31 @@ def edge_relational_sketches(graph: RTECEGraph, config: RTECEScalarConfig) -> to
         has_reverse = torch.isin(reverse_codes, edge_codes).to(dtype=graph.pos.dtype, device=graph.pos.device)
         vector_channels_j = vector_channels_j + has_reverse[:, None, None] * edge_vector
         quadrupole_channels_j = quadrupole_channels_j - has_reverse[:, None, None, None] * edge_quadrupole
-    vi = vector_channels_i.mean(dim=1)
-    vj = vector_channels_j.mean(dim=1)
-    qi = quadrupole_channels_i.mean(dim=1)
-    qj = quadrupole_channels_j.mean(dim=1)
-    base = torch.stack(
-        [
-            (vi * vj).sum(dim=-1),
-            (qi * qj).sum(dim=(-1, -2)),
-            (unit * vi).sum(dim=-1),
-            (unit * vj).sum(dim=-1),
-            torch.einsum("bi,bij,bj->b", unit, qi, unit),
-            torch.einsum("bi,bij,bj->b", unit, qj, unit),
-            radial[:, 0],
-            radial[:, min(1, radial.shape[1] - 1)],
-        ],
-        dim=-1,
-    )
+    if config.radial_edge_sketch_channels:
+        k_radial = int(config.radial_edge_sketch_channels)
+        vi = _project_radial_edge_channels(vector_channels_i, k_radial)
+        vj = _project_radial_edge_channels(vector_channels_j, k_radial)
+        qi = _project_radial_edge_channels(quadrupole_channels_i, k_radial)
+        qj = _project_radial_edge_channels(quadrupole_channels_j, k_radial)
+        base = _radial_edge_relational_base(vi, vj, qi, qj, unit, radial)
+    else:
+        vi = vector_channels_i.mean(dim=1)
+        vj = vector_channels_j.mean(dim=1)
+        qi = quadrupole_channels_i.mean(dim=1)
+        qj = quadrupole_channels_j.mean(dim=1)
+        base = torch.stack(
+            [
+                (vi * vj).sum(dim=-1),
+                (qi * qj).sum(dim=(-1, -2)),
+                (unit * vi).sum(dim=-1),
+                (unit * vj).sum(dim=-1),
+                torch.einsum("bi,bij,bj->b", unit, qi, unit),
+                torch.einsum("bi,bij,bj->b", unit, qj, unit),
+                radial[:, 0],
+                radial[:, min(1, radial.shape[1] - 1)],
+            ],
+            dim=-1,
+        )
     if config.num_edge_sketches > base.shape[1]:
         repeats = math.ceil(config.num_edge_sketches / base.shape[1])
         base = base.repeat(1, repeats)
@@ -1028,6 +1091,7 @@ __all__ = [
     "packed_element_density_descriptors",
     "cell_list_packed_element_density_descriptors",
     "atomic_scalar_descriptors",
+    "_project_radial_edge_channels",
     "edge_relational_sketches",
     "rtece_descriptors",
     "rtece_route_contract",
