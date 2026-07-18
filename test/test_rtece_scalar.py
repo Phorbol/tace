@@ -1155,6 +1155,38 @@ def test_rtece_tiny_training_step_reduces_finite_loss(tmp_path):
     assert torch.isfinite(torch.tensor(summary["final_loss"]))
 
 
+def test_rtece_summary_uses_benchmark_architecture_manifest_for_path_id_label():
+    from benchmarks.oc20neb_tace_mace.summarize_tece_distill import make_student_row
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
+
+    config = build_rtece_config_from_path_ids(
+        "radial",
+        ("atomic.radial_density",),
+        num_radial=3,
+        hidden_channels=(4,),
+    )
+    manifest = rtece_path_manifest(config)
+    dft = {
+        "model": "rtece_scalar.pt",
+        "variant": "radial",
+        "force_mode": "autograd",
+        "hidden_channels": [4],
+        "num_radial": 3,
+        "atoms_per_second": 10.0,
+        "mae_e_mev_atom": 1.0,
+        "mae_f_mev_a": 2.0,
+        "tece_architecture_path_manifest": manifest,
+        "tece_architecture_path_manifest_hash": manifest["manifest_hash"],
+    }
+    teacher = dict(dft)
+    teacher["mae_f_mev_a"] = 3.0
+
+    row = make_student_row("radial", dft_benchmark=dft, teacher_benchmark=teacher)
+
+    assert row["tece_path_manifest_hash"] == manifest["manifest_hash"]
+    assert row["tece_path_manifest"]["config"]["scalar_path_ids"] == ["atomic.radial_density"]
+
+
 def test_rtece_benchmark_row_is_summary_compatible():
     from benchmarks.oc20neb_tace_mace.summarize_tece_distill import make_student_row
 
@@ -1180,6 +1212,27 @@ def test_rtece_benchmark_row_is_summary_compatible():
     assert row["atoms_per_second"] == 100000.0
     assert row["dft_f_mae_mev_a"] == 40.0
     assert row["teacher_f_mae_mev_a"] == 39.0
+
+
+def test_train_rtece_scalar_builds_config_from_scalar_path_ids():
+    from types import SimpleNamespace
+
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import build_training_config
+
+    args = SimpleNamespace(
+        variant="radial_cavity_vec",
+        scalar_path_ids="atomic.radial_density,edge.cavity.vector_dot",
+        hidden_channels="8",
+        num_radial=3,
+    )
+
+    config = build_training_config(args)
+
+    assert config.variant == "radial_cavity_vec"
+    assert config.scalar_path_ids == ("atomic.radial_density", "edge.cavity.vector_dot")
+    assert config.hidden_channels == (8,)
+    assert config.num_radial == 3
+    assert config.num_edge_sketches == 1
 
 
 def test_parse_hidden_channels_accepts_ordered_capacity_axis():
@@ -1401,6 +1454,122 @@ def test_train_rtece_scalar_cli_fits_atomic_energies_by_default(tmp_path):
     summary = json.loads((out_dir / "train_summary.json").read_text())
     assert summary["atomic_energies"] == pytest.approx({"1": -0.5, "6": -3.0})
     assert summary["energy_per_atom_shift"] == 0.0
+
+
+def test_train_rtece_scalar_cli_trains_scalar_path_id_route(tmp_path):
+    from ase import Atoms
+    import ase.io
+
+    train_file = tmp_path / "train.extxyz"
+    out_dir = tmp_path / "rtece_path"
+    h2 = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]])
+    h2.info["energy"] = -1.0
+    h2.arrays["forces"] = torch.zeros((2, 3), dtype=torch.float64).numpy()
+    ase.io.write(str(train_file), [h2], format="extxyz")
+
+    subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/oc20neb_tace_mace/train_rtece_scalar.py",
+            "--variant",
+            "radial",
+            "--scalar-path-ids",
+            "atomic.radial_density",
+            "--train-file",
+            str(train_file),
+            "--valid-file",
+            str(train_file),
+            "--output-dir",
+            str(out_dir),
+            "--limit-configs",
+            "1",
+            "--max-steps",
+            "1",
+            "--eval-interval",
+            "0",
+            "--disable-best-checkpoint",
+            "--hidden-channels",
+            "4",
+            "--num-radial",
+            "2",
+            "--device",
+            "cpu",
+            "--default-dtype",
+            "float64",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    summary = json.loads((out_dir / "train_summary.json").read_text())
+    _model, config = __import__(
+        "benchmarks.oc20neb_tace_mace.train_rtece_scalar",
+        fromlist=["load_checkpoint"],
+    ).load_checkpoint(out_dir / "rtece_scalar.pt", dtype=torch.float64)
+
+    assert summary["variant"] == "radial"
+    assert summary["scalar_path_ids"] == ["atomic.radial_density"]
+    assert config.scalar_path_ids == ("atomic.radial_density",)
+    assert config.variant == "radial"
+
+
+def test_benchmark_rtece_scalar_writes_architecture_manifest_for_path_id_checkpoint(tmp_path):
+    from ase import Atoms
+    import ase.io
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import save_checkpoint
+
+    config = build_rtece_config_from_path_ids(
+        "radial",
+        ("atomic.radial_density",),
+        num_radial=2,
+        hidden_channels=(4,),
+    )
+    model = RTECEScalarModel(config).double()
+    checkpoint = tmp_path / "rtece_scalar.pt"
+    configs = tmp_path / "valid.extxyz"
+    output = tmp_path / "benchmark.json"
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]])
+    atoms.info["energy"] = -1.0
+    atoms.arrays["forces"] = torch.zeros((2, 3), dtype=torch.float64).numpy()
+    ase.io.write(str(configs), [atoms], format="extxyz")
+    save_checkpoint(checkpoint, model, config)
+
+    subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/oc20neb_tace_mace/benchmark_rtece_scalar.py",
+            "--model",
+            str(checkpoint),
+            "--configs",
+            str(configs),
+            "--output",
+            str(output),
+            "--variant",
+            "radial",
+            "--device",
+            "cpu",
+            "--default-dtype",
+            "float64",
+            "--limit-configs",
+            "1",
+            "--measure-passes",
+            "1",
+            "--force-mode",
+            "autograd",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    payload = json.loads(output.read_text())
+    manifest = rtece_path_manifest(config)
+
+    assert payload["tece_architecture_path_manifest_hash"] == manifest["manifest_hash"]
+    assert payload["tece_architecture_path_manifest"]["config"]["scalar_path_ids"] == ["atomic.radial_density"]
+    assert payload["tece_path_manifest_hash"] is not None
 
 
 def test_train_steps_saves_best_validation_checkpoint(tmp_path):
@@ -2882,6 +3051,49 @@ def test_rtece_summary_manifest_groups_keep_zero_projection_residual_as_best():
     assert groups[0]["projection_deleted_scalar_path_ids"] == []
 
 
+def test_rtece_summary_manifest_groups_attach_projection_by_scalar_path_ids_when_hash_differs():
+    from benchmarks.oc20neb_tace_mace.summarize_tece_distill import (
+        make_student_row,
+        manifest_group_rows,
+    )
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
+
+    config = build_rtece_config_from_path_ids(
+        "radial",
+        ("atomic.radial_density",),
+        num_radial=3,
+        hidden_channels=(4,),
+    )
+    manifest = rtece_path_manifest(config)
+    dft = {
+        "model": "rtece_scalar.pt",
+        "variant": "radial",
+        "force_mode": "autograd",
+        "hidden_channels": [4],
+        "num_radial": 3,
+        "atoms_per_second": 10.0,
+        "mae_e_mev_atom": 1.0,
+        "mae_f_mev_a": 2.0,
+        "tece_architecture_path_manifest": manifest,
+        "tece_architecture_path_manifest_hash": manifest["manifest_hash"],
+    }
+    teacher = dict(dft)
+    projection_rows = [
+        {
+            "candidate_manifest_hash": "descriptor-hash-from-different-head",
+            "candidate_scalar_path_ids": ["atomic.radial_density"],
+            "relative_residual": 0.125,
+            "deleted_scalar_path_ids": ["edge.cavity.vector_dot"],
+        }
+    ]
+    row = make_student_row("radial", dft_benchmark=dft, teacher_benchmark=teacher)
+
+    groups = manifest_group_rows([row], projection_rows=projection_rows)
+
+    assert groups[0]["projection_relative_residual"] == 0.125
+    assert groups[0]["projection_deleted_scalar_path_ids"] == ["edge.cavity.vector_dot"]
+
+
 def test_rtece_summary_markdown_includes_projection_residuals_in_manifest_groups():
     from benchmarks.oc20neb_tace_mace.summarize_tece_distill import (
         format_markdown,
@@ -2933,6 +3145,16 @@ def test_rtece_matrix_sbatch_separates_training_and_benchmark_validation_files()
     assert "TRAIN_VALID_FILE=${TRAIN_VALID_FILE:-${DFT_VALID_FILE}}" in script
     assert '--valid-file "${TRAIN_VALID_FILE}"' in script
     assert '--configs "${DFT_VALID_FILE}"' in script
+
+
+def test_rtece_matrix_sbatch_forwards_scalar_path_ids_without_sbatch_export():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
+
+    assert "SCALAR_PATH_IDS=${SCALAR_PATH_IDS:-}" in script
+    assert "scalar_path_args=()" in script
+    assert "--scalar-path-ids" in script
+    assert "--export" not in script
 
 
 def test_rtece_benchmark_sbatch_forwards_graph_backend_controls():

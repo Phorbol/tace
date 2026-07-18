@@ -19,6 +19,7 @@ from tace.models.rtece_scalar import (
     RTECEScalarConfig,
     RTECEScalarModel,
     build_rtece_config,
+    build_rtece_config_from_path_ids,
 )
 from tace.models.rtece_workflow import (
     evaluate_loss,
@@ -43,6 +44,32 @@ def parse_hidden_channels(value: str) -> tuple[int, ...]:
     if any(channel < 1 for channel in channels):
         raise ValueError(f"hidden channels must be positive, got {channels}")
     return channels
+
+
+def parse_scalar_path_ids(value: str | None) -> tuple[str, ...] | None:
+    if value is None or not value.strip():
+        return None
+    paths = tuple(part.strip() for part in value.split(",") if part.strip())
+    if not paths:
+        raise ValueError("scalar path id list must contain at least one path id")
+    return paths
+
+
+def build_training_config(args: argparse.Namespace) -> RTECEScalarConfig:
+    hidden_channels = parse_hidden_channels(args.hidden_channels)
+    scalar_path_ids = parse_scalar_path_ids(getattr(args, "scalar_path_ids", None))
+    if scalar_path_ids is not None:
+        return build_rtece_config_from_path_ids(
+            args.variant,
+            scalar_path_ids,
+            hidden_channels=hidden_channels,
+            num_radial=int(args.num_radial),
+        )
+    return replace(
+        build_rtece_config(args.variant),
+        hidden_channels=hidden_channels,
+        num_radial=int(args.num_radial),
+    )
 
 
 def load_checkpoint(
@@ -212,18 +239,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--variant",
         required=True,
-        choices=(
-            "rtece_pair",
-            "rtece_element_density",
-            "rtece_density_quadratic",
-            "rtece_vector_moments",
-            "rtece_atomic_moments",
-            "rtece_species_basis4",
-            "rtece_edge_sketch8",
-            "rtece_cavity_edge_sketch8",
-            "rtece_cavity_radial_edge_sketch14",
-            "rtece_edge_sketch16",
-        ),
+        help="Registered rTECE variant name, or a label when --scalar-path-ids is provided.",
+    )
+    parser.add_argument(
+        "--scalar-path-ids",
+        default=None,
+        help="Comma-separated scalar path ids for manifest-driven rTECE routes.",
     )
     parser.add_argument("--train-file", type=Path, required=True)
     parser.add_argument("--valid-file", type=Path, required=True)
@@ -252,11 +273,7 @@ def main() -> None:
     dtype = torch.float64 if args.default_dtype == "float64" else torch.float32
     requested = torch.device(args.device)
     device = requested if requested.type == "cpu" or torch.cuda.is_available() else torch.device("cpu")
-    config = replace(
-        build_rtece_config(args.variant),
-        hidden_channels=parse_hidden_channels(args.hidden_channels),
-        num_radial=int(args.num_radial),
-    )
+    config = build_training_config(args)
     samples = load_samples(
         args.train_file,
         cutoff=config.cutoff,
@@ -303,6 +320,7 @@ def main() -> None:
             "atomic_energies": {str(k): float(v) for k, v in (config.atomic_energies or {}).items()},
             "hidden_channels": list(config.hidden_channels),
             "num_radial": config.num_radial,
+            "scalar_path_ids": list(config.scalar_path_ids or []),
             "seed": int(args.seed),
             "energy_weight": args.energy_weight,
             "force_weight": args.force_weight,

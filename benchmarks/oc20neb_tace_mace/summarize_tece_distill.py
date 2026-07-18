@@ -83,9 +83,12 @@ def make_student_row(
     graph_construction_backend = dft_benchmark.get("graph_construction_backend")
     graph_update_backend = dft_benchmark.get("graph_update_backend")
     config = _rtece_config_from_benchmark(variant, dft_benchmark)
+    runtime_path_manifest = dft_benchmark.get("tece_path_manifest")
+    path_manifest = dft_benchmark.get("tece_architecture_path_manifest") or runtime_path_manifest
     route = None
-    path_manifest = None
-    if config is not None:
+    if isinstance(path_manifest, dict):
+        route = path_manifest.get("route")
+    elif config is not None:
         route = rtece_route_contract(
             config,
             force_mode=force_mode,
@@ -107,7 +110,9 @@ def make_student_row(
         "graph_update_backend": graph_update_backend,
         "tece_route": route,
         "tece_path_manifest": path_manifest,
-        "tece_path_manifest_hash": path_manifest.get("manifest_hash") if path_manifest else None,
+        "tece_path_manifest_hash": path_manifest.get("manifest_hash") if isinstance(path_manifest, dict) else None,
+        "tece_runtime_path_manifest": runtime_path_manifest,
+        "tece_runtime_path_manifest_hash": runtime_path_manifest.get("manifest_hash") if isinstance(runtime_path_manifest, dict) else None,
         "hidden_channels": dft_benchmark.get("hidden_channels"),
         "num_radial": dft_benchmark.get("num_radial"),
         "energy_per_atom_shift": dft_benchmark.get("energy_per_atom_shift"),
@@ -223,6 +228,22 @@ def _projection_rows_by_manifest(projection_rows: list[dict[str, Any]] | None) -
     return by_manifest
 
 
+def _scalar_path_key(values: list[Any] | tuple[Any, ...] | None) -> tuple[str, ...]:
+    return tuple(str(value) for value in values or [])
+
+
+def _projection_rows_by_scalar_paths(projection_rows: list[dict[str, Any]] | None) -> dict[tuple[str, ...], dict[str, Any]]:
+    by_paths: dict[tuple[str, ...], dict[str, Any]] = {}
+    for row in projection_rows or []:
+        key = _scalar_path_key(row.get("candidate_scalar_path_ids"))
+        if not key:
+            continue
+        current = by_paths.get(key)
+        if current is None or _projection_residual_value(row) < _projection_residual_value(current):
+            by_paths[key] = row
+    return by_paths
+
+
 def manifest_group_rows(
     rows: list[dict[str, Any]],
     *,
@@ -230,6 +251,7 @@ def manifest_group_rows(
 ) -> list[dict[str, Any]]:
     grouped: dict[str, list[dict[str, Any]]] = {}
     projection_by_manifest = _projection_rows_by_manifest(projection_rows)
+    projection_by_paths = _projection_rows_by_scalar_paths(projection_rows)
     for row in rows:
         manifest_hash = row.get("tece_path_manifest_hash") or f"missing:{row.get('variant', 'unknown')}"
         grouped.setdefault(str(manifest_hash), []).append(row)
@@ -239,10 +261,11 @@ def manifest_group_rows(
         manifest = group_rows[0].get("tece_path_manifest") or {}
         route = manifest.get("route") or group_rows[0].get("tece_route") or {}
         scalar_paths = manifest.get("scalar_paths") or []
+        scalar_path_ids = [path.get("id") for path in scalar_paths]
         atoms_values = _finite_values(group_rows, "atoms_per_second")
         dft_force_values = _finite_values(group_rows, "dft_f_mae_mev_a")
         teacher_force_values = _finite_values(group_rows, "teacher_f_mae_mev_a")
-        projection = projection_by_manifest.get(manifest_hash)
+        projection = projection_by_manifest.get(manifest_hash) or projection_by_paths.get(_scalar_path_key(scalar_path_ids))
         groups.append({
             "manifest_hash": manifest_hash,
             "semantic_tier": route.get("semantic_tier"),
@@ -255,7 +278,7 @@ def manifest_group_rows(
             "deleted_tece_groups": _sorted_unique_strings(
                 list(manifest.get("deleted_tece_groups") or route.get("deleted_tece_groups") or [])
             ),
-            "scalar_path_ids": _sorted_unique_strings([path.get("id") for path in scalar_paths]),
+            "scalar_path_ids": _sorted_unique_strings(scalar_path_ids),
             "cost_groups": _sorted_unique_strings([path.get("cost_group") for path in scalar_paths]),
             "force_modes": _sorted_unique_strings([row.get("force_mode") for row in group_rows]),
             "graph_backends": _sorted_unique_strings([row.get("graph_construction_backend") for row in group_rows]),

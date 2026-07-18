@@ -22,6 +22,7 @@ DFT_VALID_FILE=${DFT_VALID_FILE:-/home/gengjianrui/workdir_sjtu-caoxiaoming/geng
 TRAIN_VALID_FILE=${TRAIN_VALID_FILE:-${DFT_VALID_FILE}}
 TEACHER_VALID_FILE=${TEACHER_VALID_FILE:-${TACE_ROOT}/runs/oc20neb_tace_mace/tece-distill-20260717/teacher_valid.extxyz}
 VARIANTS=${VARIANTS:-rtece_pair rtece_element_density rtece_vector_moments rtece_density_quadratic rtece_atomic_moments rtece_edge_sketch8}
+SCALAR_PATH_IDS=${SCALAR_PATH_IDS:-}
 LIMIT_CONFIGS=${LIMIT_CONFIGS:-128}
 VALID_LIMIT_CONFIGS=${VALID_LIMIT_CONFIGS:-64}
 BENCH_LIMIT_CONFIGS=${BENCH_LIMIT_CONFIGS:-1024}
@@ -53,6 +54,7 @@ echo "dft_valid_file=${DFT_VALID_FILE}"
 echo "teacher_valid_file=${TEACHER_VALID_FILE}"
 echo "hidden_channels=${HIDDEN_CHANNELS}"
 echo "num_radial=${NUM_RADIAL}"
+echo "scalar_path_ids=${SCALAR_PATH_IDS}"
 echo "seed=${SEED}"
 echo "energy_weight=${ENERGY_WEIGHT}"
 echo "force_weight=${FORCE_WEIGHT}"
@@ -66,11 +68,16 @@ trap 'kill ${NVDMON_PID} 2>/dev/null || true' EXIT
 
 # shellcheck disable=SC2206
 variant_args=(${VARIANTS})
+scalar_path_args=()
+if [[ -n "${SCALAR_PATH_IDS}" ]]; then
+  scalar_path_args=(--scalar-path-ids "${SCALAR_PATH_IDS}")
+fi
 for variant in "${variant_args[@]}"; do
   out_dir="${RUN_ROOT}/${variant}"
   mkdir -p "${out_dir}"
   "${TACE_PYTHON}" "${TACE_ROOT}/benchmarks/oc20neb_tace_mace/train_rtece_scalar.py" \
     --variant "${variant}" \
+    "${scalar_path_args[@]}" \
     --train-file "${TRAIN_FILE}" \
     --valid-file "${TRAIN_VALID_FILE}" \
     --output-dir "${out_dir}" \

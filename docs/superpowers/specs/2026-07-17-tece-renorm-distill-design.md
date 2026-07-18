@@ -2128,6 +2128,44 @@ Next priority:
 2. If path-id training is blocked by analytic/fused backend layout constraints, first implement an explicit autograd-only path-id training/evaluation contract and keep fused backends guarded.
 3. Add teacher-force sensitivity weighting to the projection diagnostic only after the unweighted path-id route report joins cleanly with trained benchmark rows.
 
+# Stage 72: Path-Id Route Training And Projection/Benchmark Join
+
+Stage 72 implements the next Stage-71 priority: selected scalar path-id routes can now be trained and benchmarked as real rTECE models, then joined with descriptor projection diagnostics in the summary. This is still a tiny CPU smoke, not a production Pareto claim, but it closes the route identity loop that was missing after Stage 70.
+
+Implementation gate:
+
+- `train_rtece_scalar.py` now accepts `--scalar-path-ids`. When present, `--variant` is treated as a route label and the config is built through `build_rtece_config_from_path_ids(...)`; otherwise registered variants keep the old path.
+- Training summaries now write `scalar_path_ids`, and checkpoints already preserve the selected path-id config.
+- `rtece_scalar_matrix.sbatch` forwards optional `SCALAR_PATH_IDS` through a bash array without using forbidden `sbatch --export`.
+- `benchmark_rtece_scalar.py` now writes both a pure architecture/path manifest (`tece_architecture_path_manifest`) and a runtime manifest (`tece_path_manifest`). This separates descriptor projection identity from force/backend provenance.
+- `summarize_tece_distill.py` groups benchmark rows by architecture/path manifest and falls back to exact `candidate_scalar_path_ids` matching for projection diagnostics whose descriptor-only hash differs because head capacity or fitted atomic energies changed.
+
+Verification on 2026-07-18:
+
+- Path-id training/benchmark/summary closure tests passed: 6 passed, 107 deselected.
+- Tiny real-data CPU training smoke completed for `radial` with `atomic.radial_density` and for `radial_cavity_vec` with `atomic.radial_density,edge.cavity.vector_dot`, using 2 train configs, 2 steps, `num_radial=3`, hidden `[4]`, and fitted per-element atomic energies.
+- Generated `runs/oc20neb_tace_mace/rtece-stage72-path-id-smoke/path_id_projection_summary.{json,md}` joining projection residuals to measured DFT/teacher benchmark rows.
+
+Tiny CPU smoke result on 8 validation configs:
+
+| route | scalar paths | projection residual | deleted projection paths | CPU atoms/s | DFT F MAE | teacher F MAE | interpretation |
+|---|---|---:|---|---:|---:|---:|---|
+| `radial` | `atomic.radial_density` | 0.1273 | `edge.cavity.vector_dot`, `edge.direct.radial` | 285.3 | 118.71 | 119.08 | Very lossy descriptor projection and poor tiny-smoke force error. |
+| `radial_cavity_vec` | `atomic.radial_density`, `edge.cavity.vector_dot` | 0.00542 | `edge.direct.radial` | 133.1 | 63.67 | 60.30 | Much lower descriptor residual and better tiny-smoke force error, at higher CPU autograd cost. |
+
+Stage-72 interpretation against TECE/TACE:
+
+- This is the first working path-id route closure: selected TECE scalar paths drive training config, checkpoint metadata, benchmark artifact identity, projection residual join, and summary tables.
+- The direction of the tiny smoke is consistent with Stage 70: retaining `edge.cavity.vector_dot` greatly lowers descriptor projection residual and also improves DFT/teacher force MAE in a minimal training run. This is not yet statistical proof because the run is tiny and CPU/autograd-only.
+- The lower throughput of `radial_cavity_vec` is expected: this path currently uses unfused cavity moment/edge autograd machinery. It should not be compared with the fused element-density front until it has an analytic or fused evaluator, or until the goal is explicitly projection-quality rather than high-throughput.
+- The manifest lesson is important: full deployable model hash and descriptor projection identity are related but not identical. Hidden head capacity, energy reference fitting, force backend, and graph backend must remain explicit rather than silently changing the projection join.
+
+Next priority:
+
+1. Run a small GPU path-id training/benchmark matrix for `radial`, `radial_cavity_vec`, and `radial_cavity_vec_direct` if the autograd edge path fits, using the same projection diagnostic reference so the joined summary becomes a real early Pareto slice.
+2. If `radial_cavity_vec` is too slow under autograd, do not widen it blindly; first decide whether to implement a cheap analytic/fused evaluator for that selected edge path or keep it as a projection diagnostic candidate only.
+3. Add teacher-force sensitivity weighting after the unweighted path-id route report is reproduced at non-tiny scale.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

@@ -20,7 +20,13 @@ from benchmarks.oc20neb_tace_mace.benchmark_models import (
     reference_arrays,
     summarize_errors,
 )
-from benchmarks.oc20neb_tace_mace.rtece_scalar_model import RTECEGraph, RTECEScalarConfig, collate_graphs
+from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
+    RTECEGraph,
+    RTECEScalarConfig,
+    collate_graphs,
+    rtece_path_manifest,
+    rtece_route_contract,
+)
 from benchmarks.oc20neb_tace_mace.train_rtece_scalar import atoms_to_graph, atoms_to_rtece_graph, load_checkpoint
 
 
@@ -1195,6 +1201,20 @@ def main() -> None:
     force_steps_per_pass = int(args.trajectory_replay_steps) if int(args.trajectory_replay_steps) > 0 else 1
     atom_steps_per_pass = atoms * force_steps_per_pass
     config_steps_per_pass = len(atoms_list) * force_steps_per_pass
+    architecture_route = rtece_route_contract(model.config)
+    architecture_path_manifest = rtece_path_manifest(model.config)
+    runtime_route = rtece_route_contract(
+        model.config,
+        force_mode=force_mode,
+        graph_construction_backend=args.graph_construction_backend,
+        graph_update_backend=graph_update_backend.name if graph_update_backend is not None else None,
+    )
+    runtime_path_manifest = rtece_path_manifest(
+        model.config,
+        force_mode=force_mode,
+        graph_construction_backend=args.graph_construction_backend,
+        graph_update_backend=graph_update_backend.name if graph_update_backend is not None else None,
+    )
     payload = {
         "backend": "rtece_scalar",
         "variant": args.variant,
@@ -1212,6 +1232,12 @@ def main() -> None:
         "model_class": model.__class__.__name__,
         "requested_force_mode": args.force_mode,
         "force_mode": force_mode,
+        "tece_architecture_route": architecture_route,
+        "tece_architecture_path_manifest": architecture_path_manifest,
+        "tece_architecture_path_manifest_hash": architecture_path_manifest["manifest_hash"],
+        "tece_route": runtime_route,
+        "tece_path_manifest": runtime_path_manifest,
+        "tece_path_manifest_hash": runtime_path_manifest["manifest_hash"],
         "hidden_channels": list(model.config.hidden_channels),
         "num_radial": int(model.config.num_radial),
         "cutoff": float(model.config.cutoff),
