@@ -3657,6 +3657,30 @@ def test_rtece_matrix_submit_helper_generates_wrapper_without_sbatch_export(tmp_
     assert "rtece_scalar_matrix.sbatch" in text
 
 
+def test_rtece_matrix_submit_helper_forwards_short_range_core_without_sbatch_export(tmp_path):
+    from benchmarks.oc20neb_tace_mace.submit_rtece_scalar_matrix import write_rtece_matrix_wrapper
+
+    wrapper = write_rtece_matrix_wrapper(
+        tmp_path,
+        variants="radial_core_s0p3",
+        run_root="/tmp/rtece-stage82",
+        scalar_path_ids="atomic.radial_density",
+        use_short_range_repulsion=True,
+        short_range_repulsion_strength=0.3,
+        short_range_repulsion_beta=20.0,
+        short_range_repulsion_radius_scale=0.9,
+        force_mode="autograd",
+    )
+    text = wrapper.read_text()
+
+    assert "--export" not in text
+    assert "USE_SHORT_RANGE_REPULSION=1" in text
+    assert "SHORT_RANGE_REPULSION_STRENGTH=0.3" in text
+    assert "SHORT_RANGE_REPULSION_BETA=20.0" in text
+    assert "SHORT_RANGE_REPULSION_RADIUS_SCALE=0.9" in text
+    assert "SCALAR_PATH_IDS=atomic.radial_density" in text
+
+
 def test_rtece_matrix_sbatch_forwards_benchmark_force_mode():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()

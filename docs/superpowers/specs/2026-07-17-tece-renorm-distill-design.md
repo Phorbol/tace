@@ -2560,6 +2560,66 @@ Next priority:
 3. If a calibrated core improves dimer and rattle without destroying force MAE, implement the analytic radial-core force contribution and then re-enter throughput/Pareto benchmarking.
 4. Do not spend the next stage on nvalchemi or graph-builder acceleration; Stage 81 again shows the main blocker is physical closure of the scalarized operator, not kernel throughput.
 
+# Stage 82: Trained Radial-Core Matrix Result
+
+Stage 82 runs the trained follow-up required by Stage 81. Stage 81 only overlaid a fixed short-range core onto an already trained `radial` checkpoint; that proved the T4 radial-core axis is physically meaningful, but not deployable. Stage 82 trains the same scalar radial endpoint with the short-range core present from the start, then evaluates it through the same benchmark, dimer, and rattle gates used in Stages 79-81.
+
+Implementation/reproducibility gate:
+
+- Updated `submit_rtece_scalar_matrix.py` so Slurm wrappers can set `USE_SHORT_RANGE_REPULSION`, `SHORT_RANGE_REPULSION_STRENGTH`, `SHORT_RANGE_REPULSION_BETA`, and `SHORT_RANGE_REPULSION_RADIUS_SCALE`.
+- The wrapper path preserves the SAI constraint: parameters are exported inside the wrapper body and the submitted command remains plain `sbatch wrapper.sbatch`; no command-line `--export` is used.
+- Regression coverage checks that the submit helper emits radial-core parameters and still omits `--export`.
+- Slurm jobs `680276`, `680278`, and `680279` completed training plus DFT/teacher benchmarks.
+
+Common setup: scalar path `atomic.radial_density`, hidden `16,16`, `num_radial=8`, 512 mixed-label train configs, 128 valid configs, 512 DFT/teacher benchmark configs, force weight 30, `force_mode=autograd`, `beta=20.0`, `radius_scale=1.0`. The benchmark rows are prebuilt-batched-graph model timings, not graph-construction timings.
+
+Training and benchmark rows:
+
+| route | strength | best step | best valid loss | DFT E MAE | DFT F MAE | DFT F RMSE | teacher F MAE | atoms/s | params |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| Stage-73 `radial` baseline | 0.0 | 200 | NA | 191.39 | 29.45 | 120.02 | 34.25 | 2.96e6 | 369 |
+| `radial_core_s0p3` | 0.3 | 100 | 0.5333 | 167.04 | 34.51 | 105.21 | 39.00 | 3.04e6 | 449 |
+| `radial_core_s0p6` | 0.6 | 300 | 0.6201 | 171.40 | 44.38 | 115.82 | 48.22 | 2.98e6 | 449 |
+| `radial_core_s1p0` | 1.0 | 500 | 0.8262 | 178.57 | 61.53 | 139.35 | 64.87 | 3.07e6 | 449 |
+
+Stage-79 dimer probe on the trained checkpoints, CPU autograd, C/N/O/H dimers over 0.5-5 covalent-radius scale:
+
+| route | short repulsive pairs | C-N short F | C-N short dE | N-H short F | N-H short dE | max short-range abs F |
+|---|---:|---:|---:|---:|---:|---:|
+| Stage-73 `radial` baseline | 0/4 | +0.0204 | -0.0207 | +0.0169 | -0.0253 | 0.0248 |
+| Stage-81 overlay 0.1 | 4/4 | -0.0531 | NA | NA | -0.0123 | NA |
+| Stage-81 overlay 1.0 | 4/4 | -0.7146 | NA | NA | +0.1047 | NA |
+| `radial_core_s0p3` | 4/4 | -0.2555 | +0.0419 | -0.2045 | +0.00953 | 0.2555 |
+| `radial_core_s0p6` | 4/4 | -0.4941 | +0.1049 | -0.3769 | +0.0348 | 0.4941 |
+| `radial_core_s1p0` | 4/4 | -0.8052 | +0.1857 | -0.6026 | +0.0641 | 0.8052 |
+
+Stage-80 strict rattle+relax probe on `mixed_train_tw0.75.extxyz`, `start=58`, `limit=4`, `rattle_std=0.03 A`, `fmax=0.01`, `max_steps=10`:
+
+| route | DFT F MAE | converged frac | all mean final RMSD A | C/N mean final RMSD A | CHNO-no-CN final RMSD A | max fmax eV/A |
+|---|---:|---:|---:|---:|---:|---:|
+| Stage-73 `radial` baseline | 29.45 | 0.25 | 0.2331 | 0.2578 | 0.1591 | 0.0473 |
+| Stage-73 `radial_cavity_vec` | 35.16 | 0.00 | 0.5308 | 0.6075 | 0.3009 | 0.1201 |
+| Stage-81 overlay 0.1 | NA | 0.00 | 0.2766 | 0.2357 | NA | 0.0879 |
+| Stage-81 overlay 1.0 | NA | 0.00 | 0.2346 | 0.1844 | NA | 0.9512 |
+| `radial_core_s0p3` | 34.51 | 0.00 | 0.3476 | 0.2896 | 0.5217 | 0.2785 |
+| `radial_core_s0p6` | 44.38 | 0.00 | 0.1730 | 0.1283 | 0.3070 | 0.5309 |
+| `radial_core_s1p0` | 61.53 | 0.00 | 0.1456 | 0.1199 | 0.2228 | 0.8797 |
+
+Stage-82 interpretation against TECE/TACE and the review document:
+
+- The trained short-range radial core is still a clean T4 TECE degradation axis: it preserves scalar streaming, adds no persistent equivariant state, is visible in the path manifest as `short_range_radial_core`, and fixes the dimer short-range sign for all tested CHNO pairs.
+- Training-time exposure changes the rattle behavior relative to a post-hoc overlay. `s0p6` and `s1p0` improve the C/N mean final RMSD from the Stage-73 `radial` baseline 0.2578 A to 0.1283 A and 0.1199 A. This supports the document's hypothesis that the scalarized endpoint needs a retained low-cost local high-curvature operator for non-metal adsorbates.
+- The same rows are not Pareto-front successes yet. Force MAE worsens monotonically with core strength: DFT force MAE goes from 29.45 meV/A for baseline `radial` to 34.51, 44.38, and 61.53 meV/A. The strict relax windows do not converge within 10 LBFGS steps, and max force spikes rise to 0.53-0.88 eV/A for the routes that best lower C/N RMSD.
+- `s0p3` is not useful: it fixes dimer sign but worsens all-structure and C/N relax RMSD relative to baseline. `s0p6` is the most informative candidate because it halves C/N RMSD while not being as stiff as `s1p0`, but it needs force-spike control before it can be a Pareto point.
+- This result answers the graph-builder question for the current priority order: ASE graph construction is too slow for final end-to-end MD, and earlier stages already showed provider lifetime dominates full rebuild execution. However, Stage 82 is an algorithmic physical-closure gate. Moving now to nvalchemi/matscipy/DeepMD edge-force kernels would optimize a model whose C/N relax and force-spike tradeoff is not yet closed.
+
+Next priority after Stage 82:
+
+1. Calibrate the radial-core axis rather than widen the model: run a small `radius_scale`/strength grid around `strength=0.4-0.8` and `radius_scale=0.75-0.95`, because current `radius_scale=1.0` makes the useful C/N fix too stiff.
+2. Add a stratified validation/checkpoint score that includes C/N force or rattle proxy terms. Current best-validation loss selected checkpoints that can improve aggregate loss while leaving non-metal adsorbate relax hidden.
+3. Add targeted dimer or close-contact augmentation only after the radius/strength grid shows whether the fixed prior can be calibrated without new data.
+4. Implement analytic/fused radial-core forces only after a calibrated core survives the dimer + rattle + MAE gates. The graph/provider path should then be addressed inside the review-mandated PBC edge-vector/force/virial ABI, not as an isolated ASE replacement.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
