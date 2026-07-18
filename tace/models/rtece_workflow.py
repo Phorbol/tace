@@ -117,11 +117,21 @@ def loss_for_batch(
     *,
     energy_weight: float = 1.0,
     force_weight: float = 10.0,
+    force_focus_atomic_numbers: tuple[int, ...] = (),
+    force_focus_weight: float = 1.0,
 ) -> torch.Tensor:
     out = model(graph)
     natoms = graph.z.numel()
     e_loss = ((out["energy"] - ref_energy) / natoms).pow(2).mean()
-    f_loss = (out["forces"] - ref_forces).pow(2).mean()
+    force_sq = (out["forces"] - ref_forces).pow(2)
+    if force_focus_atomic_numbers and float(force_focus_weight) != 1.0:
+        focus_numbers = torch.tensor(tuple(int(z) for z in force_focus_atomic_numbers), dtype=graph.z.dtype, device=graph.z.device)
+        focus_mask = (graph.z.view(-1, 1) == focus_numbers.view(1, -1)).any(dim=1)
+        atom_weights = torch.ones(graph.z.shape[0], dtype=force_sq.dtype, device=force_sq.device)
+        atom_weights = torch.where(focus_mask, torch.full_like(atom_weights, float(force_focus_weight)), atom_weights)
+        atom_weights = atom_weights / atom_weights.mean().clamp_min(torch.finfo(atom_weights.dtype).tiny)
+        force_sq = force_sq * atom_weights.view(-1, 1)
+    f_loss = force_sq.mean()
     return float(energy_weight) * e_loss + float(force_weight) * f_loss
 
 
@@ -131,6 +141,8 @@ def evaluate_loss(
     *,
     energy_weight: float = 1.0,
     force_weight: float = 10.0,
+    force_focus_atomic_numbers: tuple[int, ...] = (),
+    force_focus_weight: float = 1.0,
 ) -> float:
     if not samples:
         raise ValueError("evaluate_loss requires at least one sample")
@@ -147,6 +159,8 @@ def evaluate_loss(
                     forces,
                     energy_weight=energy_weight,
                     force_weight=force_weight,
+                    force_focus_atomic_numbers=force_focus_atomic_numbers,
+                    force_focus_weight=force_focus_weight,
                 )
                 .detach()
                 .cpu()
@@ -169,6 +183,8 @@ def train_steps(
     config: RTECEScalarConfig | None = None,
     energy_weight: float = 1.0,
     force_weight: float = 10.0,
+    force_focus_atomic_numbers: tuple[int, ...] = (),
+    force_focus_weight: float = 1.0,
 ) -> dict[str, float | int | None]:
     if not samples:
         raise ValueError("train_steps requires at least one sample")
@@ -189,6 +205,8 @@ def train_steps(
             forces,
             energy_weight=energy_weight,
             force_weight=force_weight,
+            force_focus_atomic_numbers=force_focus_atomic_numbers,
+            force_focus_weight=force_focus_weight,
         )
         loss.backward()
         opt.step()
@@ -200,6 +218,8 @@ def train_steps(
                 valid_samples,
                 energy_weight=energy_weight,
                 force_weight=force_weight,
+                force_focus_atomic_numbers=force_focus_atomic_numbers,
+                force_focus_weight=force_focus_weight,
             )
             if best_valid_loss is None or valid_loss < best_valid_loss:
                 best_valid_loss = valid_loss
@@ -212,6 +232,8 @@ def train_steps(
             valid_samples,
             energy_weight=energy_weight,
             force_weight=force_weight,
+            force_focus_atomic_numbers=force_focus_atomic_numbers,
+            force_focus_weight=force_focus_weight,
         )
         best_step = max_steps
         if best_checkpoint_path is not None:

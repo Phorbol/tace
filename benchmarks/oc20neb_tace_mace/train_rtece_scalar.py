@@ -55,6 +55,28 @@ def parse_scalar_path_ids(value: str | None) -> tuple[str, ...] | None:
     return paths
 
 
+def parse_force_focus_elements(value: str | None) -> tuple[int, ...]:
+    if value is None or not str(value).strip():
+        return ()
+    from ase.data import atomic_numbers
+
+    numbers: list[int] = []
+    for part in str(value).split(","):
+        token = part.strip()
+        if not token:
+            continue
+        if token.isdigit():
+            number = int(token)
+        else:
+            if token not in atomic_numbers:
+                raise ValueError(f"unknown force focus element {token!r}")
+            number = int(atomic_numbers[token])
+        if number < 1:
+            raise ValueError(f"force focus atomic numbers must be positive, got {number}")
+        numbers.append(number)
+    return tuple(dict.fromkeys(numbers))
+
+
 def build_training_config(args: argparse.Namespace) -> RTECEScalarConfig:
     hidden_channels = parse_hidden_channels(args.hidden_channels)
     short_range_kwargs = {
@@ -270,6 +292,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--energy-weight", type=float, default=1.0)
     parser.add_argument("--force-weight", type=float, default=10.0)
+    parser.add_argument("--force-focus-elements", default=None)
+    parser.add_argument("--force-focus-weight", type=float, default=1.0)
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
     parser.add_argument("--default-dtype", choices=("float32", "float64"), default="float32")
     parser.add_argument("--neighborlist-backend", choices=("ase", "vesin", "matscipy"), default="matscipy")
@@ -309,6 +333,7 @@ def main() -> None:
             neighborlist_backend=args.neighborlist_backend,
         )
         best_checkpoint_path = args.output_dir / "rtece_scalar_best.pt"
+    force_focus_atomic_numbers = parse_force_focus_elements(args.force_focus_elements)
     summary = train_steps(
         model,
         samples,
@@ -320,6 +345,8 @@ def main() -> None:
         config=config,
         energy_weight=args.energy_weight,
         force_weight=args.force_weight,
+        force_focus_atomic_numbers=force_focus_atomic_numbers,
+        force_focus_weight=args.force_focus_weight,
     )
     summary.update(
         {
@@ -340,6 +367,8 @@ def main() -> None:
             "seed": int(args.seed),
             "energy_weight": args.energy_weight,
             "force_weight": args.force_weight,
+            "force_focus_atomic_numbers": list(force_focus_atomic_numbers),
+            "force_focus_weight": args.force_focus_weight,
             "device": str(device),
             "default_dtype": args.default_dtype,
             "neighborlist_backend": args.neighborlist_backend,

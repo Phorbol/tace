@@ -14,6 +14,10 @@ try:
     from .compile import CompileTensorModel
 except Exception:
     CompileTensorModel = None
+from . import rtece_workflow as rtece_workflow
+
+RTECEWorkflow = rtece_workflow
+
 from .rtece_workflow import (
     evaluate_loss as evaluate_rtece_loss,
     load_checkpoint as load_rtece_checkpoint,
@@ -49,6 +53,8 @@ __all__ = [
     "RTECEGraph",
     "RTECEScalarConfig",
     "RTECEScalarModel",
+    "RTECEWorkflow",
+    "rtece_workflow",
     "atomic_scalar_descriptors",
     "available_rtece_variants",
     "build_rtece_config",

@@ -37,6 +37,8 @@ def write_rtece_matrix_wrapper(
     seed: int | None = None,
     energy_weight: float | None = None,
     force_weight: float | None = None,
+    force_focus_elements: str | None = None,
+    force_focus_weight: float | None = None,
     use_short_range_repulsion: bool | None = None,
     short_range_repulsion_strength: float | None = None,
     short_range_repulsion_beta: float | None = None,
@@ -69,6 +71,8 @@ def write_rtece_matrix_wrapper(
         _shell_assign("SEED", seed),
         _shell_assign("ENERGY_WEIGHT", energy_weight),
         _shell_assign("FORCE_WEIGHT", force_weight),
+        _shell_assign("FORCE_FOCUS_ELEMENTS", force_focus_elements),
+        _shell_assign("FORCE_FOCUS_WEIGHT", force_focus_weight),
         _shell_assign(
             "USE_SHORT_RANGE_REPULSION",
             1 if use_short_range_repulsion else (0 if use_short_range_repulsion is False else None),
@@ -127,6 +131,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=None)
     parser.add_argument("--energy-weight", type=float, default=None)
     parser.add_argument("--force-weight", type=float, default=None)
+    parser.add_argument("--force-focus-elements", default=None)
+    parser.add_argument("--force-focus-weight", type=float, default=None)
     parser.add_argument("--use-short-range-repulsion", action="store_true")
     parser.add_argument("--short-range-repulsion-strength", type=float, default=None)
     parser.add_argument("--short-range-repulsion-beta", type=float, default=None)
@@ -161,6 +167,8 @@ def main() -> None:
         seed=args.seed,
         energy_weight=args.energy_weight,
         force_weight=args.force_weight,
+        force_focus_elements=args.force_focus_elements,
+        force_focus_weight=args.force_focus_weight,
         use_short_range_repulsion=args.use_short_range_repulsion,
         short_range_repulsion_strength=args.short_range_repulsion_strength,
         short_range_repulsion_beta=args.short_range_repulsion_beta,

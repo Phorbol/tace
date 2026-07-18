@@ -2880,6 +2880,73 @@ Priority after Stage 87:
 3. Keep graph/kernel work deferred. The current evidence says the dominant failure is operator/data selection for C/N local chemistry, not throughput of the existing scalar endpoint.
 4. Add `start-config` support to force/projection loaders if we need repeated exact-window stratification without writing sliced extxyz artifacts.
 
+## Stage 88: C/N Force-Focused Training Probe
+
+Stage 88 tests the first Stage-87 algorithmic branch: keep the Stage-85 retained T4 operator fixed ('radial_core_s0p6_r0p75_b10') and change only training selection pressure by increasing force loss on C/N atoms. This is deliberately a loss/selection probe, not a new architecture claim. It answers whether the broader C/N adsorbate failure can be repaired without adding a new retained TECE path.
+
+Implementation gate:
+
+- 'loss_for_batch', 'evaluate_loss', and 'train_steps' now accept optional 'force_focus_atomic_numbers' and 'force_focus_weight'.
+- Focus weights are normalized by their batch mean before applying the force MSE, so changing the focus set does not trivially rescale the total force loss.
+- 'train_rtece_scalar.py', 'rtece_scalar_matrix.sbatch', and 'submit_rtece_scalar_matrix.py' forward '--force-focus-elements' and '--force-focus-weight' without using Slurm command-line environment export.
+- Regression tests cover symbol/atomic-number parsing, normalized force weighting, and matrix wrapper forwarding.
+
+Run setup:
+
+| job id | route | base route | focus elements | focus weight | scalar paths | train/valid/bench configs | force mode |
+|---:|---|---|---|---:|---|---|---|
+| 680564 | 'radial_core_s0p6_r0p75_b10_cnfw4' | 'radial_core_s0p6_r0p75_b10' | C,N | 4.0 | 'atomic.radial_density' | 512/128/512 | 'autograd' |
+
+Aggregate benchmark result:
+
+| route | best step | best valid loss | DFT E MAE | DFT F MAE | DFT F RMSE | teacher F MAE | atoms/s |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Stage-85 's0p6_r0p75_b10' | 100 | 0.5398 | 168.02 | 29.08 | 101.12 | 34.21 | 3.08e6 |
+| Stage-88 's0p6_r0p75_b10_cnfw4' | 100 | 1.1946 | 168.23 | 31.29 | 101.79 | 35.97 | 3.08e6 |
+
+Stage-87 exact-window C/N force-selection proxy on the same 48-config slice:
+
+| route | target | global F MAE | C/N F MAE | C/N excess | selection score |
+|---|---|---:|---:|---:|---:|
+| Stage-85 's0p6_r0p75_b10' | teacher | 76.70 | 485.30 | 408.60 | 893.89 |
+| Stage-88 's0p6_r0p75_b10_cnfw4' | teacher | 78.57 | 487.11 | 408.55 | 895.66 |
+| Stage-85 's0p6_r0p75_b10' | DFT | 75.41 | 485.39 | 409.98 | 895.37 |
+| Stage-88 's0p6_r0p75_b10_cnfw4' | DFT | 77.51 | 487.47 | 409.97 | 897.44 |
+
+Stage-79 dimer probe remains force-sign valid but does not improve the residual energy-shape issue:
+
+| route | short repulsive pairs | C-N short F | C-N short dE | N-H short F | N-H short dE | O-H short dE |
+|---|---:|---:|---:|---:|---:|---:|
+| Stage-88 's0p6_r0p75_b10_cnfw4' | 4/4 | -0.2486 | +0.00409 | -0.1953 | -0.00722 | -0.00771 |
+
+Stage-86 broader rattle window (start=58, limit=48, rattle_std=0.03 A, fmax=0.01, max_steps=10) gives:
+
+| route | converged frac | all mean final RMSD A | C/N mean final RMSD A | CHNO-no-CN mean final RMSD A | max fmax eV/A |
+|---|---:|---:|---:|---:|---:|
+| Stage-85 's0p6_r0p75_b10' | 0.000 | 0.2365 | 0.2444 | 0.1183 | 0.4866 |
+| Stage-88 's0p6_r0p75_b10_cnfw4' | 0.000 | 0.2591 | 0.2612 | 0.2276 | 0.4656 |
+
+Physical scorer comparison with the same broader-rattle gate:
+
+| route | gate | score | atoms/s | DFT F MAE | dimer repulsive | C/N RMSD A | max fmax eV/A |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| Stage-85 's0p6_r0p75_b10' | 0 | 3.417 | 3.08e6 | 29.08 | 4/4 | 0.244 | 0.487 |
+| Stage-88 's0p6_r0p75_b10_cnfw4' | 0 | 3.518 | 3.08e6 | 31.29 | 4/4 | 0.261 | 0.466 |
+
+Stage-88 interpretation against TECE/TACE and the review document:
+
+- Targeted C/N force weighting is not an effective repair for the current scalar endpoint. It slightly worsens aggregate DFT/teacher force MAE and leaves the C/N excess force residual essentially unchanged.
+- The broader rattle gate confirms the proxy: C/N mean final RMSD worsens from 0.244 A to 0.261 A, while max fmax remains above the 0.40 eV/A gate.
+- This means the failure is not primarily a checkpoint-selection weighting problem. The review diagnosis now has stronger support: the scalar endpoint is missing a low-cost chemistry/geometry retained path, most likely low-rank species basis, cavity moments, or radial/cross-radial C/N-sensitive scalar sketches.
+- Graph/provider/kernel acceleration remains deferred. Stage 88 again shows that accelerating this exact candidate would optimize a physically failing row rather than advancing the TECE compiler route.
+
+Priority after Stage 88:
+
+1. Do not continue a force-focus-weight sweep as the next main experiment. The weight-4 branch failed both the cheap force proxy and the broader rattle gate.
+2. Implement a small C/N-sensitive retained operator that is still a clean T3/T4 TECE degradation axis: low-rank species basis first, and then cavity/radial edge sketches if species rank alone does not reduce the C/N residual.
+3. Keep the Stage-87 C/N force proxy as the cheap pre-filter and Stage-86 broader rattle as the confirmation gate for every new C/N-sensitive operator.
+4. Only return to fused radial-core force, ASE/matscipy/nvalchemi graph acceleration, or PBC provider engineering after a candidate improves the physical score under these gates.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

@@ -1602,6 +1602,14 @@ def test_rtece_benchmark_training_reuses_core_workflow_api():
     assert train_rtece_scalar.train_steps is rtece_workflow.train_steps
 
 
+def test_rtece_package_exports_workflow_alias_for_import_smoke():
+    from tace.models import RTECEWorkflow, RTECEScalarModel, rtece_workflow
+
+    assert RTECEScalarModel is not None
+    assert RTECEWorkflow is rtece_workflow
+    assert RTECEWorkflow.load_checkpoint is rtece_workflow.load_checkpoint
+
+
 def test_rtece_checkpoint_roundtrip(tmp_path):
     from benchmarks.oc20neb_tace_mace.train_rtece_scalar import save_checkpoint, load_checkpoint
 
@@ -1746,6 +1754,15 @@ def test_train_rtece_scalar_builds_config_with_short_range_repulsive_core():
     assert config.short_range_repulsion_radius_scale == pytest.approx(0.8)
 
 
+
+def test_parse_force_focus_elements_accepts_symbols_and_atomic_numbers():
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import parse_force_focus_elements
+
+    assert parse_force_focus_elements(None) == ()
+    assert parse_force_focus_elements("") == ()
+    assert parse_force_focus_elements("C,N") == (6, 7)
+    assert parse_force_focus_elements("6, 7") == (6, 7)
+
 def test_parse_hidden_channels_accepts_ordered_capacity_axis():
     from benchmarks.oc20neb_tace_mace.train_rtece_scalar import parse_hidden_channels
 
@@ -1777,6 +1794,40 @@ def test_loss_for_batch_honors_force_weight_axis():
     assert torch.allclose(
         loss_for_batch(model, graph, ref_energy, ref_forces, force_weight=2.0),
         torch.tensor(2.0, dtype=torch.float64),
+    )
+
+
+def test_loss_for_batch_supports_normalized_force_focus_weighting():
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import loss_for_batch
+
+    config = build_rtece_config("rtece_pair")
+    model = RTECEScalarModel(config).double()
+    for param in model.parameters():
+        param.data.zero_()
+    graph = RTECEGraph(
+        z=torch.tensor([6, 29], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(2),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+    ref_energy = torch.zeros(1, dtype=torch.float64)
+    ref_forces = torch.tensor([[1.0, 1.0, 1.0], [0.0, 0.0, 0.0]], dtype=torch.float64)
+
+    assert torch.allclose(
+        loss_for_batch(model, graph, ref_energy, ref_forces, force_weight=1.0),
+        torch.tensor(0.5, dtype=torch.float64),
+    )
+    assert torch.allclose(
+        loss_for_batch(
+            model,
+            graph,
+            ref_energy,
+            ref_forces,
+            force_weight=1.0,
+            force_focus_atomic_numbers=(6,),
+            force_focus_weight=3.0,
+        ),
+        torch.tensor(0.75, dtype=torch.float64),
     )
 
 def test_rtece_scripts_are_directly_executable():
@@ -3766,6 +3817,8 @@ def test_rtece_matrix_submit_helper_generates_wrapper_without_sbatch_export(tmp_
         num_radial=4,
         scalar_path_ids="atomic.radial_density,edge.cavity.vector_dot",
         force_weight=30.0,
+        force_focus_elements="C,N",
+        force_focus_weight=4.0,
         force_mode="autograd",
         measure_passes=1,
         default_dtype="float32",
@@ -3784,6 +3837,8 @@ def test_rtece_matrix_submit_helper_generates_wrapper_without_sbatch_export(tmp_
     assert "BENCH_LIMIT_CONFIGS=32" in text
     assert "SCALAR_PATH_IDS=atomic.radial_density,edge.cavity.vector_dot" in text
     assert "FORCE_WEIGHT=30.0" in text
+    assert "FORCE_FOCUS_ELEMENTS=C,N" in text
+    assert "FORCE_FOCUS_WEIGHT=4.0" in text
     assert "exec /bin/bash" in text
     assert "rtece_scalar_matrix.sbatch" in text
 
@@ -3817,6 +3872,9 @@ def test_rtece_matrix_sbatch_forwards_benchmark_force_mode():
     script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
 
     assert "FORCE_MODE=${FORCE_MODE:-autograd}" in script
+    assert "FORCE_FOCUS_ELEMENTS=${FORCE_FOCUS_ELEMENTS:-}" in script
+    assert "--force-focus-elements" in script
+    assert "--force-focus-weight" in script
     assert '--force-mode "${FORCE_MODE}"' in script
 
 

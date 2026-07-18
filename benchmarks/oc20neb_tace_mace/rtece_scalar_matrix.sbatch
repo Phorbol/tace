@@ -33,6 +33,8 @@ NUM_RADIAL=${NUM_RADIAL:-8}
 SEED=${SEED:-0}
 ENERGY_WEIGHT=${ENERGY_WEIGHT:-1.0}
 FORCE_WEIGHT=${FORCE_WEIGHT:-10.0}
+FORCE_FOCUS_ELEMENTS=${FORCE_FOCUS_ELEMENTS:-}
+FORCE_FOCUS_WEIGHT=${FORCE_FOCUS_WEIGHT:-1.0}
 USE_SHORT_RANGE_REPULSION=${USE_SHORT_RANGE_REPULSION:-0}
 SHORT_RANGE_REPULSION_STRENGTH=${SHORT_RANGE_REPULSION_STRENGTH:-0.0}
 SHORT_RANGE_REPULSION_BETA=${SHORT_RANGE_REPULSION_BETA:-10.0}
@@ -62,6 +64,8 @@ echo "scalar_path_ids=${SCALAR_PATH_IDS}"
 echo "seed=${SEED}"
 echo "energy_weight=${ENERGY_WEIGHT}"
 echo "force_weight=${FORCE_WEIGHT}"
+echo "force_focus_elements=${FORCE_FOCUS_ELEMENTS}"
+echo "force_focus_weight=${FORCE_FOCUS_WEIGHT}"
 echo "use_short_range_repulsion=${USE_SHORT_RANGE_REPULSION}"
 echo "short_range_repulsion_strength=${SHORT_RANGE_REPULSION_STRENGTH}"
 echo "short_range_repulsion_beta=${SHORT_RANGE_REPULSION_BETA}"
@@ -79,6 +83,13 @@ variant_args=(${VARIANTS})
 scalar_path_args=()
 if [[ -n "${SCALAR_PATH_IDS}" ]]; then
   scalar_path_args=(--scalar-path-ids "${SCALAR_PATH_IDS}")
+fi
+force_focus_args=()
+if [[ -n "${FORCE_FOCUS_ELEMENTS}" ]]; then
+  force_focus_args=(
+    --force-focus-elements "${FORCE_FOCUS_ELEMENTS}"
+    --force-focus-weight "${FORCE_FOCUS_WEIGHT}"
+  )
 fi
 short_range_args=()
 if [[ "${USE_SHORT_RANGE_REPULSION}" == "1" ]]; then
@@ -108,6 +119,7 @@ for variant in "${variant_args[@]}"; do
     --seed "${SEED}" \
     --energy-weight "${ENERGY_WEIGHT}" \
     --force-weight "${FORCE_WEIGHT}" \
+    "${force_focus_args[@]}" \
     --device cuda \
     --default-dtype "${DEFAULT_DTYPE}" \
     --eval-interval "${EVAL_INTERVAL}"
