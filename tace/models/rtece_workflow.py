@@ -80,6 +80,8 @@ def predict(
         out = model.forward_element_density_triton_force_analytic_forces(graph)
     elif force_mode == "analytic_element_triton_descriptor_force":
         out = model.forward_element_density_triton_descriptor_force_analytic_forces(graph)
+    elif force_mode == "analytic_element_direct_padded_descriptor_force":
+        out = model.forward_element_density_direct_padded_triton_descriptor_force_analytic_forces(graph)
     elif force_mode == "analytic_element_cell_list_descriptor_force":
         out = model.forward_element_density_cell_list_packed_analytic_forces(graph)
     else:

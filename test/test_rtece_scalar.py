@@ -60,6 +60,8 @@ def test_rtece_triton_kernels_have_formal_tace_models_entrypoint():
     assert core_kernels.pair_forces_triton is benchmark_kernels.pair_forces_triton
     assert core_kernels.element_density_descriptors_triton is benchmark_kernels.element_density_descriptors_triton
     assert core_kernels.element_density_forces_triton is benchmark_kernels.element_density_forces_triton
+    assert core_kernels.element_density_direct_padded_descriptors_triton is benchmark_kernels.element_density_direct_padded_descriptors_triton
+    assert core_kernels.element_density_direct_padded_forces_triton is benchmark_kernels.element_density_direct_padded_forces_triton
     assert core_kernels.direct_radius_padded_edges_triton is benchmark_kernels.direct_radius_padded_edges_triton
     assert core_kernels.direct_radius_counted_edges_triton is benchmark_kernels.direct_radius_counted_edges_triton
 
@@ -490,6 +492,25 @@ def test_rtece_scalar_model_energy_is_permutation_invariant_for_complete_graph()
     assert torch.allclose(e, e_perm, atol=1e-10, rtol=1e-10)
 
 
+def test_rtece_route_contract_classifies_direct_padded_streaming_backend():
+    route = rtece_route_contract(
+        RTECEScalarConfig(
+            variant="rtece_element_density",
+            use_element_density=True,
+            hidden_channels=(16, 16),
+        ),
+        force_mode="analytic_element_direct_padded_descriptor_force",
+        graph_construction_backend="torch_radius_nopbc",
+    )
+
+    assert route["semantic_tier"] == "T3_element_conditioned_scalar_density"
+    assert route["descriptor_realization"] == "triton_direct_padded_descriptor"
+    assert route["force_realization"] == "triton_direct_padded_descriptor_force"
+    assert route["fused_descriptor"] is True
+    assert route["fused_force"] is True
+    assert route["edge_state_lifetime"] == "streaming_padded_candidates"
+
+
 def test_core_rtece_workflow_predicts_cell_list_descriptor_force_mode():
     from tace.models.rtece_workflow import predict
 
@@ -875,6 +896,30 @@ def test_triton_element_density_force_path_requires_cuda_graph():
         raise AssertionError("Triton element-density force path should reject CPU graphs")
 
 
+def test_triton_direct_padded_descriptor_force_path_requires_cuda_graph():
+    config = RTECEScalarConfig(
+        variant="rtece_element_density",
+        use_element_density=True,
+        use_atomic_moments=False,
+        num_edge_sketches=0,
+        energy_per_atom_shift=-0.25,
+    )
+    model = RTECEScalarModel(config).double().eval()
+    graph = RTECEGraph(
+        z=torch.tensor([6, 8], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.7, 0.2, 0.1]], dtype=torch.float64),
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+
+    try:
+        model.forward_element_density_direct_padded_triton_descriptor_force_analytic_forces(graph)
+    except RuntimeError as exc:
+        assert "CUDA" in str(exc) or "Triton" in str(exc)
+    else:
+        raise AssertionError("Triton direct-padded descriptor+force path should reject CPU graphs")
+
+
 def test_triton_element_density_descriptor_force_path_requires_cuda_graph():
     config = RTECEScalarConfig(
         variant="rtece_element_density",
@@ -933,6 +978,48 @@ def test_density_analytic_forces_match_autograd_forces_for_element_descriptors()
         atol=1e-8,
         rtol=1e-8,
     )
+
+
+def test_triton_direct_padded_descriptor_force_matches_edge_index_triton_when_cuda_available():
+    if not torch.cuda.is_available():
+        return
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import torch_radius_nopbc_graph
+
+    config = RTECEScalarConfig(
+        variant="rtece_element_density",
+        cutoff=1.0,
+        num_radial=4,
+        hidden_channels=(8,),
+        use_element_density=True,
+    )
+    model = RTECEScalarModel(config).to(device="cuda", dtype=torch.float32).eval()
+    z = torch.tensor([6, 8, 1, 7], dtype=torch.long, device="cuda")
+    batch = torch.tensor([0, 0, 0, 1], dtype=torch.long, device="cuda")
+    pos = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [0.7, 0.1, 0.0],
+            [1.4, 0.0, 0.0],
+            [0.0, 0.0, 0.0],
+        ],
+        dtype=torch.float32,
+        device="cuda",
+    )
+    template = RTECEGraph(
+        z=z,
+        pos=pos,
+        edge_index=torch.zeros((2, 0), dtype=torch.long, device="cuda"),
+        batch=batch,
+    )
+    direct_graph = torch_radius_nopbc_graph(template, pos, cutoff=config.cutoff)
+
+    edge_index_out = model.forward_element_density_triton_descriptor_force_analytic_forces(direct_graph)
+    direct_out = model.forward_element_density_direct_padded_triton_descriptor_force_analytic_forces(template)
+
+    torch.cuda.synchronize()
+    assert torch.allclose(direct_out["energy"], edge_index_out["energy"], atol=1e-5, rtol=1e-5)
+    assert torch.allclose(direct_out["atomic_energy"], edge_index_out["atomic_energy"], atol=1e-5, rtol=1e-5)
+    assert torch.allclose(direct_out["forces"], edge_index_out["forces"], atol=1e-4, rtol=1e-4)
 
 
 def test_packed_element_density_analytic_forces_match_autograd_forces():

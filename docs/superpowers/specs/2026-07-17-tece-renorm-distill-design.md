@@ -1644,6 +1644,32 @@ Stage-55 interpretation against TECE/TACE:
 - The TECE design-space claim is sharpened: for the T3 element-density scalar endpoint, retained information is the scalar radial and neighbor-element density statistics; the public edge list is not part of the model semantics. It is only one runtime realization.
 - Therefore the next high-value implementation target is a fused GPU cell-list descriptor+force backend that preserves this exact route contract while removing materialized edge-list lifetime and padded candidate scans. NVIDIA nvalchemi-toolkit-ops or DeepMD edge-force/edge-virial code can be backend references, but the algorithmic target is now fixed by the route contract and tests.
 
+
+# Stage 56: Direct-Padded Streaming Triton Descriptor+Force Backend
+
+Stage 56 adds the first GPU-kernel lowering of the Stage55 observation that the T3 element-density scalar endpoint does not semantically require a public materialized `edge_index`. This is not yet the final cell-list backend because it still scans padded per-configuration pair slots, but descriptor and force kernels can now consume `(pos, batch counts, starts, z)` directly and keep edge state implicit inside the kernel.
+
+Implementation gate:
+
+- Added `element_density_direct_padded_descriptors_triton(...)` and `element_density_direct_padded_forces_triton(...)` under `tace.models.rtece_triton_kernels`. These scan direct padded candidate slots and atomically accumulate packed element-density descriptors or conservative force contributions without outputting an edge list.
+- Added `RTECEScalarModel.forward_element_density_direct_padded_triton_descriptor_force_analytic_forces(...)`. It validates the scalar element-density endpoint, derives `counts/starts` from sorted `batch`, ignores `edge_index`, computes descriptors with the direct-padded Triton descriptor kernel, differentiates the scalar head with respect to descriptors, and applies the direct-padded force kernel.
+- Added workflow and benchmark force mode `analytic_element_direct_padded_descriptor_force`.
+- Extended `rtece_route_contract(...)` so this mode reports `triton_direct_padded_descriptor`, `triton_direct_padded_descriptor_force`, `direct_active_nopbc`, and `streaming_padded_candidates`.
+- Added tests that first failed on the missing kernel API, route contract, and model method; a CUDA-conditional numerical test compares direct-padded streaming against the existing edge-index Triton path when a GPU is available.
+
+Verification:
+
+- Targeted Stage56 tests: `4 passed, 69 deselected, 1 warning`.
+- Full rTECE test file: `73 passed, 1 warning`.
+- Benchmark CLI help lists `analytic_element_direct_padded_descriptor_force`.
+- The current login node reports `torch.cuda.is_available() == False` and device count `0`; therefore Stage56 is not yet a measured GPU Pareto point.
+
+Stage-56 interpretation against TECE/TACE:
+
+- This separates two hardware-cost axes that the TECE design-space document treats as first-class: edge-state lifetime and candidate-space work. Stage56 removes public edge-list lifetime at the GPU descriptor/force interface, but still keeps padded candidate scanning.
+- The route is cleaner than another graph-update backend because the descriptor and force semantics now flow from the scalar TECE statistics directly, not through a persistent edge tensor.
+- The next priority is to run this backend on a CUDA node against `analytic_element_triton_descriptor_force`, then replace the padded pair-slot iterator with real cell-list candidate streaming if the result confirms that padded candidate work remains the bottleneck.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

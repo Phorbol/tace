@@ -106,6 +106,11 @@ def rtece_route_contract(
         force_realization = "triton_fused_descriptor_force"
         fused_descriptor = True
         fused_force = True
+    if force_mode == "analytic_element_direct_padded_descriptor_force":
+        descriptor_realization = "triton_direct_padded_descriptor"
+        force_realization = "triton_direct_padded_descriptor_force"
+        fused_descriptor = True
+        fused_force = True
     if force_mode == "analytic_element_cell_list_descriptor_force":
         descriptor_realization = "cell_list_fused_descriptor_oracle"
         force_realization = "cell_list_analytic_descriptor_force"
@@ -123,6 +128,8 @@ def rtece_route_contract(
 
     if force_mode == "analytic_element_cell_list_descriptor_force":
         edge_state_lifetime = "streaming_cell_candidates_oracle"
+    elif force_mode == "analytic_element_direct_padded_descriptor_force":
+        edge_state_lifetime = "streaming_padded_candidates"
     elif graph_update_backend == "cached_topology":
         edge_state_lifetime = "persistent_cached_edge_index"
     elif graph_update_backend and "triton_counted" in graph_update_backend:
@@ -696,6 +703,74 @@ class RTECEScalarModel(torch.nn.Module):
             num_radial=int(self.config.num_radial),
         )
         return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
+
+    def forward_element_density_direct_padded_triton_descriptor_force_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+        _validate_packed_element_density_config(
+            self.config,
+            "forward_element_density_direct_padded_triton_descriptor_force_analytic_forces",
+        )
+        if graph.pos.device.type != "cuda":
+            raise RuntimeError("Triton direct-padded element-density descriptor+force path requires a CUDA graph")
+        if graph.pos.dtype != torch.float32:
+            raise RuntimeError("Triton direct-padded element-density descriptor+force path currently supports float32 graphs only")
+        if graph.batch.ndim != 1 or graph.batch.shape[0] != graph.z.shape[0]:
+            raise ValueError("direct-padded Triton path requires one batch id per atom")
+        if graph.batch.numel() > 1 and torch.any(graph.batch[1:] < graph.batch[:-1]):
+            raise ValueError("direct-padded Triton path requires atoms sorted by batch")
+
+        from tace.models.rtece_triton_kernels import (
+            element_density_direct_padded_descriptors_triton,
+            element_density_direct_padded_forces_triton,
+        )
+
+        pos = graph.pos
+        num_graphs = int(graph.batch.max().item()) + 1 if graph.batch.numel() else 1
+        if graph.batch.numel():
+            _, counts = torch.unique_consecutive(graph.batch, return_counts=True)
+            starts = torch.cat([counts.new_zeros(1), counts.cumsum(dim=0)[:-1]])
+        else:
+            counts = graph.batch.new_zeros(0)
+            starts = graph.batch.new_zeros(0)
+        node_z = graph.z.to(dtype=pos.dtype, device=pos.device) / float(self.config.max_atomic_number)
+        descriptors = element_density_direct_padded_descriptors_triton(
+            pos=pos,
+            counts=counts.to(device=pos.device),
+            starts=starts.to(device=pos.device),
+            node_z=node_z,
+            cutoff=float(self.config.cutoff),
+            num_radial=int(self.config.num_radial),
+        ).requires_grad_(True)
+
+        z_scaled = node_z.view(-1, 1)
+        atomic_energy = self.energy_head(torch.cat([z_scaled, descriptors], dim=-1)).squeeze(-1)
+        energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
+        if self.config.energy_per_atom_shift:
+            atom_counts = scatter_sum(
+                torch.ones_like(atomic_energy[:, None]),
+                graph.batch,
+                num_graphs,
+            ).squeeze(-1)
+            energy = energy + atom_counts * pos.new_tensor(float(self.config.energy_per_atom_shift))
+
+        descriptor_grad = torch.autograd.grad(
+            energy.sum(),
+            descriptors,
+            create_graph=False,
+            retain_graph=False,
+        )[0]
+        density_grad, element_density_grad = descriptor_grad.split(self.config.num_radial, dim=-1)
+        forces = element_density_direct_padded_forces_triton(
+            pos=pos,
+            counts=counts.to(device=pos.device),
+            starts=starts.to(device=pos.device),
+            node_z=node_z,
+            density_grad=density_grad,
+            element_density_grad=element_density_grad,
+            cutoff=float(self.config.cutoff),
+            num_radial=int(self.config.num_radial),
+        )
+        return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
+
 
     def forward_element_density_cell_list_packed_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
         _validate_packed_element_density_config(self.config, "forward_element_density_cell_list_packed_analytic_forces")

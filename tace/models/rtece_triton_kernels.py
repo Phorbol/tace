@@ -513,3 +513,255 @@ def element_density_forces_triton(
         num_warps=4,
     )
     return forces
+
+
+@triton.jit
+def _element_density_direct_padded_descriptor_kernel(
+    pos,
+    counts,
+    starts,
+    node_z,
+    descriptors,
+    num_graphs: tl.constexpr,
+    max_count: tl.constexpr,
+    total_slots: tl.constexpr,
+    cutoff: tl.constexpr,
+    num_radial: tl.constexpr,
+    block_size: tl.constexpr,
+):
+    offsets = tl.program_id(0) * block_size + tl.arange(0, block_size)
+    mask = offsets < total_slots
+    slots_per_graph = max_count * max_count
+    graph = offsets // slots_per_graph
+    local_pair = offsets - graph * slots_per_graph
+    src_local = local_pair // max_count
+    dst_local = local_pair - src_local * max_count
+    count = tl.load(counts + graph, mask=mask & (graph < num_graphs), other=0)
+    start = tl.load(starts + graph, mask=mask & (graph < num_graphs), other=0)
+    valid = mask & (graph < num_graphs) & (src_local < count) & (dst_local < count) & (src_local != dst_local)
+    src = start + src_local
+    dst = start + dst_local
+    src_z = tl.load(node_z + src, mask=valid, other=0.0)
+
+    sx = tl.load(pos + src * 3 + 0, mask=valid, other=0.0)
+    sy = tl.load(pos + src * 3 + 1, mask=valid, other=0.0)
+    sz = tl.load(pos + src * 3 + 2, mask=valid, other=0.0)
+    dx = tl.load(pos + dst * 3 + 0, mask=valid, other=0.0)
+    dy = tl.load(pos + dst * 3 + 1, mask=valid, other=0.0)
+    dz = tl.load(pos + dst * 3 + 2, mask=valid, other=0.0)
+
+    vx = dx - sx
+    vy = dy - sy
+    vz = dz - sz
+    dist = tl.sqrt(vx * vx + vy * vy + vz * vz)
+    dist = tl.maximum(dist, 1.0e-12)
+    inside = valid & (dist < cutoff)
+
+    x = tl.minimum(tl.maximum(dist / cutoff, 0.0), 1.0)
+    x2 = x * x
+    x3 = x2 * x
+    x4 = x3 * x
+    x5 = x4 * x
+    envelope = tl.where(inside, 1.0 - 10.0 * x3 + 15.0 * x4 - 6.0 * x5, 0.0)
+
+    width = cutoff / (num_radial - 1)
+    inv_width2 = 1.0 / (width * width)
+    descriptor_stride = num_radial * 2
+    for k in range(0, num_radial):
+        center = width * k
+        delta = dist - center
+        gaussian = tl.exp(-0.5 * delta * delta * inv_width2)
+        radial = gaussian * envelope
+        base = descriptors + dst * descriptor_stride + k
+        tl.atomic_add(base, radial, sem="relaxed", mask=inside)
+        tl.atomic_add(base + num_radial, radial * src_z, sem="relaxed", mask=inside)
+
+
+@triton.jit
+def _element_density_direct_padded_force_kernel(
+    pos,
+    counts,
+    starts,
+    node_z,
+    density_grad,
+    element_density_grad,
+    forces,
+    num_graphs: tl.constexpr,
+    max_count: tl.constexpr,
+    total_slots: tl.constexpr,
+    cutoff: tl.constexpr,
+    num_radial: tl.constexpr,
+    block_size: tl.constexpr,
+):
+    offsets = tl.program_id(0) * block_size + tl.arange(0, block_size)
+    mask = offsets < total_slots
+    slots_per_graph = max_count * max_count
+    graph = offsets // slots_per_graph
+    local_pair = offsets - graph * slots_per_graph
+    src_local = local_pair // max_count
+    dst_local = local_pair - src_local * max_count
+    count = tl.load(counts + graph, mask=mask & (graph < num_graphs), other=0)
+    start = tl.load(starts + graph, mask=mask & (graph < num_graphs), other=0)
+    valid = mask & (graph < num_graphs) & (src_local < count) & (dst_local < count) & (src_local != dst_local)
+    src = start + src_local
+    dst = start + dst_local
+    src_z = tl.load(node_z + src, mask=valid, other=0.0)
+
+    sx = tl.load(pos + src * 3 + 0, mask=valid, other=0.0)
+    sy = tl.load(pos + src * 3 + 1, mask=valid, other=0.0)
+    sz = tl.load(pos + src * 3 + 2, mask=valid, other=0.0)
+    dx = tl.load(pos + dst * 3 + 0, mask=valid, other=0.0)
+    dy = tl.load(pos + dst * 3 + 1, mask=valid, other=0.0)
+    dz = tl.load(pos + dst * 3 + 2, mask=valid, other=0.0)
+
+    vx = dx - sx
+    vy = dy - sy
+    vz = dz - sz
+    dist = tl.sqrt(vx * vx + vy * vy + vz * vz)
+    dist = tl.maximum(dist, 1.0e-12)
+    inside = valid & (dist < cutoff)
+    inv_dist = 1.0 / dist
+    ux = vx * inv_dist
+    uy = vy * inv_dist
+    uz = vz * inv_dist
+
+    x = tl.minimum(tl.maximum(dist / cutoff, 0.0), 1.0)
+    x2 = x * x
+    x3 = x2 * x
+    x4 = x3 * x
+    x5 = x4 * x
+    envelope = tl.where(inside, 1.0 - 10.0 * x3 + 15.0 * x4 - 6.0 * x5, 0.0)
+    envelope_derivative = tl.where(inside, (-30.0 * x2 + 60.0 * x3 - 30.0 * x4) / cutoff, 0.0)
+
+    width = cutoff / (num_radial - 1)
+    inv_width2 = 1.0 / (width * width)
+    edge_scale = tl.zeros((block_size,), dtype=tl.float32)
+    for k in range(0, num_radial):
+        center = width * k
+        delta = dist - center
+        gaussian = tl.exp(-0.5 * delta * delta * inv_width2)
+        gaussian_derivative = gaussian * (-delta * inv_width2)
+        radial_derivative = gaussian_derivative * envelope + gaussian * envelope_derivative
+        density_part = tl.load(density_grad + dst * num_radial + k, mask=inside, other=0.0)
+        element_part = tl.load(element_density_grad + dst * num_radial + k, mask=inside, other=0.0)
+        edge_scale += (density_part + element_part * src_z) * radial_derivative
+
+    gx = edge_scale * ux
+    gy = edge_scale * uy
+    gz = edge_scale * uz
+    tl.atomic_add(forces + dst * 3 + 0, -gx, sem="relaxed", mask=inside)
+    tl.atomic_add(forces + dst * 3 + 1, -gy, sem="relaxed", mask=inside)
+    tl.atomic_add(forces + dst * 3 + 2, -gz, sem="relaxed", mask=inside)
+    tl.atomic_add(forces + src * 3 + 0, gx, sem="relaxed", mask=inside)
+    tl.atomic_add(forces + src * 3 + 1, gy, sem="relaxed", mask=inside)
+    tl.atomic_add(forces + src * 3 + 2, gz, sem="relaxed", mask=inside)
+
+
+def _validate_direct_padded_inputs(
+    *,
+    pos: torch.Tensor,
+    counts: torch.Tensor,
+    starts: torch.Tensor,
+    node_z: torch.Tensor,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor, int, int, int]:
+    if pos.device.type != "cuda":
+        raise RuntimeError("Triton direct-padded element-density path requires CUDA positions")
+    if pos.dtype != torch.float32:
+        raise RuntimeError("Triton direct-padded element-density path currently supports float32 positions only")
+    if counts.device.type != "cuda" or starts.device.type != "cuda" or node_z.device.type != "cuda":
+        raise RuntimeError("Triton direct-padded element-density path requires CUDA counts, starts, and atomic numbers")
+    if counts.dtype != torch.long or starts.dtype != torch.long:
+        raise RuntimeError("Triton direct-padded element-density path requires int64 counts and starts")
+    if node_z.dtype != torch.float32:
+        raise RuntimeError("Triton direct-padded element-density path currently supports float32 atomic numbers only")
+    if not pos.is_contiguous():
+        pos = pos.contiguous()
+    counts = counts.contiguous()
+    starts = starts.contiguous()
+    node_z = node_z.contiguous()
+    num_graphs = int(counts.numel())
+    max_count = int(counts.max().detach().cpu()) if num_graphs else 0
+    total_slots = int(num_graphs * max_count * max_count)
+    return pos, counts, starts, node_z, num_graphs, max_count, total_slots
+
+
+def element_density_direct_padded_descriptors_triton(
+    *,
+    pos: torch.Tensor,
+    counts: torch.Tensor,
+    starts: torch.Tensor,
+    node_z: torch.Tensor,
+    cutoff: float,
+    num_radial: int,
+    block_size: int = 128,
+) -> torch.Tensor:
+    pos, counts, starts, node_z, num_graphs, max_count, total_slots = _validate_direct_padded_inputs(
+        pos=pos,
+        counts=counts,
+        starts=starts,
+        node_z=node_z,
+    )
+    descriptors = torch.zeros((int(node_z.numel()), int(num_radial) * 2), device=pos.device, dtype=pos.dtype)
+    if num_graphs == 0 or max_count <= 1:
+        return descriptors
+    grid = (triton.cdiv(total_slots, block_size),)
+    _element_density_direct_padded_descriptor_kernel[grid](
+        pos,
+        counts,
+        starts,
+        node_z,
+        descriptors,
+        int(num_graphs),
+        int(max_count),
+        int(total_slots),
+        float(cutoff),
+        int(num_radial),
+        int(block_size),
+        num_warps=4,
+    )
+    return descriptors
+
+
+def element_density_direct_padded_forces_triton(
+    *,
+    pos: torch.Tensor,
+    counts: torch.Tensor,
+    starts: torch.Tensor,
+    node_z: torch.Tensor,
+    density_grad: torch.Tensor,
+    element_density_grad: torch.Tensor,
+    cutoff: float,
+    num_radial: int,
+    block_size: int = 128,
+) -> torch.Tensor:
+    pos, counts, starts, node_z, num_graphs, max_count, total_slots = _validate_direct_padded_inputs(
+        pos=pos,
+        counts=counts,
+        starts=starts,
+        node_z=node_z,
+    )
+    if density_grad.dtype != torch.float32 or element_density_grad.dtype != torch.float32:
+        raise RuntimeError("Triton direct-padded element-density force path currently supports float32 gradients only")
+    density_grad = density_grad.contiguous()
+    element_density_grad = element_density_grad.contiguous()
+    forces = torch.zeros_like(pos)
+    if num_graphs == 0 or max_count <= 1:
+        return forces
+    grid = (triton.cdiv(total_slots, block_size),)
+    _element_density_direct_padded_force_kernel[grid](
+        pos,
+        counts,
+        starts,
+        node_z,
+        density_grad,
+        element_density_grad,
+        forces,
+        int(num_graphs),
+        int(max_count),
+        int(total_slots),
+        float(cutoff),
+        int(num_radial),
+        int(block_size),
+        num_warps=4,
+    )
+    return forces
