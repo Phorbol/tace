@@ -876,6 +876,40 @@ def test_rtece_dimer_scan_summary_reports_smoothness_and_nonfinite_counts():
     assert summary["short_force_repulsive"] is False
 
 
+def test_rtece_rattle_relax_focus_group_classification():
+    from benchmarks.oc20neb_tace_mace.rattle_relax_rtece import classify_focus_groups
+
+    assert classify_focus_groups(["Cu", "C", "H"]) == ["C_or_N", "CHNO"]
+    assert classify_focus_groups(["Cu", "O", "H"]) == ["CHNO", "CHNO_no_CN"]
+    assert classify_focus_groups(["Cu", "Ag"]) == ["not_CHNO"]
+
+
+def test_rtece_rattle_relax_summary_tracks_rmsd_and_force_spikes():
+    from benchmarks.oc20neb_tace_mace.rattle_relax_rtece import (
+        positions_rmsd,
+        summarize_relax_records,
+    )
+
+    ref = torch.zeros((2, 3), dtype=torch.float64)
+    shifted = torch.tensor([[1.0, 0.0, 0.0], [0.0, 2.0, 0.0]], dtype=torch.float64)
+    assert positions_rmsd(shifted, ref) == pytest.approx((5.0 / 2.0) ** 0.5)
+
+    records = [
+        {"focus_groups": ["C_or_N", "CHNO"], "converged": True, "initial_rmsd_a": 0.1, "final_rmsd_a": 0.2, "max_fmax_ev_a": 1.5},
+        {"focus_groups": ["not_CHNO"], "converged": False, "initial_rmsd_a": 0.2, "final_rmsd_a": 0.5, "max_fmax_ev_a": 3.0},
+    ]
+    summary = summarize_relax_records(records)
+    groups = {row["label"]: row for row in summary["focus_groups"]}
+
+    assert summary["num_configs"] == 2
+    assert summary["converged_fraction"] == pytest.approx(0.5)
+    assert summary["mean_final_rmsd_a"] == pytest.approx(0.35)
+    assert summary["max_fmax_ev_a"] == pytest.approx(3.0)
+    assert groups["C_or_N"]["count"] == 1
+    assert groups["C_or_N"]["mean_final_rmsd_a"] == pytest.approx(0.2)
+    assert groups["not_CHNO"]["converged_fraction"] == pytest.approx(0.0)
+
+
 def test_rtece_force_error_stratification_reports_element_and_focus_groups():
     from benchmarks.oc20neb_tace_mace.stratify_rtece_force_errors import stratify_symbol_force_errors
 

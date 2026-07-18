@@ -2458,6 +2458,65 @@ Next priority:
 2. If rattle+relax confirms short-range collapse or weak CHNO restoration, add a controlled candidate T4 operator: a cheap radial repulsive-core path or dimer-augmented loss, then measure whether it fixes dimer/rattle behavior without destroying the high-throughput endpoint.
 3. Keep low-level graph/kernel acceleration behind these physical checks; the current bottleneck is physical closure of the scalarized retained operator, not ASE graph construction.
 
+# Stage 80: rTECE Rattle+Relax Physical Probe
+
+Stage 80 adds the second physical-generalization diagnostic requested by Stage 78/79 and by the review document: rattle a structure, relax it with the rTECE checkpoint through an ASE calculator, then report convergence, final RMSD, and force spikes by the same chemically focused groups. This is not a throughput benchmark. It tests whether the scalarized retained TECE operator gives a locally restoring conservative field after small geometry perturbations.
+
+Implementation gate:
+
+- Added `rattle_relax_rtece.py`.
+- The script loads Stage-73 rTECE checkpoints with `load_checkpoint`, rebuilds graphs through the existing `atoms_to_rtece_graph`, predicts through `tace.models.rtece_workflow.predict`, and exposes the model as an ASE `Calculator` for LBFGS relax.
+- It records initial/final RMSD to the reference structure, initial/final/max `fmax`, convergence, energy change, wall time, and per-structure focus groups.
+- Focus groups keep the Stage-77/78 `C_or_N`, `CHNO`, and `not_CHNO` definitions, and add `CHNO_no_CN` because the current 512-config mixed training prefix has `CHNO=512`, `C_or_N=507`, and `not_CHNO=0`; without this extra group there is no non-CHNO control inside this slice.
+- Regression tests cover focus-group classification, RMSD calculation, convergence aggregation, and max-force-spike summary.
+
+A first loose run with `start=0`, `limit=2`, `rattle_std=0.03 A`, `fmax=0.05`, and `max_steps=5` showed that both structures were C/N/CHNO and that `radial` could pass without meaningful motion because the initial rTECE forces were already below the loose threshold. This run is retained only as a harness smoke, not as a physical conclusion.
+
+Bounded strict Stage-80 run on Stage-73 checkpoints, CPU autograd, `mixed_train_tw0.75.extxyz`, `start=58`, `limit=4`, `rattle_std=0.03 A`, `fmax=0.01`, `max_steps=10`:
+
+| route | group | count | converged frac | mean initial RMSD A | mean final RMSD A | max final RMSD A | max fmax eV/A |
+|---|---|---:|---:|---:|---:|---:|---:|
+| `radial` | all | 4 | 0.25 | 0.05246 | 0.2331 | 0.3341 | 0.04728 |
+| `radial` | `C_or_N` | 3 | 0.00 | 0.05299 | 0.2578 | 0.3341 | 0.04728 |
+| `radial` | `CHNO_no_CN` | 1 | 1.00 | 0.05087 | 0.1591 | 0.1591 | 0.02550 |
+| `radial_cavity_vec` | all | 4 | 0.00 | 0.05246 | 0.5308 | 0.7685 | 0.1201 |
+| `radial_cavity_vec` | `C_or_N` | 3 | 0.00 | 0.05299 | 0.6075 | 0.7685 | 0.1201 |
+| `radial_cavity_vec` | `CHNO_no_CN` | 1 | 0.00 | 0.05087 | 0.3009 | 0.3009 | 0.05542 |
+
+Representative per-structure outcomes:
+
+| route | index | formula | groups | converged | final RMSD A | final fmax eV/A |
+|---|---:|---|---|---:|---:|---:|
+| `radial` | 58 | `CH2Au24NSc12` | `C_or_N,CHNO` | 0 | 0.2661 | 0.0205 |
+| `radial` | 59 | `C2HCa16In16O2Rh16` | `C_or_N,CHNO` | 0 | 0.3341 | 0.0246 |
+| `radial` | 60 | `HOSb12Ti52` | `CHNO,CHNO_no_CN` | 1 | 0.1591 | 0.00906 |
+| `radial` | 61 | `CH2Hf24NSb48` | `C_or_N,CHNO` | 0 | 0.1731 | 0.0168 |
+| `radial_cavity_vec` | 58 | `CH2Au24NSc12` | `C_or_N,CHNO` | 0 | 0.7685 | 0.1201 |
+| `radial_cavity_vec` | 59 | `C2HCa16In16O2Rh16` | `C_or_N,CHNO` | 0 | 0.5485 | 0.0506 |
+| `radial_cavity_vec` | 60 | `HOSb12Ti52` | `CHNO,CHNO_no_CN` | 0 | 0.3009 | 0.0507 |
+| `radial_cavity_vec` | 61 | `CH2Hf24NSb48` | `C_or_N,CHNO` | 0 | 0.5054 | 0.0548 |
+
+Force-sign sanity check:
+
+- For config 58, a finite step of `1e-3` along the predicted force lowered energy for both routes, while the opposite step raised energy.
+- `radial`: `dE(+F)=-1.037e-4 eV`, `dE(-F)=+1.037e-4 eV`.
+- `radial_cavity_vec`: `dE(+F)=-2.788e-4 eV`, `dE(-F)=+2.787e-4 eV`.
+- Therefore the rattle+relax divergence is not explained by an ASE force-sign bug; the rTECE force convention is consistent with `F=-dE/dR`.
+
+Stage-80 interpretation against TECE/TACE and the review document:
+
+- The user-observed C/N relaxation problem is supported by a second physical diagnostic. In the strict window, `radial` C/N structures never reach `fmax=0.01` within 10 LBFGS steps and move from about 0.053 A initial RMSD to about 0.258 A mean final RMSD.
+- The `CHNO_no_CN` single structure is not a complete control set, but it behaves less badly under `radial` than the C/N subset. The current distillation slice lacks true `not_CHNO` metal-only structures, so a separate control dataset is required before claiming element-general statistics.
+- `radial_cavity_vec` is worse in this relax probe: it has larger initial forces, zero convergence, and much larger final RMSD. This overrides the Stage-79 dimer-only sign benefit for the current checkpoint. The cavity-vector path contains some local geometric information, but in this trained route it does not form a stable low-precision relax model.
+- The clean TECE conclusion is now narrower: do not widen edge paths or chase graph builders first. The missing ingredient for a high-throughput scalar endpoint is a controlled local physical prior or loss correction, most likely a cheap short-range radial repulsive core and/or targeted dimer/rattle augmentation, plus stratified validation so C/N failures are visible during checkpoint selection.
+
+Next priority:
+
+1. Add a controlled T4 short-range radial-core candidate that preserves scalar streaming and conservative forces, then rerun Stage-79 dimer and Stage-80 rattle+relax before any throughput claim.
+2. Add stratified C/N or CHNO validation/selection for rTECE checkpoints so force/relax failures cannot hide behind aggregate mixed-label validation loss.
+3. Build or locate a small metal-only/not-CHNO control set for rattle+relax; the current mixed training prefix cannot answer that comparison.
+4. Keep nvalchemi/matscipy graph-builder acceleration behind the physical-closure gates. ASE graph construction is too slow for final deployment, but it is not the current blocker for proving the TECE degradation route works.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
