@@ -37,6 +37,9 @@ def _rtece_config_from_benchmark(variant: str, benchmark: dict[str, Any]) -> RTE
     if isinstance(hidden, list):
         hidden = tuple(int(x) for x in hidden)
     num_radial = int(benchmark.get("num_radial") or config.num_radial)
+    atomic_energies = benchmark.get("atomic_energies")
+    if atomic_energies is not None:
+        atomic_energies = {int(k): float(v) for k, v in atomic_energies.items()}
     return RTECEScalarConfig(
         variant=config.variant,
         cutoff=float(benchmark.get("cutoff") or config.cutoff),
@@ -49,6 +52,7 @@ def _rtece_config_from_benchmark(variant: str, benchmark: dict[str, Any]) -> RTE
         use_atomic_moments=config.use_atomic_moments,
         num_edge_sketches=config.num_edge_sketches,
         energy_per_atom_shift=float(benchmark.get("energy_per_atom_shift") or config.energy_per_atom_shift),
+        atomic_energies=atomic_energies,
     )
 
 
@@ -80,6 +84,8 @@ def make_student_row(
         "tece_route": route,
         "hidden_channels": dft_benchmark.get("hidden_channels"),
         "num_radial": dft_benchmark.get("num_radial"),
+        "energy_per_atom_shift": dft_benchmark.get("energy_per_atom_shift"),
+        "atomic_energies": dft_benchmark.get("atomic_energies"),
         "seconds_per_pass": dft_benchmark.get("seconds_per_pass"),
         "peak_allocated_mb": dft_benchmark.get("peak_allocated_mb"),
         "peak_reserved_mb": dft_benchmark.get("peak_reserved_mb"),

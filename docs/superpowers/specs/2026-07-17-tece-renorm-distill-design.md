@@ -1703,6 +1703,43 @@ Stage-57 interpretation against TECE/TACE:
 - The TECE route priority remains unchanged: direct-padded streaming needs CUDA numeric/throughput validation against edge-index Triton; if padded work remains the bottleneck, the next runtime renormalization is true cell-list candidate streaming.
 - The practical next step is to use a known-good SAI sbatch template or an interactive compute allocation to run the exact benchmark commands, instead of continuing blind Slurm submissions from the cancelled script.
 
+
+# Stage 58: TACE-Style E0 Reference And SAI-Safe Benchmark Submission
+
+Stage 58 closes two blocking issues raised by the code review and the failed GPU validation attempts. The Slurm cancellation was traced to a submission-method constraint rather than an rTECE model failure: on SAI, rTECE benchmark jobs must not be submitted with `sbatch --export=ALL,...` for parameter passing. A minimal `16V100`/`flood-1o2gpu` probe with `hostname` and `nvidia-smi -L` completed, so the partition/QOS/single-GPU shape itself is valid. Future rTECE benchmark submissions should use a generated wrapper sbatch whose body exports variables, then submit the wrapper with plain `sbatch wrapper.sbatch`.
+
+The more important model-side correction is energy reference handling. The review correctly identified the old scalar `energy_per_atom_shift = sum(E_s)/sum(N_s)` as incompatible with TACE/MACE-style energy comparability on composition-varying data. rTECE now supports a TACE-style per-element reference map:
+
+```text
+E_ref(s) = sum_Z N_{sZ} E0_Z
+E_model(s) = sum_i MLP_i + E_ref(s)
+```
+
+When E0s are not provided, the training script now fits average per-element E0s from the training set by least squares over the composition matrix `N_{sZ}` against total energies `E_s`, matching the standard TACE/MACE practice more closely than a single global per-atom shift. The legacy `energy_per_atom_shift` remains as a checkpoint-compatible fallback, but it is no longer the default rTECE training reference.
+
+Implementation gate:
+
+- Added `atomic_energies` to `RTECEScalarConfig` and a shared `atomic_reference_energy(...)` path used by autograd and analytic/Triton inference forwards.
+- Added `fit_atomic_energies(...)` in `train_rtece_scalar.py`; default training now stores least-squares per-element E0s in the config and `train_summary.json`.
+- Preserved old checkpoints by keeping `energy_per_atom_shift` and normalizing serialized `atomic_energies` keys back to integer atomic numbers on load.
+- Added an inference-only guard for analytic/Triton force backends. These paths detach descriptor geometry or take `create_graph=False`; they are valid benchmark/inference force evaluators but not force-training backends.
+- Added `submit_rtece_scalar_benchmark.py`, which generates an SAI-safe wrapper with GPU `#SBATCH` resource lines and no Slurm `--export` option.
+- Recorded the SAI `sbatch --export` constraint in the local `sai-user-guide` skill and Codex memory.
+
+Verification completed in this stage:
+
+- Per-element E0 model and least-squares tests: passed.
+- CPU CLI smoke confirmed default training writes least-squares `atomic_energies` and leaves legacy `energy_per_atom_shift` at zero.
+- Workflow/checkpoint/no-export helper tests: passed.
+
+Stage-58 interpretation against TECE/TACE:
+
+- This is a scientific-closure fix, not a throughput optimization. It makes rTECE energy residuals comparable to TACE/MACE residual training by removing a composition-dependent baseline error before judging the reduced scalar operator family.
+- The next Pareto experiments should be rerun for the active radial/hidden front because old energy MAE values were contaminated by the global-shift baseline. Force MAE rankings may remain informative, but energy MAE and teacher/DFT energy comparability must be regenerated.
+- Review-priority order after this stage: first PBC graph ABI with edge shifts/cell, then chemical low-rank species basis and cavity/radial edge sketches, then the renormalization/distillation manifest that maps deleted TECE paths to student descriptors. Kernel-level cell-list fusion remains useful only after these semantic contracts are stable.
+- After the review P0 correctness issues are closed, add physics validation beyond aggregate MAE/RMSE: element-pair dimer scans from roughly 0.5x to 5x covalent-radius scale to inspect energy/force smoothness and repulsion behavior, plus train/test structure rattle-and-relax comparisons against original TACE using final energy, force stability, and relaxed RMSD. These tests should be used to judge rTECE generalization and physical usability after the semantic bugs are fixed, not as a substitute for fixing the bugs.
+- Early rattle-and-relax observations suggest rTECE relax RMSD is especially large for non-metal adsorbates such as C/N-containing species. Treat this as an algorithmic diagnostic: bucket relax failures by adsorbate chemistry and local coordination, then test whether low-rank species bases and cavity/radial angular sketches repair those basins. This is consistent with the review concern that a single `Z` moment causes chemical collisions and that current scalar sketches delete too much angular environment for adsorbate bonding.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

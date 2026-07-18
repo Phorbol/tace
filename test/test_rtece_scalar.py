@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+import json
 import math
 import subprocess
 import sys
 
+import pytest
 import torch
 
 from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
@@ -542,6 +544,28 @@ def test_core_rtece_workflow_predicts_cell_list_descriptor_force_mode():
     assert out["tece_route"]["edge_state_lifetime"] == "streaming_cell_candidates_oracle"
 
 
+def test_core_rtece_workflow_rejects_inference_only_force_modes_while_training():
+    from tace.models.rtece_workflow import predict
+
+    config = RTECEScalarConfig(
+        variant="rtece_element_density",
+        num_radial=4,
+        hidden_channels=(8,),
+        use_element_density=True,
+    )
+    model = RTECEScalarModel(config).double()
+    model.train()
+    graph = RTECEGraph(
+        z=torch.tensor([6, 8], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(2),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+
+    with pytest.raises(RuntimeError, match="inference-only"):
+        predict(model, graph, force_mode="analytic_element_packed")
+
+
 def test_core_rtece_workflow_saves_loads_and_predicts_with_route_metadata(tmp_path):
     from tace.models.rtece_workflow import load_checkpoint, predict, save_checkpoint
 
@@ -738,7 +762,29 @@ def test_collate_graphs_matches_individual_energies():
     assert torch.allclose(batched, torch.cat([e1, e2]), atol=1e-10, rtol=1e-10)
 
 
-def test_energy_per_atom_shift_adds_zeroth_order_energy():
+def test_atomic_energies_add_tace_style_element_reference_energy():
+    config = RTECEScalarConfig(
+        variant="rtece_pair",
+        use_atomic_moments=False,
+        num_edge_sketches=0,
+        atomic_energies={1: -0.5, 6: -3.0},
+    )
+    model = RTECEScalarModel(config).double()
+    for param in model.parameters():
+        param.data.zero_()
+    graph = RTECEGraph(
+        z=torch.tensor([1, 6, 1], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.7, 0.0, 0.0], [1.4, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    out = model(graph)
+
+    assert torch.allclose(out["energy"], torch.tensor([-4.0], dtype=torch.float64))
+
+
+def test_energy_per_atom_shift_remains_legacy_zeroth_order_energy():
     config = RTECEScalarConfig(
         variant="rtece_pair",
         use_atomic_moments=False,
@@ -758,6 +804,29 @@ def test_energy_per_atom_shift_adds_zeroth_order_energy():
     out = model(graph)
 
     assert torch.allclose(out["energy"], torch.tensor([2.5], dtype=torch.float64))
+
+
+def test_fit_atomic_energies_solves_per_element_reference_least_squares():
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import fit_atomic_energies
+
+    g1 = RTECEGraph(
+        z=torch.tensor([1, 1], dtype=torch.long),
+        pos=torch.zeros((2, 3), dtype=torch.float64),
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+    g2 = RTECEGraph(
+        z=torch.tensor([6, 1], dtype=torch.long),
+        pos=torch.zeros((2, 3), dtype=torch.float64),
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+    samples = [
+        (g1, torch.tensor([-1.0], dtype=torch.float64), torch.zeros((2, 3), dtype=torch.float64)),
+        (g2, torch.tensor([-3.5], dtype=torch.float64), torch.zeros((2, 3), dtype=torch.float64)),
+    ]
+
+    assert fit_atomic_energies(samples) == pytest.approx({1: -0.5, 6: -3.0})
 
 
 def test_fit_energy_per_atom_shift_uses_total_energy_per_total_atom():
@@ -781,6 +850,60 @@ def test_fit_energy_per_atom_shift_uses_total_energy_per_total_atom():
     ]
 
     assert fit_energy_per_atom_shift(samples) == 1.6
+
+
+
+def test_train_rtece_scalar_cli_fits_atomic_energies_by_default(tmp_path):
+    import ase.io
+    from ase import Atoms
+
+    train_file = tmp_path / "train.extxyz"
+    out_dir = tmp_path / "out"
+    h2 = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]])
+    h2.info["energy"] = -1.0
+    h2.arrays["forces"] = torch.zeros((2, 3), dtype=torch.float64).numpy()
+    ch = Atoms("CH", positions=[[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]])
+    ch.info["energy"] = -3.5
+    ch.arrays["forces"] = torch.zeros((2, 3), dtype=torch.float64).numpy()
+    ase.io.write(str(train_file), [h2, ch], format="extxyz")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/oc20neb_tace_mace/train_rtece_scalar.py",
+            "--variant",
+            "rtece_pair",
+            "--train-file",
+            str(train_file),
+            "--valid-file",
+            str(train_file),
+            "--output-dir",
+            str(out_dir),
+            "--limit-configs",
+            "2",
+            "--max-steps",
+            "1",
+            "--eval-interval",
+            "0",
+            "--disable-best-checkpoint",
+            "--hidden-channels",
+            "4",
+            "--num-radial",
+            "2",
+            "--device",
+            "cpu",
+            "--default-dtype",
+            "float64",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0
+
+    summary = json.loads((out_dir / "train_summary.json").read_text())
+    assert summary["atomic_energies"] == pytest.approx({"1": -0.5, "6": -3.0})
+    assert summary["energy_per_atom_shift"] == 0.0
 
 
 def test_train_steps_saves_best_validation_checkpoint(tmp_path):
@@ -1928,6 +2051,7 @@ def test_rtece_benchmark_row_preserves_force_mode():
         "force_mode": "analytic_pair",
         "hidden_channels": [16, 16],
         "num_radial": 4,
+        "atomic_energies": {"1": -0.5, "6": -3.0},
         "atoms_per_second": 100000.0,
         "configs_per_second": 1000.0,
         "seconds_per_pass": 0.1,
@@ -1946,6 +2070,8 @@ def test_rtece_benchmark_row_preserves_force_mode():
     assert row["force_mode"] == "analytic_pair"
     assert row["hidden_channels"] == [16, 16]
     assert row["num_radial"] == 4
+    assert row["atomic_energies"] == {"1": -0.5, "6": -3.0}
+    assert row["tece_route"]["energy_reference"] == "per_element_atomic_energies"
 
 
 def test_rtece_summary_attaches_tece_route_contract():
@@ -2037,6 +2163,34 @@ def test_rtece_benchmark_sbatch_forwards_graph_backend_controls():
     assert "GRAPH_UPDATE_BACKEND=${GRAPH_UPDATE_BACKEND:-ase_neighborlist}" in script
     assert '--graph-construction-backend "${GRAPH_CONSTRUCTION_BACKEND}"' in script
     assert '--graph-update-backend "${GRAPH_UPDATE_BACKEND}"' in script
+
+
+def test_rtece_benchmark_submit_helper_generates_wrapper_without_sbatch_export(tmp_path):
+    from benchmarks.oc20neb_tace_mace.submit_rtece_scalar_benchmark import (
+        build_sbatch_command,
+        write_rtece_benchmark_wrapper,
+    )
+
+    wrapper = write_rtece_benchmark_wrapper(
+        tmp_path,
+        model="/tmp/rtece.pt",
+        force_mode="analytic_element_direct_padded_descriptor_force",
+        limit_configs_list="64",
+        measure_passes=1,
+        out_dir="/tmp/rtece-bench",
+    )
+    command = build_sbatch_command(wrapper)
+    text = wrapper.read_text()
+
+    assert "--export" not in command
+    assert "#SBATCH --gpus-per-node=1" in text
+    assert "#SBATCH --qos=flood-1o2gpu" in text
+    assert "--mem" not in text
+    assert "--cpus-per-task" not in text
+    assert "MODEL=/tmp/rtece.pt" in text
+    assert "FORCE_MODE=analytic_element_direct_padded_descriptor_force" in text
+    assert "exec /bin/bash" in text
+    assert "rtece_scalar_benchmark.sbatch" in text
 
 
 def test_rtece_matrix_sbatch_forwards_benchmark_force_mode():

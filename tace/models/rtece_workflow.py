@@ -48,7 +48,10 @@ def load_checkpoint(
     device: str | torch.device = "cpu",
 ) -> tuple[RTECEScalarModel, RTECEScalarConfig, dict[str, Any]]:
     payload = torch.load(Path(path), map_location=device)
-    config = RTECEScalarConfig(**payload["config"])
+    config_payload = dict(payload["config"])
+    if config_payload.get("atomic_energies") is not None:
+        config_payload["atomic_energies"] = {int(k): float(v) for k, v in config_payload["atomic_energies"].items()}
+    config = RTECEScalarConfig(**config_payload)
     model = RTECEScalarModel(config).to(device=device, dtype=dtype)
     model.load_state_dict(payload["state_dict"])
     model.eval()

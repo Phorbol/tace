@@ -111,6 +111,35 @@ def fit_energy_per_atom_shift(
     return total_energy / float(total_atoms)
 
 
+def fit_atomic_energies(
+    samples: list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]],
+    *,
+    ridge: float = 1.0e-12,
+) -> dict[int, float]:
+    if not samples:
+        raise ValueError("fit_atomic_energies requires at least one sample")
+    elements = sorted({int(z) for graph, _, _ in samples for z in graph.z.detach().cpu().tolist()})
+    if not elements:
+        raise ValueError("cannot fit atomic energies for zero atoms")
+    rows = []
+    targets = []
+    for graph, energy, _ in samples:
+        z_cpu = graph.z.detach().cpu()
+        rows.append([float((z_cpu == z).sum().item()) for z in elements])
+        targets.append(float(energy.detach().sum().cpu()))
+    design = np.asarray(rows, dtype=np.float64)
+    target = np.asarray(targets, dtype=np.float64)
+    lhs = design.T @ design
+    if ridge > 0.0:
+        lhs = lhs + float(ridge) * np.eye(lhs.shape[0], dtype=np.float64)
+    rhs = design.T @ target
+    try:
+        values = np.linalg.solve(lhs, rhs)
+    except np.linalg.LinAlgError:
+        values = np.linalg.lstsq(design, target, rcond=None)[0]
+    return {int(z): float(v) for z, v in zip(elements, values, strict=True)}
+
+
 
 def load_samples(
     configs: Path,
@@ -183,7 +212,7 @@ def main() -> None:
         limit_configs=args.limit_configs,
     )
     if not args.no_fit_energy_shift:
-        config = replace(config, energy_per_atom_shift=fit_energy_per_atom_shift(samples))
+        config = replace(config, atomic_energies=fit_atomic_energies(samples))
     model = RTECEScalarModel(config).to(device=device, dtype=dtype)
     valid_samples = None
     best_checkpoint_path = None
@@ -216,6 +245,7 @@ def main() -> None:
             "train_configs": len(samples),
             "valid_configs": len(valid_samples) if valid_samples is not None else 0,
             "energy_per_atom_shift": config.energy_per_atom_shift,
+            "atomic_energies": {str(k): float(v) for k, v in (config.atomic_energies or {}).items()},
             "hidden_channels": list(config.hidden_channels),
             "num_radial": config.num_radial,
             "seed": int(args.seed),

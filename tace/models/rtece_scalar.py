@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Mapping
 import math
 
 import torch
@@ -19,6 +20,7 @@ class RTECEScalarConfig:
     use_atomic_moments: bool = False
     num_edge_sketches: int = 0
     energy_per_atom_shift: float = 0.0
+    atomic_energies: Mapping[int, float] | None = None
 
 
 def build_rtece_config(variant: str) -> RTECEScalarConfig:
@@ -168,6 +170,7 @@ def rtece_route_contract(
         "graph_construction_backend": graph_construction_backend,
         "graph_update_backend": graph_update_backend,
         "edge_state_lifetime": edge_state_lifetime,
+        "energy_reference": "per_element_atomic_energies" if config.atomic_energies else ("global_per_atom_shift" if config.energy_per_atom_shift else "none"),
         "pareto_axes": pareto_axes,
     }
 
@@ -207,6 +210,35 @@ def collate_graphs(graphs: list[RTECEGraph]) -> RTECEGraph:
         batch=torch.cat(batch_parts, dim=0),
     )
 
+
+
+def atomic_reference_energy(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
+    num_graphs = int(graph.batch.max().item()) + 1 if graph.batch.numel() else 1
+    if config.atomic_energies:
+        values = graph.pos.new_zeros(graph.z.shape[0])
+        for z, energy in config.atomic_energies.items():
+            values = torch.where(
+                graph.z == int(z),
+                graph.pos.new_tensor(float(energy)),
+                values,
+            )
+        return scatter_sum(values[:, None], graph.batch, num_graphs).squeeze(-1)
+    if config.energy_per_atom_shift:
+        atom_counts = scatter_sum(
+            torch.ones((graph.z.shape[0], 1), dtype=graph.pos.dtype, device=graph.pos.device),
+            graph.batch,
+            num_graphs,
+        ).squeeze(-1)
+        return atom_counts * graph.pos.new_tensor(float(config.energy_per_atom_shift))
+    return graph.pos.new_zeros(num_graphs)
+
+
+def add_atomic_reference_energy(
+    energy: torch.Tensor,
+    graph: RTECEGraph,
+    config: RTECEScalarConfig,
+) -> torch.Tensor:
+    return energy + atomic_reference_energy(graph, config)
 
 def compute_pair_geometry(graph: RTECEGraph) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
     src, dst = graph.edge_index
@@ -468,7 +500,15 @@ class RTECEScalarModel(torch.nn.Module):
         layers.append(torch.nn.Linear(prev, 1))
         self.energy_head = torch.nn.Sequential(*layers)
 
+    def _require_inference_mode(self, backend_name: str) -> None:
+        if self.training:
+            raise RuntimeError(
+                f"{backend_name} is an inference-only rTECE force backend; "
+                "use model.eval() for benchmark/inference or model(graph) for force training."
+            )
+
     def forward_density_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+        self._require_inference_mode("forward_density_analytic_forces")
         if self.config.use_atomic_moments or self.config.num_edge_sketches:
             raise ValueError("forward_density_analytic_forces only supports scalar density/moment descriptors")
         pos = graph.pos
@@ -497,13 +537,7 @@ class RTECEScalarModel(torch.nn.Module):
         z_scaled = z_scaled / float(self.config.max_atomic_number)
         atomic_energy = self.energy_head(torch.cat([z_scaled, descriptors], dim=-1)).squeeze(-1)
         energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
-        if self.config.energy_per_atom_shift:
-            atom_counts = scatter_sum(
-                torch.ones_like(atomic_energy[:, None]),
-                graph.batch,
-                num_graphs,
-            ).squeeze(-1)
-            energy = energy + atom_counts * pos.new_tensor(float(self.config.energy_per_atom_shift))
+        energy = add_atomic_reference_energy(energy, graph, self.config)
 
         grad_targets = [density]
         if element_density is not None:
@@ -546,11 +580,13 @@ class RTECEScalarModel(torch.nn.Module):
         return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
 
     def forward_pair_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+        self._require_inference_mode("forward_pair_analytic_forces")
         if self.config.use_density_quadratic:
             raise ValueError("forward_pair_analytic_forces only supports pure rtece_pair descriptors")
         return self.forward_density_analytic_forces(graph)
 
     def forward_pair_triton_force_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+        self._require_inference_mode("forward_pair_triton_force_analytic_forces")
         if self.config.use_element_density or self.config.use_density_quadratic or self.config.use_vector_moments:
             raise ValueError("forward_pair_triton_force_analytic_forces only supports pure rtece_pair descriptors")
         if self.config.use_atomic_moments or self.config.num_edge_sketches:
@@ -574,13 +610,7 @@ class RTECEScalarModel(torch.nn.Module):
         z_scaled = z_scaled / float(self.config.max_atomic_number)
         atomic_energy = self.energy_head(torch.cat([z_scaled, descriptors], dim=-1)).squeeze(-1)
         energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
-        if self.config.energy_per_atom_shift:
-            atom_counts = scatter_sum(
-                torch.ones_like(atomic_energy[:, None]),
-                graph.batch,
-                num_graphs,
-            ).squeeze(-1)
-            energy = energy + atom_counts * pos.new_tensor(float(self.config.energy_per_atom_shift))
+        energy = add_atomic_reference_energy(energy, graph, self.config)
 
         density_grad = torch.autograd.grad(
             energy.sum(),
@@ -598,6 +628,7 @@ class RTECEScalarModel(torch.nn.Module):
         return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
 
     def forward_element_density_triton_force_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+        self._require_inference_mode("forward_element_density_triton_force_analytic_forces")
         if not self.config.use_element_density:
             raise ValueError("forward_element_density_triton_force_analytic_forces requires use_element_density=True")
         if self.config.use_density_quadratic or self.config.use_vector_moments:
@@ -625,13 +656,7 @@ class RTECEScalarModel(torch.nn.Module):
         z_scaled = node_z.view(-1, 1)
         atomic_energy = self.energy_head(torch.cat([z_scaled, descriptors], dim=-1)).squeeze(-1)
         energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
-        if self.config.energy_per_atom_shift:
-            atom_counts = scatter_sum(
-                torch.ones_like(atomic_energy[:, None]),
-                graph.batch,
-                num_graphs,
-            ).squeeze(-1)
-            energy = energy + atom_counts * pos.new_tensor(float(self.config.energy_per_atom_shift))
+        energy = add_atomic_reference_energy(energy, graph, self.config)
 
         density_grad, element_density_grad = torch.autograd.grad(
             energy.sum(),
@@ -651,6 +676,7 @@ class RTECEScalarModel(torch.nn.Module):
         return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
 
     def forward_element_density_triton_descriptor_force_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+        self._require_inference_mode("forward_element_density_triton_descriptor_force_analytic_forces")
         if not self.config.use_element_density:
             raise ValueError("forward_element_density_triton_descriptor_force_analytic_forces requires use_element_density=True")
         if self.config.use_density_quadratic or self.config.use_vector_moments:
@@ -678,13 +704,7 @@ class RTECEScalarModel(torch.nn.Module):
         z_scaled = node_z.view(-1, 1)
         atomic_energy = self.energy_head(torch.cat([z_scaled, descriptors], dim=-1)).squeeze(-1)
         energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
-        if self.config.energy_per_atom_shift:
-            atom_counts = scatter_sum(
-                torch.ones_like(atomic_energy[:, None]),
-                graph.batch,
-                num_graphs,
-            ).squeeze(-1)
-            energy = energy + atom_counts * pos.new_tensor(float(self.config.energy_per_atom_shift))
+        energy = add_atomic_reference_energy(energy, graph, self.config)
 
         descriptor_grad = torch.autograd.grad(
             energy.sum(),
@@ -705,6 +725,7 @@ class RTECEScalarModel(torch.nn.Module):
         return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
 
     def forward_element_density_direct_padded_triton_descriptor_force_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+        self._require_inference_mode("forward_element_density_direct_padded_triton_descriptor_force_analytic_forces")
         _validate_packed_element_density_config(
             self.config,
             "forward_element_density_direct_padded_triton_descriptor_force_analytic_forces",
@@ -744,13 +765,7 @@ class RTECEScalarModel(torch.nn.Module):
         z_scaled = node_z.view(-1, 1)
         atomic_energy = self.energy_head(torch.cat([z_scaled, descriptors], dim=-1)).squeeze(-1)
         energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
-        if self.config.energy_per_atom_shift:
-            atom_counts = scatter_sum(
-                torch.ones_like(atomic_energy[:, None]),
-                graph.batch,
-                num_graphs,
-            ).squeeze(-1)
-            energy = energy + atom_counts * pos.new_tensor(float(self.config.energy_per_atom_shift))
+        energy = add_atomic_reference_energy(energy, graph, self.config)
 
         descriptor_grad = torch.autograd.grad(
             energy.sum(),
@@ -773,6 +788,7 @@ class RTECEScalarModel(torch.nn.Module):
 
 
     def forward_element_density_cell_list_packed_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+        self._require_inference_mode("forward_element_density_cell_list_packed_analytic_forces")
         _validate_packed_element_density_config(self.config, "forward_element_density_cell_list_packed_analytic_forces")
         pos = graph.pos
         src, dst = _cell_list_directed_edges_nopbc(graph, float(self.config.cutoff))
@@ -794,13 +810,7 @@ class RTECEScalarModel(torch.nn.Module):
         z_scaled = node_z.view(-1, 1)
         atomic_energy = self.energy_head(torch.cat([z_scaled, descriptors], dim=-1)).squeeze(-1)
         energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
-        if self.config.energy_per_atom_shift:
-            atom_counts = scatter_sum(
-                torch.ones_like(atomic_energy[:, None]),
-                graph.batch,
-                num_graphs,
-            ).squeeze(-1)
-            energy = energy + atom_counts * pos.new_tensor(float(self.config.energy_per_atom_shift))
+        energy = add_atomic_reference_energy(energy, graph, self.config)
 
         descriptor_grad = torch.autograd.grad(
             energy.sum(),
@@ -824,6 +834,7 @@ class RTECEScalarModel(torch.nn.Module):
         return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
 
     def forward_element_density_packed_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+        self._require_inference_mode("forward_element_density_packed_analytic_forces")
         if not self.config.use_element_density:
             raise ValueError("forward_element_density_packed_analytic_forces requires use_element_density=True")
         if self.config.use_density_quadratic or self.config.use_vector_moments:
@@ -848,13 +859,7 @@ class RTECEScalarModel(torch.nn.Module):
         z_scaled = z_scaled / float(self.config.max_atomic_number)
         atomic_energy = self.energy_head(torch.cat([z_scaled, descriptors], dim=-1)).squeeze(-1)
         energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
-        if self.config.energy_per_atom_shift:
-            atom_counts = scatter_sum(
-                torch.ones_like(atomic_energy[:, None]),
-                graph.batch,
-                num_graphs,
-            ).squeeze(-1)
-            energy = energy + atom_counts * pos.new_tensor(float(self.config.energy_per_atom_shift))
+        energy = add_atomic_reference_energy(energy, graph, self.config)
 
         descriptor_grad = torch.autograd.grad(
             energy.sum(),
@@ -887,14 +892,7 @@ class RTECEScalarModel(torch.nn.Module):
         atomic_energy = self.energy_head(atomic_input).squeeze(-1)
         num_graphs = int(graph.batch.max().item()) + 1 if graph.batch.numel() else 1
         energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
-        if self.config.energy_per_atom_shift:
-            atom_counts = scatter_sum(
-                torch.ones_like(atomic_energy[:, None]),
-                graph.batch,
-                num_graphs,
-            ).squeeze(-1)
-            shift = pos.new_tensor(float(self.config.energy_per_atom_shift))
-            energy = energy + atom_counts * shift
+        energy = add_atomic_reference_energy(energy, graph, self.config)
         forces = -torch.autograd.grad(
             energy.sum(),
             pos,
@@ -912,6 +910,8 @@ __all__ = [
     "descriptor_dim",
     "collate_graphs",
     "compute_pair_geometry",
+    "atomic_reference_energy",
+    "add_atomic_reference_energy",
     "cutoff_envelope",
     "radial_features_and_derivatives",
     "compute_radial_features_only",
