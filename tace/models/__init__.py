@@ -27,7 +27,9 @@ from .rtece_scalar import (
     RTECEScalarConfig,
     RTECEScalarModel,
     atomic_scalar_descriptors,
+    available_rtece_variants,
     build_rtece_config,
+    build_rtece_config_from_manifest,
     cell_list_packed_element_density_descriptors,
     descriptor_dim,
     edge_relational_sketches,
@@ -35,6 +37,7 @@ from .rtece_scalar import (
     rtece_descriptors,
     rtece_path_manifest,
     rtece_route_contract,
+    rtece_variant_registry,
 )
 
 __all__ = [
@@ -46,7 +49,9 @@ __all__ = [
     "RTECEScalarConfig",
     "RTECEScalarModel",
     "atomic_scalar_descriptors",
+    "available_rtece_variants",
     "build_rtece_config",
+    "build_rtece_config_from_manifest",
     "cell_list_packed_element_density_descriptors",
     "descriptor_dim",
     "edge_relational_sketches",
@@ -54,6 +59,7 @@ __all__ = [
     "rtece_descriptors",
     "rtece_path_manifest",
     "rtece_route_contract",
+    "rtece_variant_registry",
     "evaluate_rtece_loss",
     "load_rtece_checkpoint",
     "rtece_loss_for_batch",

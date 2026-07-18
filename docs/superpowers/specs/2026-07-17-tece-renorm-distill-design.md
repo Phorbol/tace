@@ -1964,6 +1964,30 @@ Next priority:
 2. Use the manifest groups in the next benchmark report to compare actual architecture-level Pareto points; do not scale another autograd cavity-edge sweep unless its path group has an analytic/fused force route.
 3. Return to algorithmic closure after the registry: teacher-conditioned radial/species path selection or a lightweight projection-error diagnostic, because those are the next missing pieces of true renormalization/distillation.
 
+# Stage 66: Route Registry And Manifest Reconstruction
+
+Stage 66 takes the next small compiler-substrate step after manifest-grouped summaries. The code no longer treats `build_rtece_config()` as a long variant-name branch. Instead, the ordered variant set is represented by a registry-backed config table, and the public API can expose route/path metadata for each deployable rTECE architecture.
+
+Implementation gate:
+
+- Added `available_rtece_variants()` as the stable ordered list of registered rTECE scalar architectures.
+- Reworked `build_rtece_config(variant)` to instantiate from `_RTECE_VARIANT_CONFIG_KWARGS` rather than from hardcoded `if` branches. This keeps current behavior but makes the design space explicitly enumerable.
+- Added `build_rtece_config_from_manifest(manifest)`, which reconstructs the architecture-level `RTECEScalarConfig` from a `rtece_path_manifest.v1` payload and preserves the manifest hash for unshifted/no-E0 architecture configs.
+- Added `rtece_variant_registry()`, returning per-variant semantic tier, descriptor family, retained/deleted TECE groups, moment ids, scalar path ids, cost groups, config payload, and manifest hash.
+- Exported the registry APIs from both `tace.models.rtece_scalar` and the formal `tace.models` package entrypoint; the historical benchmark shim receives them through the existing wildcard import.
+
+Stage-66 interpretation against TECE/TACE:
+
+- This is still not a teacher-aware renormalization compiler: it does not choose paths from teacher covariance, solve projection Gram systems, or downfold deleted groups.
+- It removes another layer of naming-driven architecture logic. The current T3/T4 design space is now enumerable as registered path-manifest architectures, which is the minimum structure needed before adding path-level selection, sensitivity ranking, or hardware-cost-conditioned search.
+- The registry also makes benchmark reports auditable: a manifest group can now be traced back to an exported architecture spec and rebuilt into the same config, rather than existing only as a row label.
+
+Next priority:
+
+1. Introduce a real path-spec constructor for the scalar endpoint, where selected `ScalarPathSpec` ids drive descriptor dimensions and feature assembly directly instead of being collapsed back into Boolean flags.
+2. After that, add the first projection-error diagnostic: compare a route's retained descriptor covariance/teacher-force sensitivity against deleted path groups on a bounded OC20NEB subset.
+3. Keep GPU benchmark scaling focused on registered routes with analytic/fused force backends; avoid large autograd edge-sketch sweeps until the path group has a viable inference backend.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:

@@ -464,6 +464,64 @@ def test_rtece_path_manifest_has_stable_path_ids_and_hash():
     assert "persistent_equivariant_edge_state" in manifest["deleted_tece_groups"]
 
 
+def test_rtece_variant_registry_exposes_path_spec_architectures():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
+        available_rtece_variants,
+        rtece_variant_registry,
+    )
+
+    variants = available_rtece_variants()
+    registry = rtece_variant_registry()
+
+    assert variants == tuple(registry)
+    assert "rtece_cavity_radial_edge_sketch14" in registry
+    radial = registry["rtece_cavity_radial_edge_sketch14"]
+    assert radial["semantic_tier"] == "T3_cavity_radial_edge_scalar_sketch"
+    assert "low_rank_radial_edge_moment_sketches" in radial["retained_tece_groups"]
+    assert "edge.cavity.vector_cross_radial_dot" in radial["scalar_path_ids"]
+    assert radial["config"]["radial_edge_sketch_channels"] == 2
+
+    for variant in variants:
+        config = build_rtece_config(variant)
+        manifest = rtece_path_manifest(config)
+        spec = registry[variant]
+        assert spec["semantic_tier"] == manifest["route"]["semantic_tier"]
+        assert set(spec["scalar_path_ids"]) == {path["id"] for path in manifest["scalar_paths"]}
+
+
+def test_rtece_config_from_manifest_reconstructs_architecture_hash():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_manifest
+
+    config = RTECEScalarConfig(
+        variant="rtece_cavity_radial_edge_sketch14",
+        cutoff=4.5,
+        num_radial=6,
+        hidden_channels=(16, 32),
+        use_atomic_moments=True,
+        num_edge_sketches=14,
+        use_cavity_edge_sketches=True,
+        radial_edge_sketch_channels=2,
+    )
+    manifest = rtece_path_manifest(config, force_mode="autograd")
+    rebuilt = build_rtece_config_from_manifest(manifest)
+
+    assert rebuilt == config
+    assert rtece_path_manifest(rebuilt, force_mode="autograd")["manifest_hash"] == manifest["manifest_hash"]
+
+
+def test_rtece_route_registry_has_formal_tace_models_entrypoint():
+    from benchmarks.oc20neb_tace_mace import rtece_scalar_model as benchmark_rtece
+    from tace.models import (
+        available_rtece_variants as core_available_rtece_variants,
+        build_rtece_config_from_manifest as core_build_rtece_config_from_manifest,
+        rtece_variant_registry as core_rtece_variant_registry,
+    )
+
+    assert core_available_rtece_variants is benchmark_rtece.available_rtece_variants
+    assert core_build_rtece_config_from_manifest is benchmark_rtece.build_rtece_config_from_manifest
+    assert core_rtece_variant_registry is benchmark_rtece.rtece_variant_registry
+
+
 def test_rtece_species_basis_variant_has_route_contract():
     config = build_rtece_config("rtece_species_basis4")
     route = rtece_route_contract(config, force_mode="autograd")

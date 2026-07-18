@@ -28,39 +28,67 @@ class RTECEScalarConfig:
     atomic_energies: Mapping[int, float] | None = None
 
 
+_RTECE_VARIANT_CONFIG_KWARGS: dict[str, dict[str, object]] = {
+    "rtece_pair": {},
+    "rtece_element_density": {"use_element_density": True},
+    "rtece_density_quadratic": {"use_density_quadratic": True},
+    "rtece_vector_moments": {"use_vector_moments": True},
+    "rtece_atomic_moments": {"use_atomic_moments": True},
+    "rtece_species_basis4": {"species_basis_channels": 4},
+    "rtece_edge_sketch8": {"use_atomic_moments": True, "num_edge_sketches": 8},
+    "rtece_cavity_edge_sketch8": {
+        "use_atomic_moments": True,
+        "num_edge_sketches": 8,
+        "use_cavity_edge_sketches": True,
+    },
+    "rtece_cavity_radial_edge_sketch14": {
+        "use_atomic_moments": True,
+        "num_edge_sketches": 14,
+        "use_cavity_edge_sketches": True,
+        "radial_edge_sketch_channels": 2,
+    },
+    "rtece_edge_sketch16": {"use_atomic_moments": True, "num_edge_sketches": 16},
+}
+
+
+def available_rtece_variants() -> tuple[str, ...]:
+    return tuple(_RTECE_VARIANT_CONFIG_KWARGS)
+
+
 def build_rtece_config(variant: str) -> RTECEScalarConfig:
-    if variant == "rtece_pair":
-        return RTECEScalarConfig(variant=variant)
-    if variant == "rtece_element_density":
-        return RTECEScalarConfig(variant=variant, use_element_density=True)
-    if variant == "rtece_density_quadratic":
-        return RTECEScalarConfig(variant=variant, use_density_quadratic=True)
-    if variant == "rtece_vector_moments":
-        return RTECEScalarConfig(variant=variant, use_vector_moments=True)
-    if variant == "rtece_atomic_moments":
-        return RTECEScalarConfig(variant=variant, use_atomic_moments=True)
-    if variant == "rtece_species_basis4":
-        return RTECEScalarConfig(variant=variant, species_basis_channels=4)
-    if variant == "rtece_edge_sketch8":
-        return RTECEScalarConfig(variant=variant, use_atomic_moments=True, num_edge_sketches=8)
-    if variant == "rtece_cavity_edge_sketch8":
-        return RTECEScalarConfig(
-            variant=variant,
-            use_atomic_moments=True,
-            num_edge_sketches=8,
-            use_cavity_edge_sketches=True,
-        )
-    if variant == "rtece_cavity_radial_edge_sketch14":
-        return RTECEScalarConfig(
-            variant=variant,
-            use_atomic_moments=True,
-            num_edge_sketches=14,
-            use_cavity_edge_sketches=True,
-            radial_edge_sketch_channels=2,
-        )
-    if variant == "rtece_edge_sketch16":
-        return RTECEScalarConfig(variant=variant, use_atomic_moments=True, num_edge_sketches=16)
-    raise ValueError(f"unknown rTECE scalar variant {variant!r}")
+    try:
+        kwargs = dict(_RTECE_VARIANT_CONFIG_KWARGS[variant])
+    except KeyError as exc:
+        raise ValueError(f"unknown rTECE scalar variant {variant!r}") from exc
+    return RTECEScalarConfig(variant=variant, **kwargs)
+
+
+def build_rtece_config_from_manifest(manifest: Mapping[str, Any]) -> RTECEScalarConfig:
+    if manifest.get("schema_version") != "rtece_path_manifest.v1":
+        raise ValueError("expected rtece_path_manifest.v1 manifest")
+    payload = manifest.get("config")
+    if not isinstance(payload, Mapping):
+        raise ValueError("rTECE path manifest is missing config payload")
+    hidden = payload.get("hidden_channels", RTECEScalarConfig(variant="rtece_pair").hidden_channels)
+    if isinstance(hidden, list):
+        hidden_channels = tuple(int(value) for value in hidden)
+    else:
+        hidden_channels = tuple(int(value) for value in hidden)
+    return RTECEScalarConfig(
+        variant=str(payload.get("variant")),
+        cutoff=float(payload.get("cutoff", 5.0)),
+        num_radial=int(payload.get("num_radial", 8)),
+        hidden_channels=hidden_channels,
+        max_atomic_number=int(payload.get("max_atomic_number", 100)),
+        use_element_density=bool(payload.get("use_element_density", False)),
+        use_density_quadratic=bool(payload.get("use_density_quadratic", False)),
+        use_vector_moments=bool(payload.get("use_vector_moments", False)),
+        use_atomic_moments=bool(payload.get("use_atomic_moments", False)),
+        species_basis_channels=int(payload.get("species_basis_channels", 0)),
+        num_edge_sketches=int(payload.get("num_edge_sketches", 0)),
+        use_cavity_edge_sketches=bool(payload.get("use_cavity_edge_sketches", False)),
+        radial_edge_sketch_channels=int(payload.get("radial_edge_sketch_channels", 0)),
+    )
 
 
 def descriptor_dim(config: RTECEScalarConfig) -> int:
@@ -458,6 +486,28 @@ def rtece_path_manifest(
     manifest = dict(manifest_core)
     manifest["manifest_hash"] = hashlib.sha256(encoded.encode("utf-8")).hexdigest()[:16]
     return manifest
+
+
+def rtece_variant_registry() -> dict[str, dict[str, object]]:
+    registry = {}
+    for variant in available_rtece_variants():
+        config = build_rtece_config(variant)
+        manifest = rtece_path_manifest(config)
+        route = manifest["route"]
+        scalar_paths = list(manifest["scalar_paths"])
+        registry[variant] = {
+            "variant": variant,
+            "config": manifest["config"],
+            "semantic_tier": route["semantic_tier"],
+            "descriptor_family": route["descriptor_family"],
+            "retained_tece_groups": list(manifest["retained_tece_groups"]),
+            "deleted_tece_groups": list(manifest["deleted_tece_groups"]),
+            "moment_ids": [str(moment["id"]) for moment in manifest["moments"]],
+            "scalar_path_ids": [str(path["id"]) for path in scalar_paths],
+            "cost_groups": sorted({str(path["cost_group"]) for path in scalar_paths}),
+            "manifest_hash": manifest["manifest_hash"],
+        }
+    return registry
 
 
 @dataclass
@@ -1310,7 +1360,9 @@ __all__ = [
     "RTECEScalarConfig",
     "RTECEGraph",
     "RTECEScalarModel",
+    "available_rtece_variants",
     "build_rtece_config",
+    "build_rtece_config_from_manifest",
     "descriptor_dim",
     "collate_graphs",
     "compute_pair_geometry",
@@ -1331,4 +1383,5 @@ __all__ = [
     "rtece_descriptors",
     "rtece_path_manifest",
     "rtece_route_contract",
+    "rtece_variant_registry",
 ]
