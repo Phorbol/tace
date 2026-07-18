@@ -1395,6 +1395,35 @@ Stage-46 interpretation against TECE/TACE:
 - This explains the Stage-45 Pareto curve: the current PyTorch provider trades launch count against padded tensor size. The next provider should not be another Python grouping variant; it should approach exact pair/cell-list work while keeping launch count close to one.
 - The fused/cell-list target is concrete: generate about 0.826M directed active edges from about 3.70M exact per-config pair slots without materializing long-lived padded distance/mask tensors. This is the next system-level TECE/TACE renormalization step before more model architecture changes.
 
+
+# Stage 47: Ragged Exact-Pair Direct-Radius Provider
+
+Stage 47 tested the Stage-46 hypothesis that a provider with exact per-config pair slots and low launch count might dominate padded grouped/chunked radius updates. The new `torch_radius_nopbc_ragged` backend preserves the same direct-distance graph semantics and conservative rTECE force path, but constructs exact ragged all-pair candidates instead of padded all-config or chunked masks.
+
+Implementation gate:
+
+- Added `torch_radius_nopbc_ragged_graph(...)` and exposed `--graph-update-backend torch_radius_nopbc_ragged`.
+- Added tests that ragged edges match the loop backend, that the update backend records exact work metadata, and that CLI help exposes the new backend.
+- The tests were first run red and failed on missing function/factory/CLI choice; after implementation, the targeted tests passed and the full rTECE scalar test file passed with 57 tests.
+
+GPU setup: radial8h24 `rtece_element_density`, direct-active initial graph, DFT valid `:1024`, 59193 atoms, one V100, float32, `--force-mode auto`, forced invalid cache with `trajectory_skin_margin=0.002`, `trajectory_displacement_std=0.001`, 20 force steps and 10 update events.
+
+| update backend | mode | atom-step/s | update total s | peak alloc MB | chunks | padded pair slots | padding overhead | directed edges | DFT F MAE |
+|---|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| `torch_radius_nopbc_grouped` | update-only | 66,746,689 | 0.012180 | 241.3 | 1 | 7,750,656 | 2.095 | 825,584 | n/a |
+| `torch_radius_nopbc_grouped_chunked` chunk256 | update-only | 46,507,195 | 0.021406 | 110.0 | 4 | 6,211,328 | 1.679 | 825,584 | n/a |
+| `torch_radius_nopbc_ragged` | update-only | 39,074,531 | 0.025768 | 383.9 | 1 | 3,699,489 | 1.000 | 825,584 | n/a |
+| `torch_radius_nopbc_grouped` | model+updates | 26,766,448 | 0.012598 | 263.1 | 1 | 7,750,656 | 2.095 | 825,584 | 33.18 |
+| `torch_radius_nopbc_grouped_chunked` chunk256 | model+updates | 22,949,920 | 0.021976 | 130.5 | 4 | 6,211,328 | 1.679 | 825,584 | 33.18 |
+| `torch_radius_nopbc_ragged` | model+updates | 20,805,343 | 0.025858 | 405.9 | 1 | 3,699,489 | 1.000 | 825,584 | 33.18 |
+
+Stage-47 interpretation against TECE/TACE:
+
+- Ragged exact-pair construction is a useful negative result. It removes padded pair-slot overhead completely, but in PyTorch it materializes long integer tensors for graph ids, pair offsets, and source/destination indices. That memory traffic dominates the saved distance work.
+- The result sharpens the provider route: the next front point will not come from another Python/Torch tensor reshaping strategy. Chunk256 remains the best practical memory/throughput compromise in the current provider family, while all-config grouped remains the fastest high-memory update backend.
+- The fused/cell-list provider requirement is now stronger and more specific. It must generate active edges or feed descriptor/force kernels without materializing either padded distance/mask tensors or ragged all-pair index tensors.
+- This fits the TECE/TACE system-renormalization thesis: after semantic projection and fused scalar descriptors, the remaining deployment bottleneck is not parameter count or model architecture. It is the runtime representation of local edge topology and its lifetime in memory.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
