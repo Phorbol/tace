@@ -737,6 +737,51 @@ def test_rtece_projection_residual_metrics_accepts_sample_weights():
     assert weighted["relative_residual"] > unweighted["relative_residual"]
 
 
+def test_rtece_head_jacobian_weights_follow_energy_head_descriptor_gradient():
+    from benchmarks.oc20neb_tace_mace.make_rtece_projection_weights import rtece_head_jacobian_sample_weights
+
+    config = RTECEScalarConfig(num_radial=2, hidden_channels=(), variant="linear_sensitivity")
+    model = RTECEScalarModel(config).to(dtype=torch.float64)
+    linear = model.energy_head[0]
+    with torch.no_grad():
+        linear.weight.zero_()
+        linear.bias.zero_()
+        linear.weight[0, 1:] = torch.tensor([3.0, 4.0], dtype=torch.float64)
+
+    graph = RTECEGraph(
+        z=torch.tensor([6, 1], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.9, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=torch.tensor([[0, 1], [1, 0]], dtype=torch.long),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+
+    payload = rtece_head_jacobian_sample_weights(model, [graph], normalize="none")
+
+    assert payload["weight_source"] == "rtece_head_jacobian_l2"
+    assert payload["num_samples"] == 2
+    assert payload["sample_weights"] == pytest.approx([5.0, 5.0])
+    assert payload["normalization"] == "none"
+
+
+def test_rtece_head_jacobian_weights_mean_normalize(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_projection_weights import write_sample_weight_json
+
+    payload = {
+        "weight_source": "rtece_head_jacobian_l2",
+        "sample_weights": [2.0, 4.0],
+        "num_samples": 2,
+        "normalization": "mean1",
+    }
+    path = tmp_path / "weights.json"
+
+    write_sample_weight_json(path, payload)
+
+    saved = json.loads(path.read_text(encoding="utf-8"))
+    assert saved["schema_version"] == "rtece_projection_sample_weights.v1"
+    assert saved["weight_source"] == "rtece_head_jacobian_l2"
+    assert saved["sample_weights"] == [2.0, 4.0]
+
+
 def test_rtece_projection_loads_sample_weight_json(tmp_path):
     from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import _load_sample_weights_json
 

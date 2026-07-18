@@ -2252,6 +2252,46 @@ Next priority:
 2. Keep the current `radial` route as the endpoint baseline for throughput/accuracy. Treat `radial_cavity_vec` as a semantic candidate requiring proof through weighted sensitivity and physical tests, not as an automatic Pareto improvement.
 3. After the sensitivity metric is available, run dimer scan and rattle+relax tests on representative metal and non-metal adsorbates to check whether the metric predicts the C/N relaxation RMSD failure mode observed by the user.
 
+# Stage 75: rTECE Head-Jacobian Projection Weights
+
+Stage 75 adds the first Jacobian-style projection weight generator. This is a bridge toward the review document Sobolev/Gram/downfolding requirement, not the final teacher-TECE sensitivity metric. Because no original TACE/TECE teacher semantic path cache is available in the current workflow, the bounded implementation uses a trained rTECE reference route as a surrogate: it measures the L2 norm of the rTECE energy head gradient with respect to each atom descriptor row.
+
+Implementation gate:
+
+- Added `make_rtece_projection_weights.py`.
+- The script loads an rTECE checkpoint, rebuilds bounded rTECE graphs from extxyz, computes `rtece_descriptors(...)`, evaluates the checkpoint energy head, and writes mean-normalized `rtece_head_jacobian_l2` sample weights.
+- The emitted JSON uses the Stage-74 `rtece_projection_sample_weights.v1` schema and is directly consumable by `analyze_rtece_projection_error.py --sample-weight-json`.
+- Tests verify that a linear energy head with descriptor weights `[3, 4]` emits per-atom raw Jacobian weights of `5`, and that JSON writing preserves the sample-weight schema.
+
+Bounded run on the same 8-config/419-atom Stage-69 subset:
+
+| source checkpoint | route | raw sensitivity range | normalized weight range |
+|---|---|---:|---:|
+| Stage-73 `radial_cavity_vec_direct` best checkpoint | full path-id reference | 0.0349-0.0484 | 0.799-1.107 |
+
+Head-Jacobian weighted projection result:
+
+| weighting | route | projection residual | Stage-73 GPU atoms/s | DFT F MAE | teacher F MAE |
+|---|---|---:|---:|---:|---:|
+| raw descriptor | `radial` | 0.1273 | 2.96M | 29.45 | 34.25 |
+| rTECE head Jacobian | `radial` | 0.1257 | 2.96M | 29.45 | 34.25 |
+| raw descriptor | `radial_cavity_vec` | 0.00542 | 1.08M | 35.16 | 38.53 |
+| rTECE head Jacobian | `radial_cavity_vec` | 0.00531 | 1.08M | 35.16 | 38.53 |
+| rTECE head Jacobian | `radial_cavity_vec_direct` | 1.94e-13 | 1.08M | 34.57 | 39.20 |
+
+Stage-75 interpretation against TECE/TACE and the review document:
+
+- The code path for Jacobian-weighted projection is now real and reproducible, but the surrogate rTECE head is too low-capacity or too smooth on this subset to provide strong sample discrimination. Its weights span only about 0.80-1.11 after normalization, so the resulting residuals are nearly identical to the raw descriptor residuals.
+- This is a useful negative result. It shows that merely using the current student/reference rTECE energy head as a sensitivity proxy does not resolve the Stage-73 mismatch where `radial` has worse descriptor residual but better force MAE and throughput.
+- The next sensitivity metric must be closer to the original teacher and to force/Sobolev behavior: teacher force residual stratification, finite-difference teacher response, teacher-force Jacobian probes, HVP, or cached TACE/TECE semantic path activations. A student-head Jacobian is acceptable as plumbing, not as the final renormalization criterion.
+- Algorithmically, the current Pareto baseline remains `radial` for the path-id slice. `edge.cavity.vector_dot` remains a semantic candidate, but it still lacks evidence that its descriptor advantage becomes force accuracy or physical-generalization advantage under the current training setup.
+
+Next priority:
+
+1. Add a teacher/label-side sensitivity generator that uses existing `teacher_forces`/`dft_forces` and model errors to emphasize atoms/configurations where the low-rank route actually fails, instead of relying on the smooth rTECE head alone.
+2. Use that residual-aware weighting to rerun the same path-id projection table and check whether it correlates with C/N adsorbate relax RMSD failures.
+3. Only after this sensitivity metric starts predicting accuracy/generalization should we spend GPU on larger edge-path training or graph-backend acceleration.
+
 ## Stage Review Rule
 
 After each experiment stage, compare results back to the source documents:
