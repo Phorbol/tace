@@ -1,0 +1,147 @@
+{
+  "basis": "TECE_design_space deployment/Sobolev weighting and rTECE_review distillation-metric critique; fixed stage129 current-Pareto architectures, changed only per-configuration force-loss weights.",
+  "failed_first_submit": {
+    "jobs": [
+      "685081",
+      "685082"
+    ],
+    "root_cause": "weighted extxyz initially lost ASE calculator energy/forces; fixed writer and regenerated dataset before completed jobs."
+  },
+  "interpretation": {
+    "max_error_result": "Species24 reduces DFT force max error versus stage129, so Sobolev weighting may trade average force accuracy for tail-control benefit. This needs physical triage before rejecting the idea completely.",
+    "next_priority": "Run dimer/rattle physical triage on stage130 checkpoints. If physical tail gates do not improve, deprioritize weighting-only changes and move back to representation/projection changes aligned with TECE edge-relational scalar sketches or broader teacher trajectory/Jacobian distillation.",
+    "standard_rmse_result": "Not a Pareto improvement on the standard DFT force RMSE axis. Species20 slightly improves DFT energy RMSE versus stage129 but worsens force RMSE; species24 worsens both E and F RMSE."
+  },
+  "jobs": [
+    {
+      "elapsed": "00:08:47",
+      "exit_code": "0:0",
+      "job": "685083",
+      "row": "l1_active_nrad12_species24_radial_species8_cross3_h64",
+      "state": "COMPLETED"
+    },
+    {
+      "elapsed": "00:08:38",
+      "exit_code": "0:0",
+      "job": "685084",
+      "row": "l1_active_nrad12_species20_radial_species8_cross3_h64",
+      "state": "COMPLETED"
+    }
+  ],
+  "rows": [
+    {
+      "delta_vs_stage129": {
+        "atoms_per_second": -14105.90054396796,
+        "dft_e_max_abs_mev_atom": -30.843936695772072,
+        "dft_e_rmse_mev_atom": -6.46118298216436,
+        "dft_f_max_abs_mev_a": 9.271502494812012,
+        "dft_f_rmse_mev_a": 11.375722857696047
+      },
+      "dft": {
+        "atoms_per_second": 1280703.4546763625,
+        "e_mae_mev_atom": 232.52285941058466,
+        "e_max_abs_mev_atom": 651.144092233456,
+        "e_rmse_mev_atom": 293.6374521451154,
+        "f_mae_mev_a": 49.43296327466226,
+        "f_max_abs_mev_a": 2396.761422335205,
+        "f_rmse_mev_a": 119.02902503333723
+      },
+      "num_parameters": 25449,
+      "teacher": {
+        "atoms_per_second": 1287702.8229056713,
+        "e_mae_mev_atom": 220.40449715044372,
+        "e_max_abs_mev_atom": 609.9038516773898,
+        "e_rmse_mev_atom": 277.239606627378,
+        "f_mae_mev_a": 50.602672951397864,
+        "f_max_abs_mev_a": 2438.891888102417,
+        "f_rmse_mev_a": 116.1794922094315
+      },
+      "train": {
+        "best_step": 18768,
+        "best_valid_loss": 0.13079144060611725,
+        "early_stopping_patience": 400,
+        "lr_scheduler": "plateau",
+        "lr_warmup_steps": 500,
+        "max_steps": 20000,
+        "sample_weight_keys": [
+          "energy_weight",
+          "forces_weight"
+        ]
+      },
+      "variant": "l1_active_nrad12_species20_radial_species8_cross3_h64"
+    },
+    {
+      "delta_vs_stage129": {
+        "atoms_per_second": -2258.6115514601115,
+        "dft_e_max_abs_mev_atom": 146.72959271599268,
+        "dft_e_rmse_mev_atom": 31.177148459402076,
+        "dft_f_max_abs_mev_a": -397.04322814941406,
+        "dft_f_rmse_mev_a": 18.615074157208525
+      },
+      "dft": {
+        "atoms_per_second": 1222159.380417995,
+        "e_mae_mev_atom": 246.41832796504937,
+        "e_max_abs_mev_atom": 806.2581202665442,
+        "e_rmse_mev_atom": 305.02623461674074,
+        "f_mae_mev_a": 48.72505331842405,
+        "f_max_abs_mev_a": 2300.4894244396974,
+        "f_rmse_mev_a": 120.17230731083716
+      },
+      "num_parameters": 28925,
+      "teacher": {
+        "atoms_per_second": 1227010.9917936174,
+        "e_mae_mev_atom": 233.33329741894215,
+        "e_max_abs_mev_atom": 765.0182387408089,
+        "e_rmse_mev_atom": 287.9198220939037,
+        "f_mae_mev_a": 49.95020713492725,
+        "f_max_abs_mev_a": 2286.4546482879637,
+        "f_rmse_mev_a": 117.90863374157438
+      },
+      "train": {
+        "best_step": 12240,
+        "best_valid_loss": 0.11408685147762299,
+        "early_stopping_patience": 400,
+        "lr_scheduler": "plateau",
+        "lr_warmup_steps": 500,
+        "max_steps": 20000,
+        "sample_weight_keys": [
+          "energy_weight",
+          "forces_weight"
+        ]
+      },
+      "variant": "l1_active_nrad12_species24_radial_species8_cross3_h64"
+    }
+  ],
+  "schema_version": "rtece_stage130_sobolev_weighted_results.v1",
+  "source_commits": [
+    "cb1328c",
+    "a39a23c"
+  ],
+  "stage": "stage130_sobolev_weighted_distill",
+  "weight_policy": {
+    "atoms": 113970,
+    "configs": 2176,
+    "energy_weight": 1.0,
+    "force_tail_multiplier": 2.0,
+    "force_tail_quantile": 0.9,
+    "force_tail_threshold_ev_a": 5.304898376769142,
+    "force_weight_max": 6.057063326374391,
+    "force_weight_mean": 1.0,
+    "force_weight_min": 0.7571329157967989,
+    "input": "runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/augmented_train_base2048_plus_teacher_rattle128.extxyz",
+    "max_force_norm_ev_a_max": 74.43260059832025,
+    "max_force_norm_ev_a_min": 0.04426387528783601,
+    "normalize_force_mean": true,
+    "output": "runs/oc20neb_tace_mace/rtece-stage130-sobolev-weighted-distill/weighted_train_base2048_rattle128.extxyz",
+    "raw_force_weight_mean": 1.3207720588235294,
+    "schema_version": "rtece_extxyz_sample_weights.v1",
+    "source_counts": {
+      "base_mixed_train_tw0p75": 2048,
+      "teacher_labeled_stage128_rattles": 128
+    },
+    "source_force_multipliers": {
+      "teacher_labeled_stage128_rattles": 4.0
+    },
+    "tail_config_count": 218
+  }
+}
