@@ -9,6 +9,12 @@ Primary metric: DFT force RMSE vs atoms/s. Missing benchmark rows are kept expli
 | l1_active_radial_species8_h64 | benchmark_found | 17209 | angular_bandwidth_l_max, scalar_path_density, radial_rank, scalar_head_capacity, trainable_feature_extractor, trainable_edge_species_radial_basis, trainable_species_basis, short_range_physical_prior, stage122_radial_species_adapter, frontloaded_representation_capacity, low_rank_neighbor_species_basis, stage114_ef_active_selection, cross_radial_invariants, trainable_cross_radial_projection | 1.671e+06 | 112.838 | 46.315 | 1996.323 | 335.816 | 268.928 | -41.688 | 731.924 |
 | l1_active_radial_species16_h64 | benchmark_found | 18953 | angular_bandwidth_l_max, scalar_path_density, radial_rank, scalar_head_capacity, trainable_feature_extractor, trainable_edge_species_radial_basis, trainable_species_basis, short_range_physical_prior, stage122_radial_species_adapter, frontloaded_representation_capacity, low_rank_neighbor_species_basis, stage114_ef_active_selection, cross_radial_invariants, trainable_cross_radial_projection | 1.661e+06 | 115.390 | 48.508 | 2364.083 | 333.318 | 262.331 | -31.542 | 741.273 |
 
+## Physical Diagnostics
+
+| row | focus | focus F RMSE | focus F max | physical score | physical gate | dimer gate | rattle gate |
+|---|---|---:|---:|---:|---|---|---|
+| l1_active_radial_species8_h64 | C_or_N | NA | NA | 17.615 | False | True | False |
+
 ## Missing Benchmark Rows
 
 None

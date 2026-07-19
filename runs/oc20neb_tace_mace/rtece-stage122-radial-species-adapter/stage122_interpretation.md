@@ -51,11 +51,32 @@ Against the previous local references:
 
 Stage122 slightly improves force RMSE relative to Stage121, but loses throughput and worsens energy RMSE. It does not beat the Stage119 throughput/accuracy point and should not be counted as a new Pareto-front model.
 
+## Physical Diagnostics
+
+Stage122 best was also evaluated with a real sbatch physical diagnostic job:
+
+- job `684971`: `stage122_best_physical_no_export.sbatch`
+- target row: `l1_active_radial_species8_h64`
+- dimer pairs: `C-N`, `C-O`, `N-H`, `O-H`, `Cu-O`
+- rattle-relax: first 8 teacher-valid configurations, `0.05` A rattle, 20 LBFGS steps
+
+The dimer scan was finite and short-range forces were repulsive for all tested pairs, but the `Cu-O` short-minus-long energy lift was slightly negative (`-0.033` eV), which is a warning that short-range shape is not fully physical.
+
+The rattle-relax test is more concerning:
+
+- `C_or_N` mean final RMSD: `0.1975` A
+- max final RMSD: `0.2358` A
+- converged fraction: `0.0`
+- max fmax: `4.089` eV/A
+- physical gate: `False`
+
+This confirms that the small Stage122 validation RMSE gain is not enough to claim better physical generalization. It supports the review-document warning that RMSE, dimer smoothness, and rattle-relax stability must remain separate acceptance axes.
+
 ## Interpretation
 
 The useful signal is not that this exact adapter is the next deployment model. The signal is that putting trainable capacity before scalarization can recover a little force RMSE at a moderate parameter count (`17k`), while previous descriptor bottleneck/front mixer variants did not move the force RMSE front as cleanly.
 
-The negative result is equally important: the current adapter is still too expensive because it forces autograd force evaluation and uses the ASE neighborlist graph path. It also worsens energy RMSE, so it is not yet a clean TECE/rTECE renormalized model.
+The negative result is equally important: the current adapter is still too expensive because it forces autograd force evaluation and uses the ASE neighborlist graph path. It also worsens energy RMSE and fails the rattle-relax diagnostic, so it is not yet a clean TECE/rTECE renormalized model.
 
 This suggests the next priority should be a compiler-style front basis, not another final-head sweep:
 
