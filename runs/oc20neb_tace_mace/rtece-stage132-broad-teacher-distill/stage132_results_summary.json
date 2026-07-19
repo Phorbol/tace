@@ -1,0 +1,132 @@
+{
+  "edge_vs_atomic_stage132": {
+    "atoms_per_second": -649131.024226969,
+    "cn_rattle_final_rmsd_a": -0.0016323901178293132,
+    "dft_e_rmse_mev_atom": 13.910649444254943,
+    "dft_f_max_abs_mev_a": 288.58348802429214,
+    "dft_f_rmse_mev_a": 0.818742485785819,
+    "physical_score": -0.2617189786100944,
+    "rattle_max_fmax_ev_a": -0.4244453328631632
+  },
+  "interpretation": {
+    "atomic_result": "The fixed stage129 atomic architecture keeps near-1.22M atoms/s and reaches DFT F max 1840.5 meV/A, much better than stage129 species24 F max 2697.5, but DFT F RMSE worsens to 108.35 meV/A and physical gate still fails because rattle fmax is 10.56 eV/A.",
+    "distillation_result": "Broader teacher-rattle coverage improves high-force-tail/physical indicators versus the corresponding narrower-data baselines, but it does not close the rattle force-spike failure and does not improve RMSE Pareto quality.",
+    "edge_result": "The fixed stage131 L1 edge residual also improves physical score/rattle fmax versus stage131, but remains slower by about 0.65M atoms/s than the atomic stage132 row and has worse RMSE; it is not a throughput/RMSE Pareto row.",
+    "next_priority": "Do not keep increasing edge L or only adding small local fake-label patches. The next TECE-consistent step should test true Sobolev/Jacobian or relaxation-trajectory distillation on the fixed atomic front, then decide whether a trainable front representation axis is needed from residual/projection diagnostics."
+  },
+  "jobs": {
+    "physical_atomic": 685184,
+    "physical_edge": 685185,
+    "prepare": 685181,
+    "slurm_exit": "all COMPLETED 0:0",
+    "train_atomic": 685182,
+    "train_edge": 685183
+  },
+  "rows": [
+    {
+      "delta_vs_baseline": {
+        "atoms_per_second": -6535.725920999888,
+        "cn_rattle_final_rmsd_a": -0.013761276264114317,
+        "dft_e_rmse_mev_atom": 19.54228704685471,
+        "dft_f_max_abs_mev_a": -856.9934015972901,
+        "dft_f_rmse_mev_a": 6.797293392165301,
+        "physical_score": -0.4793554589774267,
+        "rattle_max_fmax_ev_a": -0.2778395742428934
+      },
+      "delta_vs_baseline_label": "stage129_same_atomic_architecture",
+      "dft": {
+        "atoms_per_second": 1217882.2660484551,
+        "e_mae_mev_atom": 230.09653626407908,
+        "e_max_abs_mev_atom": 697.3013906020223,
+        "e_rmse_mev_atom": 293.39137320419337,
+        "f_mae_mev_a": 46.5025060854312,
+        "f_max_abs_mev_a": 1840.5392509918213,
+        "f_rmse_mev_a": 108.35452654579393,
+        "num_parameters": 28925
+      },
+      "physical": {
+        "benchmark_gate_pass": true,
+        "cn_rattle_final_rmsd_a": 0.10313320250384972,
+        "dimer_energy_shape_penalty": 0.0,
+        "dimer_gate_pass": true,
+        "dimer_short_repulsive_fraction": 1.0,
+        "physical_gate_pass": false,
+        "physical_score": 14.298451723191814,
+        "rattle_gate_pass": false,
+        "rattle_max_fmax_ev_a": 10.558581459519518
+      },
+      "train": {
+        "batch_size": 8,
+        "best_step": 18240,
+        "best_valid_loss": 0.1045481488108635,
+        "early_stopping_patience": 400,
+        "lr_scheduler": "plateau",
+        "lr_warmup_steps": 500,
+        "steps": 20000,
+        "trainer_backend": "lightning",
+        "valid_batch_size": 16
+      },
+      "variant": "l1_active_nrad12_species24_radial_species8_cross3_h64"
+    },
+    {
+      "delta_vs_baseline": {
+        "atoms_per_second": 1610.937586038839,
+        "cn_rattle_final_rmsd_a": -0.015107453751095914,
+        "dft_e_rmse_mev_atom": 24.41830395018053,
+        "dft_f_max_abs_mev_a": -167.59967187377924,
+        "dft_f_rmse_mev_a": 4.177155419390829,
+        "physical_score": -2.279572226606181,
+        "rattle_max_fmax_ev_a": -2.328721281808356
+      },
+      "delta_vs_baseline_label": "stage131_same_edge_architecture",
+      "dft": {
+        "atoms_per_second": 568751.2418214862,
+        "e_mae_mev_atom": 228.5709156503892,
+        "e_max_abs_mev_atom": 701.9397034466913,
+        "e_rmse_mev_atom": 307.3020226484483,
+        "f_mae_mev_a": 45.1410566314046,
+        "f_max_abs_mev_a": 2129.1227390161134,
+        "f_rmse_mev_a": 109.17326903157975,
+        "num_parameters": 29117
+      },
+      "physical": {
+        "benchmark_gate_pass": true,
+        "cn_rattle_final_rmsd_a": 0.1015008123860204,
+        "dimer_energy_shape_penalty": 0.0,
+        "dimer_gate_pass": true,
+        "dimer_short_repulsive_fraction": 1.0,
+        "physical_gate_pass": false,
+        "physical_score": 14.03673274458172,
+        "rattle_gate_pass": false,
+        "rattle_max_fmax_ev_a": 10.134136126656355
+      },
+      "train": {
+        "batch_size": 8,
+        "best_step": 18240,
+        "best_valid_loss": 0.1035052165389061,
+        "early_stopping_patience": 400,
+        "lr_scheduler": "plateau",
+        "lr_warmup_steps": 500,
+        "steps": 20000,
+        "trainer_backend": "lightning",
+        "valid_batch_size": 16
+      },
+      "variant": "l1_active_species24_cavity_vec_residual_h64"
+    }
+  ],
+  "schema_version": "rtece_stage132_results_summary.v1",
+  "source_commits": [
+    "1ba25a9068caea11c6fb9635d36592d297eb45b6",
+    "54c6a5273a69884521438c1cac3c7d774d9b89b7"
+  ],
+  "stage": "stage132_broad_teacher_distill_projection_check",
+  "training_data": {
+    "augmented_atoms": 135986,
+    "augmented_configs": 2560,
+    "base_configs": 2048,
+    "rattle_copies_per_config": 16,
+    "rattle_source_window": "valid[0:32]",
+    "rattle_std_a": 0.05,
+    "teacher_rattle_configs": 512
+  }
+}
