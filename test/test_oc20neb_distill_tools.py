@@ -287,6 +287,119 @@ def test_stage117_manifest_audit_accepts_clean_teacher_fake_label_contract(tmp_p
     assert audit["checked"]["queue_policy"] == "manifest_only_no_sbatch_submission"
 
 
+def test_stage129_manifest_targets_stage128_pareto_rows_and_teacher_rattle_window(tmp_path):
+    stage129 = load_module("make_rtece_stage129_teacher_rattle_distill", "make_rtece_stage129_teacher_rattle_distill.py")
+
+    manifest = stage129.make_stage129_manifest(
+        output_root=tmp_path / "stage129",
+        base_train="runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz",
+        source_configs="valid.extxyz",
+        teacher_model="teacher.ckpt",
+        train_valid_file="valid.extxyz",
+        dft_valid_file="valid.extxyz",
+        teacher_valid_file="teacher_valid.extxyz",
+        source_start_config=58,
+        source_limit_configs=8,
+        copies_per_config=16,
+        rattle_std_a=0.05,
+        base_limit_configs=2048,
+        max_steps=20000,
+        lr_warmup_steps=500,
+        early_stopping_patience=400,
+    )
+
+    assert manifest["schema_version"] == "rtece_stage129_teacher_rattle_distill.v1"
+    assert manifest["distillation_semantics"] == "teacher_fake_labels_on_stage128_rattle_window"
+    assert manifest["source_start_config"] == 58
+    assert manifest["source_limit_configs"] == 8
+    assert manifest["copies_per_config"] == 16
+    assert manifest["augmented_limit_configs"] == 2176
+    assert [row["variant"] for row in manifest["rows"]] == [
+        "l1_active_nrad12_species20_radial_species8_cross3_h64",
+        "l1_active_nrad12_species24_radial_species8_cross3_h64",
+    ]
+    commands = "\n".join(step["command"] for step in manifest["steps"])
+    assert "make_rattle_distill_configs.py" in commands
+    assert "--start-config 58" in commands
+    assert "distill_tace_labels.py" in commands
+    assert "concat_extxyz_datasets.py" in commands
+    assert "make_rtece_pareto_sweep.py" in commands
+    assert "--max-steps 20000" in commands
+    assert "--lr-warmup-steps 500" in commands
+    assert "--early-stopping-patience 400" in commands
+    assert "--export" not in commands
+    assert "--mem" not in commands
+    assert "--cpus-per-task" not in commands
+
+    audit = stage129.audit_stage129_manifest(manifest)
+    assert audit["contract_pass"] is True
+    assert audit["failed_checks"] == []
+
+
+def test_stage129_manifest_cli_runs_from_repo_script_path(tmp_path):
+    import json
+    import subprocess
+    import sys
+
+    root = Path(__file__).resolve().parents[1]
+    output_root = tmp_path / "stage129"
+    output_json = output_root / "manifest.json"
+    output_md = output_root / "manifest.md"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/oc20neb_tace_mace/make_rtece_stage129_teacher_rattle_distill.py",
+            "--output-root",
+            str(output_root),
+            "--base-train",
+            "mixed_train.extxyz",
+            "--source-configs",
+            "valid.extxyz",
+            "--teacher-model",
+            "teacher.ckpt",
+            "--train-valid-file",
+            "valid.extxyz",
+            "--dft-valid-file",
+            "valid.extxyz",
+            "--teacher-valid-file",
+            "teacher_valid.extxyz",
+            "--output-json",
+            str(output_json),
+            "--output-md",
+            str(output_md),
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(output_json.read_text())
+    assert payload["row_set"] == "stage129-current-pareto"
+    assert output_md.exists()
+
+
+def test_stage129_audit_rejects_non_pareto_cross4_row(tmp_path):
+    stage129 = load_module("make_rtece_stage129_teacher_rattle_distill", "make_rtece_stage129_teacher_rattle_distill.py")
+    manifest = stage129.make_stage129_manifest(
+        output_root=tmp_path / "stage129",
+        base_train="mixed_train.extxyz",
+        source_configs="valid.extxyz",
+        teacher_model="teacher.ckpt",
+        train_valid_file="valid.extxyz",
+        dft_valid_file="valid.extxyz",
+        teacher_valid_file="teacher_valid.extxyz",
+    )
+    manifest["rows"].append({"variant": "l1_active_nrad12_species24_radial_species8_cross4_h64"})
+
+    audit = stage129.audit_stage129_manifest(manifest)
+
+    assert audit["contract_pass"] is False
+    assert "stage128_pareto_rows" in audit["failed_checks"]
+
+
 def minimal_base_config():
     return {
         "misc": {"project_name": "oc20neb_fullcase200_tace"},

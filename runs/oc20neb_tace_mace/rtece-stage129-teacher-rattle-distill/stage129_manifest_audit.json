@@ -1,0 +1,27 @@
+{
+  "checked": {
+    "augmented_limit_configs": 2176,
+    "copies_per_config": 16,
+    "row_set": "stage129-current-pareto",
+    "source_limit_configs": 8,
+    "source_start_config": 58,
+    "variants": [
+      "l1_active_nrad12_species20_radial_species8_cross3_h64",
+      "l1_active_nrad12_species24_radial_species8_cross3_h64"
+    ]
+  },
+  "checks": {
+    "augmented_limit_configs": true,
+    "distillation_semantics": true,
+    "no_forbidden_sbatch_flags": true,
+    "schema_version": true,
+    "stage128_pareto_rows": true,
+    "stage128_window": true,
+    "training_contract": true,
+    "uses_current_pareto_row_set": true,
+    "uses_teacher_fake_labels": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "schema_version": "rtece_stage129_manifest_audit.v1"
+}

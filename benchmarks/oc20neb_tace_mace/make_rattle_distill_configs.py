@@ -40,6 +40,7 @@ def make_rattle_distill_configs(
     copies_per_config: int,
     rattle_std_a: float,
     seed: int,
+    source_start_config: int = 0,
 ) -> tuple[list, dict]:
     """Return rattled copies that keep the existing standard training labels.
 
@@ -74,6 +75,7 @@ def make_rattle_distill_configs(
             copied.info["energy"] = energy
             copied.arrays["forces"] = forces.copy()
             copied.info["rattle_source_config_index"] = int(config_idx)
+            copied.info["rattle_source_absolute_config_index"] = int(source_start_config) + int(config_idx)
             copied.info["rattle_copy_index"] = int(copy_idx)
             copied.info["rattle_seed"] = int(rattle_seed)
             copied.info["rattle_std_a"] = float(rattle_std_a)
@@ -87,6 +89,7 @@ def make_rattle_distill_configs(
     summary = {
         "schema_version": "rtece_rattle_distill_configs.v1",
         "source_configs": int(len(atoms_list)),
+        "start_config": int(source_start_config),
         "copies_per_config": int(num_copies),
         "configs": int(len(rattled)),
         "atoms": int(total_atoms),
@@ -98,10 +101,22 @@ def make_rattle_distill_configs(
     return rattled, summary
 
 
-def load_atoms(configs: Path, limit: int | None):
+def _extxyz_index(start: int, limit: int | None) -> str:
+    start_i = int(start)
+    if start_i < 0:
+        raise ValueError("start_config must be non-negative")
+    if limit is None:
+        return ":" if start_i == 0 else f"{start_i}:"
+    limit_i = int(limit)
+    if limit_i < 1:
+        raise ValueError("limit_configs must be positive")
+    return f":{limit_i}" if start_i == 0 else f"{start_i}:{start_i + limit_i}"
+
+
+def load_atoms(configs: Path, limit: int | None, *, start_config: int = 0):
     import ase.io
 
-    index = ":" if limit is None else f":{int(limit)}"
+    index = _extxyz_index(start_config, limit)
     atoms_list = ase.io.read(str(configs), index=index)
     if not isinstance(atoms_list, list):
         atoms_list = [atoms_list]
@@ -115,6 +130,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--summary", type=Path)
+    parser.add_argument("--start-config", type=int, default=0)
     parser.add_argument("--limit-configs", type=int)
     parser.add_argument("--copies-per-config", type=int, default=1)
     parser.add_argument("--rattle-std-a", type=float, default=0.05)
@@ -126,12 +142,13 @@ def main() -> None:
     import ase.io
 
     args = parse_args()
-    source = load_atoms(args.input, args.limit_configs)
+    source = load_atoms(args.input, args.limit_configs, start_config=args.start_config)
     rattled, summary = make_rattle_distill_configs(
         source,
         copies_per_config=args.copies_per_config,
         rattle_std_a=args.rattle_std_a,
         seed=args.seed,
+        source_start_config=args.start_config,
     )
     summary.update({"input": str(args.input), "output": str(args.output)})
     args.output.parent.mkdir(parents=True, exist_ok=True)

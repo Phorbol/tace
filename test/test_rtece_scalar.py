@@ -1560,6 +1560,62 @@ def test_make_rattle_distill_configs_cli_runs_from_repo_script_path(tmp_path):
     assert summary.exists()
 
 
+def test_make_rattle_distill_configs_cli_supports_start_config_window(tmp_path):
+    import json
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    source = tmp_path / "source.extxyz"
+    output = tmp_path / "rattled.extxyz"
+    summary = tmp_path / "summary.json"
+    frames = []
+    for idx in range(4):
+        atoms = Atoms("H", positions=[[float(idx), 0.0, 0.0]])
+        atoms.info["energy"] = float(-idx)
+        atoms.info["case_id"] = f"case-{idx}"
+        atoms.arrays["forces"] = np.zeros((1, 3), dtype=np.float64)
+        frames.append(atoms)
+    ase.io.write(source, frames, format="extxyz")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/oc20neb_tace_mace/make_rattle_distill_configs.py",
+            "--input",
+            str(source),
+            "--output",
+            str(output),
+            "--summary",
+            str(summary),
+            "--start-config",
+            "2",
+            "--limit-configs",
+            "1",
+            "--copies-per-config",
+            "1",
+            "--rattle-std-a",
+            "0.01",
+            "--seed",
+            "9",
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["start_config"] == 2
+    assert payload["source_configs"] == 1
+    generated = ase.io.read(output, index=":")
+    assert generated[0].info["rattle_source_absolute_config_index"] == 2
+    assert generated[0].info["rattle_source_case_id"] == "case-2"
+
+
 def test_make_rattle_distill_configs_requires_standard_energy_force_targets():
     from ase import Atoms
 

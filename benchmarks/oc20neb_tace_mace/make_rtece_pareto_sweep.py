@@ -928,6 +928,23 @@ def stage127_local_cross_species_rows() -> list[dict[str, Any]]:
     return _with_parameter_estimates(rows)
 
 
+def stage129_current_pareto_rows() -> list[dict[str, Any]]:
+    selected = {
+        "l1_active_nrad12_species20_radial_species8_cross3_h64",
+        "l1_active_nrad12_species24_radial_species8_cross3_h64",
+    }
+    rows = [row for row in stage127_local_cross_species_rows() if str(row.get("name")) in selected]
+    for row in rows:
+        row["stage_basis"] = "stage129_teacher_rattle_distill_current_pareto"
+        row["stage128_source"] = "runs/oc20neb_tace_mace/rtece-stage128-physical-triage/stage128_interpretation.md"
+        row["distillation_test_role"] = (
+            "fixed stage128 physical Pareto architecture; only the deployment-distribution "
+            "teacher-rattle coverage changes relative to stage127"
+        )
+    return rows
+
+
+
 def preflight_extxyz_file(path: str | Path, *, limit_configs: int | None = None) -> dict[str, int | str]:
     source = Path(path)
     if not source.exists():
@@ -1116,6 +1133,7 @@ def parse_args() -> argparse.Namespace:
             "front-capacity-ladder-stage125",
             "rank-neighborhood-stage126",
             "local-cross-species-stage127",
+            "stage129-current-pareto",
         ),
         default="design-space-default",
     )
@@ -1161,6 +1179,8 @@ def main() -> None:
         rows = stage126_rank_neighborhood_rows()
     elif args.row_set == "local-cross-species-stage127":
         rows = stage127_local_cross_species_rows()
+    elif args.row_set == "stage129-current-pareto":
+        rows = stage129_current_pareto_rows()
     else:
         rows = None
     payload = write_pareto_sweep(
