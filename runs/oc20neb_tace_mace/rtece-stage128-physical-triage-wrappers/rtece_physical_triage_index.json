@@ -1,0 +1,64 @@
+{
+  "cases": [
+    {
+      "checkpoint": "runs/oc20neb_tace_mace/rtece-stage127-local-cross-species/l1_active_nrad12_species20_radial_species8_cross3_h64/l1_active_nrad12_species20_radial_species8_cross3_h64/rtece_scalar_best.pt",
+      "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage127-local-cross-species/l1_active_nrad12_species20_radial_species8_cross3_h64/l1_active_nrad12_species20_radial_species8_cross3_h64/l1_active_nrad12_species20_radial_species8_cross3_h64_dft_benchmark.json",
+      "dimer_json": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-stage128-physical-triage/l1_active_nrad12_species20_radial_species8_cross3_h64/l1_active_nrad12_species20_radial_species8_cross3_h64_dimer.json",
+      "physical_pareto_json": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-stage128-physical-triage/l1_active_nrad12_species20_radial_species8_cross3_h64/l1_active_nrad12_species20_radial_species8_cross3_h64_physical_pareto.json",
+      "rattle_json": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-stage128-physical-triage/l1_active_nrad12_species20_radial_species8_cross3_h64/l1_active_nrad12_species20_radial_species8_cross3_h64_rattle.json",
+      "run_dir": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-stage128-physical-triage/l1_active_nrad12_species20_radial_species8_cross3_h64",
+      "selection_basis": "stage127 non-dominated local active-set candidate: force-RMSE branch or energy/robustness branch; cross2 excluded because stage127 marked it dominated",
+      "stage127_source": "runs/oc20neb_tace_mace/rtece-stage127-local-cross-species/stage127_interpretation.md",
+      "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage127-local-cross-species/l1_active_nrad12_species20_radial_species8_cross3_h64/l1_active_nrad12_species20_radial_species8_cross3_h64/l1_active_nrad12_species20_radial_species8_cross3_h64_teacher_benchmark.json",
+      "variant": "l1_active_nrad12_species20_radial_species8_cross3_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage128-physical-triage-wrappers/l1_active_nrad12_species20_radial_species8_cross3_h64/rtece_physical_triage_no_export.sbatch"
+    },
+    {
+      "checkpoint": "runs/oc20neb_tace_mace/rtece-stage127-local-cross-species/l1_active_nrad12_species24_radial_species8_cross3_h64/l1_active_nrad12_species24_radial_species8_cross3_h64/rtece_scalar_best.pt",
+      "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage127-local-cross-species/l1_active_nrad12_species24_radial_species8_cross3_h64/l1_active_nrad12_species24_radial_species8_cross3_h64/l1_active_nrad12_species24_radial_species8_cross3_h64_dft_benchmark.json",
+      "dimer_json": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-stage128-physical-triage/l1_active_nrad12_species24_radial_species8_cross3_h64/l1_active_nrad12_species24_radial_species8_cross3_h64_dimer.json",
+      "physical_pareto_json": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-stage128-physical-triage/l1_active_nrad12_species24_radial_species8_cross3_h64/l1_active_nrad12_species24_radial_species8_cross3_h64_physical_pareto.json",
+      "rattle_json": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-stage128-physical-triage/l1_active_nrad12_species24_radial_species8_cross3_h64/l1_active_nrad12_species24_radial_species8_cross3_h64_rattle.json",
+      "run_dir": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-stage128-physical-triage/l1_active_nrad12_species24_radial_species8_cross3_h64",
+      "selection_basis": "stage127 non-dominated local active-set candidate: force-RMSE branch or energy/robustness branch; cross2 excluded because stage127 marked it dominated",
+      "stage127_source": "runs/oc20neb_tace_mace/rtece-stage127-local-cross-species/stage127_interpretation.md",
+      "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage127-local-cross-species/l1_active_nrad12_species24_radial_species8_cross3_h64/l1_active_nrad12_species24_radial_species8_cross3_h64/l1_active_nrad12_species24_radial_species8_cross3_h64_teacher_benchmark.json",
+      "variant": "l1_active_nrad12_species24_radial_species8_cross3_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage128-physical-triage-wrappers/l1_active_nrad12_species24_radial_species8_cross3_h64/rtece_physical_triage_no_export.sbatch"
+    },
+    {
+      "checkpoint": "runs/oc20neb_tace_mace/rtece-stage127-local-cross-species/l1_active_nrad12_species24_radial_species8_cross4_h64/l1_active_nrad12_species24_radial_species8_cross4_h64/rtece_scalar_best.pt",
+      "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage127-local-cross-species/l1_active_nrad12_species24_radial_species8_cross4_h64/l1_active_nrad12_species24_radial_species8_cross4_h64/l1_active_nrad12_species24_radial_species8_cross4_h64_dft_benchmark.json",
+      "dimer_json": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-stage128-physical-triage/l1_active_nrad12_species24_radial_species8_cross4_h64/l1_active_nrad12_species24_radial_species8_cross4_h64_dimer.json",
+      "physical_pareto_json": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-stage128-physical-triage/l1_active_nrad12_species24_radial_species8_cross4_h64/l1_active_nrad12_species24_radial_species8_cross4_h64_physical_pareto.json",
+      "rattle_json": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-stage128-physical-triage/l1_active_nrad12_species24_radial_species8_cross4_h64/l1_active_nrad12_species24_radial_species8_cross4_h64_rattle.json",
+      "run_dir": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-stage128-physical-triage/l1_active_nrad12_species24_radial_species8_cross4_h64",
+      "selection_basis": "stage127 non-dominated local active-set candidate: force-RMSE branch or energy/robustness branch; cross2 excluded because stage127 marked it dominated",
+      "stage127_source": "runs/oc20neb_tace_mace/rtece-stage127-local-cross-species/stage127_interpretation.md",
+      "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage127-local-cross-species/l1_active_nrad12_species24_radial_species8_cross4_h64/l1_active_nrad12_species24_radial_species8_cross4_h64/l1_active_nrad12_species24_radial_species8_cross4_h64_teacher_benchmark.json",
+      "variant": "l1_active_nrad12_species24_radial_species8_cross4_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage128-physical-triage-wrappers/l1_active_nrad12_species24_radial_species8_cross4_h64/rtece_physical_triage_no_export.sbatch"
+    }
+  ],
+  "configs": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "design_basis": "Evaluate stage127 non-dominated active-set candidates under physical external tests: dimer smoothness/short-range repulsion and C_or_N rattle-relax stability.",
+  "dimer_num_points": 24,
+  "dimer_pairs": [
+    "C-N",
+    "C-O",
+    "C-H",
+    "N-H",
+    "O-H",
+    "C-C",
+    "N-N"
+  ],
+  "max_focus_rattle_rmsd_a": 0.35,
+  "rattle_focus_label": "C_or_N",
+  "rattle_limit_configs": 8,
+  "rattle_max_steps": 10,
+  "rattle_start_config": 58,
+  "run_root": "/home/gengjianrui/bin/tace/runs/oc20neb_tace_mace/rtece-stage128-physical-triage",
+  "schema_version": "rtece_physical_triage.v1",
+  "stage": "stage128_physical_triage",
+  "stage127_source": "runs/oc20neb_tace_mace/rtece-stage127-local-cross-species/stage127_interpretation.md"
+}

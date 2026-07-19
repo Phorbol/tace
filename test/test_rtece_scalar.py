@@ -6827,6 +6827,57 @@ def test_rtece_stage121_active_frontloaded_rows_keep_active_atomic_paths_and_mov
     assert by_name["l2_active_species16_bneck16_h64"]["representation_parameters_estimate"] > by_name["l1_active_species16_bneck16_h64"]["representation_parameters_estimate"]
 
 
+def test_rtece_stage128_physical_triage_writes_no_export_wrappers(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_physical_triage import (
+        stage128_physical_triage_cases,
+        write_physical_triage_wrappers,
+    )
+
+    cases = stage128_physical_triage_cases(stage127_root="/tmp/stage127")
+
+    assert [case["variant"] for case in cases] == [
+        "l1_active_nrad12_species20_radial_species8_cross3_h64",
+        "l1_active_nrad12_species24_radial_species8_cross3_h64",
+        "l1_active_nrad12_species24_radial_species8_cross4_h64",
+    ]
+    assert not any("cross2" in case["variant"] for case in cases)
+    assert all(case["stage127_source"].endswith("stage127_interpretation.md") for case in cases)
+
+    index = write_physical_triage_wrappers(
+        tmp_path / "wrappers",
+        run_root="/tmp/stage128",
+        configs="/tmp/valid.extxyz",
+        cases=cases,
+        dimer_pairs=("C-N", "C-O", "C-H", "N-H", "O-H", "C-C", "N-N"),
+        dimer_num_points=24,
+        rattle_start_config=58,
+        rattle_limit_configs=8,
+        rattle_max_steps=10,
+    )
+
+    assert index["schema_version"] == "rtece_physical_triage.v1"
+    assert index["stage"] == "stage128_physical_triage"
+    assert index["rattle_focus_label"] == "C_or_N"
+    assert index["stage127_source"].endswith("stage127_interpretation.md")
+    assert len(index["cases"]) == 3
+
+    for case in index["cases"]:
+        wrapper = Path(case["wrapper"])
+        text = wrapper.read_text(encoding="utf-8")
+        assert "--export" not in text
+        assert "--mem" not in text
+        assert "--cpus-per-task" not in text
+        assert "dimer_scan_rtece.py" in text
+        assert "rattle_relax_rtece.py" in text
+        assert "summarize_rtece_physical_pareto.py" in text
+        assert "RATTLE_START_CONFIG=58" in text
+        assert "RATTLE_LIMIT_CONFIGS=8" in text
+        assert "RATTLE_MAX_STEPS=10" in text
+        assert "C-N C-O C-H N-H O-H C-C N-N" in text
+
+
 def test_rtece_stage121_active_frontloaded_sweep_cli_generates_four_rows(tmp_path):
     import json
     import subprocess
