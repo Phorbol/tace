@@ -1,0 +1,26 @@
+{
+  "atoms": 113970,
+  "configs": 2176,
+  "energy_weight": 1.0,
+  "force_tail_multiplier": 2.0,
+  "force_tail_quantile": 0.9,
+  "force_tail_threshold_ev_a": 5.304898376769142,
+  "force_weight_max": 6.057063326374391,
+  "force_weight_mean": 1.0,
+  "force_weight_min": 0.7571329157967989,
+  "input": "runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/augmented_train_base2048_plus_teacher_rattle128.extxyz",
+  "max_force_norm_ev_a_max": 74.43260059832025,
+  "max_force_norm_ev_a_min": 0.04426387528783601,
+  "normalize_force_mean": true,
+  "output": "runs/oc20neb_tace_mace/rtece-stage130-sobolev-weighted-distill/weighted_train_base2048_rattle128.extxyz",
+  "raw_force_weight_mean": 1.3207720588235294,
+  "schema_version": "rtece_extxyz_sample_weights.v1",
+  "source_counts": {
+    "base_mixed_train_tw0p75": 2048,
+    "teacher_labeled_stage128_rattles": 128
+  },
+  "source_force_multipliers": {
+    "teacher_labeled_stage128_rattles": 4.0
+  },
+  "tail_config_count": 218
+}

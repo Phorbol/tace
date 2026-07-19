@@ -1,0 +1,48 @@
+{
+  "architectures": [
+    "l1_active_nrad12_species20_radial_species8_cross3_h64",
+    "l1_active_nrad12_species24_radial_species8_cross3_h64"
+  ],
+  "basis_documents": [
+    "/home/gengjianrui/bin/TECE_design_space.md",
+    "/home/gengjianrui/bin/rTECE_review.md"
+  ],
+  "controlled_change": "Use extxyz per-configuration energy_weight/forces_weight in the production Lightning training path; keep stage129 current-Pareto architectures and training hyperparameters fixed.",
+  "failed_preflight_root_cause": "Initial weighted extxyz did not preserve ASE calculator energy/forces; training failed with Atoms object has no calculator. Fixed apply_extxyz_sample_weights to materialize energy and forces from atoms.info or calc.results and regenerated weighted_train_base2048_rattle128.extxyz.",
+  "hypothesis": "Aligning the rTECE student training measure with deployment/Sobolev force sensitivity may reduce high-force and rattle physical failures without changing architecture.",
+  "primary_metrics": [
+    "DFT_E_RMSE",
+    "DFT_F_RMSE",
+    "DFT_E_max_error",
+    "DFT_F_max_error",
+    "teacher_E_RMSE",
+    "teacher_F_RMSE",
+    "atoms_per_second",
+    "physical_triage_dimer",
+    "physical_triage_rattle_relax"
+  ],
+  "schema_version": "rtece_stage_manifest.v1",
+  "slurm_failed_preflight_jobs": {
+    "l1_active_nrad12_species20_radial_species8_cross3_h64": 685081,
+    "l1_active_nrad12_species24_radial_species8_cross3_h64": 685082
+  },
+  "slurm_jobs": {
+    "l1_active_nrad12_species20_radial_species8_cross3_h64": 685084,
+    "l1_active_nrad12_species24_radial_species8_cross3_h64": 685083
+  },
+  "stage": "stage130-sobolev-weighted-distill",
+  "stage129_reference": "runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/stage129_results_summary.json",
+  "train_source": "runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/augmented_train_base2048_plus_teacher_rattle128.extxyz",
+  "weight_policy": {
+    "element_specific": false,
+    "energy_weight": 1.0,
+    "force_tail_multiplier": 2.0,
+    "force_tail_quantile": 0.9,
+    "normalize_force_mean": true,
+    "source_force_multipliers": {
+      "teacher_labeled_stage128_rattles": 4.0
+    }
+  },
+  "weighted_train_file": "runs/oc20neb_tace_mace/rtece-stage130-sobolev-weighted-distill/weighted_train_base2048_rattle128.extxyz",
+  "wrapper_index": "runs/oc20neb_tace_mace/rtece-stage130-sobolev-weighted-distill/current_pareto_wrappers/rtece_pareto_sweep_index.json"
+}
