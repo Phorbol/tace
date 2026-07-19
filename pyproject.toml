@@ -78,6 +78,8 @@ Homepage = "https://github.com/xvzemin/tace"
 [project.scripts]
 tace-train = "tace.scripts.train:main"
 tace-eval = "tace.scripts.eval:main"
+tace-rtece-eval = "tace.scripts.rtece_eval:main"
+tace-rtece-train-scalar = "tace.scripts.rtece_train_scalar:main"
 tace-clean = "tace.scripts.clean:main"
 tace-split = "tace.scripts.split:main"
 tace-export = "tace.scripts.export:main"

@@ -21,6 +21,7 @@ def write_rtece_benchmark_wrapper(
     output_dir: str | Path,
     *,
     model: str,
+    configs: str | None = None,
     force_mode: str,
     limit_configs_list: str,
     measure_passes: int,
@@ -37,6 +38,7 @@ def write_rtece_benchmark_wrapper(
     wrapper = target_dir / "rtece_scalar_benchmark_no_export.sbatch"
     assignments = [
         _shell_assign("MODEL", model),
+        _shell_assign("CONFIGS", configs),
         _shell_assign("FORCE_MODE", force_mode),
         _shell_assign("LIMIT_CONFIGS_LIST", limit_configs_list),
         _shell_assign("MEASURE_PASSES", measure_passes),
@@ -76,6 +78,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Submit rTECE benchmark through a self-contained Slurm wrapper.")
     parser.add_argument("--wrapper-dir", type=Path, required=True)
     parser.add_argument("--model", required=True)
+    parser.add_argument("--configs", default=None)
     parser.add_argument("--force-mode", default="auto")
     parser.add_argument("--limit-configs-list", default="1024")
     parser.add_argument("--measure-passes", type=int, default=5)
@@ -94,6 +97,7 @@ def main() -> None:
     wrapper = write_rtece_benchmark_wrapper(
         args.wrapper_dir,
         model=args.model,
+        configs=args.configs,
         force_mode=args.force_mode,
         limit_configs_list=args.limit_configs_list,
         measure_passes=args.measure_passes,

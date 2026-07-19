@@ -29,6 +29,7 @@ class e3nnCueScatterTensorProduct(torch.nn.Module):
         l1l2: Union[str, None] = None,
         l2l3: Union[str, None] = None,
         l3l1: Union[str, None] = None,
+        instructions = None,
     ) -> None:
         super().__init__()
 

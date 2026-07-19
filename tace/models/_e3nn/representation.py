@@ -26,6 +26,29 @@ from .layer_norm import get_normalization_layer
 from ..linear import e3nnLinear
 
 
+def normalize_radial_active_indices(num_radial_basis: int, active_indices) -> tuple[int, ...]:
+    """Return validated radial basis columns retained by the compact model."""
+
+    num_radial_basis = int(num_radial_basis)
+    if num_radial_basis <= 0:
+        raise ValueError("num_radial_basis must be positive")
+    if active_indices is None:
+        return tuple(range(num_radial_basis))
+
+    try:
+        indices = tuple(int(index) for index in active_indices)
+    except TypeError as exc:
+        raise ValueError("active_indices must be a non-empty sequence of integers") from exc
+    if not indices:
+        raise ValueError("active_indices must be non-empty")
+    if len(set(indices)) != len(indices):
+        raise ValueError("active_indices contains duplicate entries")
+    if min(indices) < 0 or max(indices) >= num_radial_basis:
+        raise ValueError(
+            f"active_indices out of range for num_radial_basis={num_radial_basis}"
+        )
+    return indices
+
 
 class Representation(torch.nn.Module):
     def __init__(
@@ -81,6 +104,16 @@ class Representation(torch.nn.Module):
             dydynamic_cutoff_mu=radial_basis['dydynamic_cutoff_mu'],
             num_elements=len(atomic_numbers),
         )
+        active_radial_indices = normalize_radial_active_indices(
+            self.radial_basis.num_basis,
+            radial_basis.get('active_indices'),
+        )
+        self.num_active_radial_basis = len(active_radial_indices)
+        self.register_buffer(
+            'radial_active_index',
+            torch.tensor(active_radial_indices, dtype=torch.long),
+            persistent=False,
+        )
         
         # === angular basis ===
         self.use_so2 = (
@@ -106,7 +139,7 @@ class Representation(torch.nn.Module):
         # === node/edge embedding ===
         self.node_embedding = NODE_EMBEDDING[node_embedding['type']](
             num_elements=self.num_elements,
-            num_radial_basis=self.radial_basis.num_basis,
+            num_radial_basis=self.num_active_radial_basis,
             num_channel=num_channel,
             Lmax=Lmax,
             lmax=lmax,
@@ -115,7 +148,7 @@ class Representation(torch.nn.Module):
         )
         self.edge_embedding = EDGE_EMBEDDING[edge_embedding['type']](
             num_elements=self.num_elements,
-            num_radial_basis=self.radial_basis.num_basis,
+            num_radial_basis=self.num_active_radial_basis,
             num_channel=num_channel,
             bias=False,
         )
@@ -138,7 +171,7 @@ class Representation(torch.nn.Module):
                     layer=layer,
                     num_layers=num_layers,
                     num_elements=self.num_elements,
-                    num_radial_basis=self.radial_basis.num_basis,
+                    num_radial_basis=self.num_active_radial_basis,
                     edge_embedding_channel=self.edge_embedding.out_dim,
                     num_channel=num_channel,
                 )
@@ -156,7 +189,7 @@ class Representation(torch.nn.Module):
             "lmax": lmax,
             "num_channel": num_channel,
             "target_irreps": target_irreps,
-            "num_radial_basis": radial_basis["num_radial_basis"],
+            "num_radial_basis": self.num_active_radial_basis,
             "radial_mlp": radial_basis["hidden"],
             "radial_bias": radial_basis["bias"],
             "l1l2": atomic_basis["l1l2"],
@@ -317,6 +350,8 @@ class Representation(torch.nn.Module):
             self.atomic_numbers,
             graph.dcutoff,
         )
+        if self.num_active_radial_basis != self.radial_basis.num_basis:
+            radial_basis = radial_basis.index_select(-1, self.radial_active_index)
         
         # === angular basis ===
         edge_attrs = None

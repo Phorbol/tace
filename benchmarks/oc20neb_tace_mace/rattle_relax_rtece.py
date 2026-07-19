@@ -108,31 +108,16 @@ def summarize_relax_records(records: list[dict[str, Any]]) -> dict[str, Any]:
 
 
 def make_rtece_calculator(model, config, *, device: Any, dtype: Any, force_mode: str, neighborlist_backend: str):
-    import torch
-    from ase.calculators.calculator import Calculator
-    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import atoms_to_rtece_graph
-    from tace.models.rtece_workflow import predict
+    from tace.interface.ase import RTECEAseCalc
 
-    class RTECECalculator(Calculator):
-        implemented_properties = ["energy", "forces", "free_energy"]
-
-        def calculate(self, atoms=None, properties=None, system_changes=None):
-            super().calculate(atoms, properties, system_changes)
-            graph = atoms_to_rtece_graph(
-                atoms,
-                cutoff=float(config.cutoff),
-                device=device,
-                dtype=dtype,
-                neighborlist_backend=neighborlist_backend,
-            )
-            out = predict(model, graph, force_mode=force_mode)
-            energy = float(out["energy"].detach().cpu().reshape(-1)[0])
-            forces = out["forces"].detach().cpu().to(dtype=torch.float64).numpy()
-            self.results["energy"] = energy
-            self.results["free_energy"] = energy
-            self.results["forces"] = forces
-
-    return RTECECalculator()
+    return RTECEAseCalc(
+        model,
+        config=config,
+        dtype=dtype,
+        device=device,
+        force_mode=force_mode,
+        neighborlist_backend=neighborlist_backend,
+    )
 
 
 def relax_rattled_structure(

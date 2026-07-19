@@ -35,6 +35,12 @@ def _safe_ratio(value: float | None, reference: float) -> float:
     return float(value) / float(reference)
 
 
+def _optional_ratio(value: float | None, reference: float) -> float:
+    if value is None:
+        return 0.0
+    return _safe_ratio(value, reference)
+
+
 def _focus_group(summary: dict[str, Any], label: str) -> dict[str, Any] | None:
     for row in summary.get("focus_groups", []) or []:
         if row.get("label") == label:
@@ -74,14 +80,18 @@ def dimer_gate_summary(dimer_scan: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def rattle_gate_summary(rattle_relax: dict[str, Any]) -> dict[str, Any]:
+def rattle_gate_summary(rattle_relax: dict[str, Any], *, focus_label: str = "C_or_N") -> dict[str, Any]:
     summary = rattle_relax.get("summary") or {}
+    focus = _focus_group(summary, focus_label) or {}
     cn = _focus_group(summary, "C_or_N") or {}
     chno_no_cn = _focus_group(summary, "CHNO_no_CN") or {}
     return {
         "rattle_converged_fraction": _finite_float(summary.get("converged_fraction")),
         "rattle_mean_final_rmsd_a": _finite_float(summary.get("mean_final_rmsd_a")),
         "rattle_max_fmax_ev_a": _finite_float(summary.get("max_fmax_ev_a")),
+        "rattle_focus_label": str(focus_label),
+        "focus_rattle_final_rmsd_a": _finite_float(focus.get("mean_final_rmsd_a")),
+        "focus_rattle_max_fmax_ev_a": _finite_float(focus.get("max_fmax_ev_a")),
         "cn_rattle_final_rmsd_a": _finite_float(cn.get("mean_final_rmsd_a")),
         "cn_rattle_max_fmax_ev_a": _finite_float(cn.get("max_fmax_ev_a")),
         "chno_no_cn_rattle_final_rmsd_a": _finite_float(chno_no_cn.get("mean_final_rmsd_a")),
@@ -96,19 +106,46 @@ def make_physical_pareto_row(
     dimer_scan: dict[str, Any],
     rattle_relax: dict[str, Any],
     max_dft_f_mae_mev_a: float = 35.0,
-    max_cn_rattle_rmsd_a: float = 0.20,
+    max_dft_f_rmse_mev_a: float = 120.0,
+    max_dft_e_rmse_mev_atom: float = 250.0,
+    max_dft_f_max_mev_a: float = 1000.0,
+    max_dft_e_max_mev_atom: float = 500.0,
+    rattle_focus_label: str = "C_or_N",
+    max_focus_rattle_rmsd_a: float = 0.20,
+    max_cn_rattle_rmsd_a: float | None = None,
     max_rattle_fmax_ev_a: float = 0.40,
     dimer_energy_penalty_scale_ev: float = 0.05,
 ) -> dict[str, Any]:
     teacher_benchmark = teacher_benchmark or {}
+    if max_cn_rattle_rmsd_a is not None and rattle_focus_label == "C_or_N":
+        max_focus_rattle_rmsd_a = float(max_cn_rattle_rmsd_a)
+    dft_e_mae = _finite_float(dft_benchmark.get("mae_e_mev_atom"))
+    dft_e_rmse = _finite_float(dft_benchmark.get("rmse_e_mev_atom"))
+    dft_e_max = _finite_float(dft_benchmark.get("max_abs_e_mev_atom"))
     dft_f_mae = _finite_float(dft_benchmark.get("mae_f_mev_a"))
+    dft_f_rmse = _finite_float(dft_benchmark.get("rmse_f_mev_a"))
+    dft_f_max = _finite_float(dft_benchmark.get("max_abs_f_mev_a"))
     dimer = dimer_gate_summary(dimer_scan)
-    rattle = rattle_gate_summary(rattle_relax)
-    benchmark_gate_pass = bool(dft_f_mae is not None and dft_f_mae <= float(max_dft_f_mae_mev_a))
+    rattle = rattle_gate_summary(rattle_relax, focus_label=rattle_focus_label)
+    force_gate_value = dft_f_rmse if dft_f_rmse is not None else dft_f_mae
+    force_gate_threshold = float(max_dft_f_rmse_mev_a) if dft_f_rmse is not None else float(max_dft_f_mae_mev_a)
+    benchmark_gate_pass = bool(force_gate_value is not None and force_gate_value <= force_gate_threshold)
+    if dft_e_rmse is not None:
+        benchmark_gate_pass = benchmark_gate_pass and dft_e_rmse <= float(max_dft_e_rmse_mev_atom)
+    if dft_f_max is not None:
+        benchmark_gate_pass = benchmark_gate_pass and dft_f_max <= float(max_dft_f_max_mev_a)
+    if dft_e_max is not None:
+        benchmark_gate_pass = benchmark_gate_pass and dft_e_max <= float(max_dft_e_max_mev_atom)
+    benchmark_score = (
+        _safe_ratio(force_gate_value, force_gate_threshold)
+        + _optional_ratio(dft_e_rmse, max_dft_e_rmse_mev_atom)
+        + _optional_ratio(dft_f_max, max_dft_f_max_mev_a)
+        + _optional_ratio(dft_e_max, max_dft_e_max_mev_atom)
+    )
     rattle_gate_pass = bool(
-        rattle["cn_rattle_final_rmsd_a"] is not None
+        rattle["focus_rattle_final_rmsd_a"] is not None
         and rattle["rattle_max_fmax_ev_a"] is not None
-        and rattle["cn_rattle_final_rmsd_a"] <= float(max_cn_rattle_rmsd_a)
+        and rattle["focus_rattle_final_rmsd_a"] <= float(max_focus_rattle_rmsd_a)
         and rattle["rattle_max_fmax_ev_a"] <= float(max_rattle_fmax_ev_a)
     )
     dimer_fail_fraction = 1.0 - float(dimer["dimer_short_repulsive_fraction"])
@@ -116,8 +153,8 @@ def make_physical_pareto_row(
     min_short_energy_lift = _finite_float(dimer.get("dimer_min_short_energy_lift_eV"))
     dimer_energy_shape_penalty = max(0.0, -min_short_energy_lift) if min_short_energy_lift is not None else 0.0
     physical_score = (
-        _safe_ratio(dft_f_mae, max_dft_f_mae_mev_a)
-        + _safe_ratio(rattle["cn_rattle_final_rmsd_a"], max_cn_rattle_rmsd_a)
+        benchmark_score
+        + _safe_ratio(rattle["focus_rattle_final_rmsd_a"], max_focus_rattle_rmsd_a)
         + _safe_ratio(rattle["rattle_max_fmax_ev_a"], max_rattle_fmax_ev_a)
         + 2.0 * dimer_fail_fraction
         + nonfinite_penalty
@@ -136,14 +173,28 @@ def make_physical_pareto_row(
         "num_parameters": dft_benchmark.get("num_parameters"),
         "force_mode": dft_benchmark.get("force_mode"),
         "tece_path_manifest_hash": manifest_hash,
-        "dft_e_mae_mev_atom": _finite_float(dft_benchmark.get("mae_e_mev_atom")),
+        "dft_e_mae_mev_atom": dft_e_mae,
+        "dft_e_rmse_mev_atom": dft_e_rmse,
+        "dft_e_max_abs_mev_atom": dft_e_max,
         "dft_f_mae_mev_a": dft_f_mae,
-        "dft_f_rmse_mev_a": _finite_float(dft_benchmark.get("rmse_f_mev_a")),
+        "dft_f_rmse_mev_a": dft_f_rmse,
+        "dft_f_max_abs_mev_a": dft_f_max,
+        "teacher_e_mae_mev_atom": _finite_float(teacher_benchmark.get("mae_e_mev_atom")),
+        "teacher_e_rmse_mev_atom": _finite_float(teacher_benchmark.get("rmse_e_mev_atom")),
+        "teacher_e_max_abs_mev_atom": _finite_float(teacher_benchmark.get("max_abs_e_mev_atom")),
         "teacher_f_mae_mev_a": _finite_float(teacher_benchmark.get("mae_f_mev_a")),
         "teacher_f_rmse_mev_a": _finite_float(teacher_benchmark.get("rmse_f_mev_a")),
+        "teacher_f_max_abs_mev_a": _finite_float(teacher_benchmark.get("max_abs_f_mev_a")),
         "max_dft_f_mae_mev_a": float(max_dft_f_mae_mev_a),
-        "max_cn_rattle_rmsd_a": float(max_cn_rattle_rmsd_a),
+        "max_dft_f_rmse_mev_a": float(max_dft_f_rmse_mev_a),
+        "max_dft_e_rmse_mev_atom": float(max_dft_e_rmse_mev_atom),
+        "max_dft_f_max_mev_a": float(max_dft_f_max_mev_a),
+        "max_dft_e_max_mev_atom": float(max_dft_e_max_mev_atom),
+        "rattle_focus_label": str(rattle_focus_label),
+        "max_focus_rattle_rmsd_a": float(max_focus_rattle_rmsd_a),
+        "max_cn_rattle_rmsd_a": float(max_focus_rattle_rmsd_a) if str(rattle_focus_label) == "C_or_N" else None,
         "max_rattle_fmax_ev_a": float(max_rattle_fmax_ev_a),
+        "benchmark_score": float(benchmark_score),
         "benchmark_gate_pass": benchmark_gate_pass,
         "rattle_gate_pass": rattle_gate_pass,
         "dimer_energy_shape_penalty": float(dimer_energy_shape_penalty),
@@ -208,12 +259,13 @@ def fmt(value: Any, digits: int = 3) -> str:
 
 
 def format_markdown(rows: list[dict[str, Any]], front: list[dict[str, Any]]) -> str:
+    focus_label = str(rows[0].get("rattle_focus_label") or "focus") if rows else "focus"
     lines = [
         "# rTECE Physical Pareto Summary",
         "",
         "## Ranked Rows",
         "",
-        "| variant | gate | score | atoms/s | DFT F MAE | dimer repulsive | C/N RMSD | max fmax | params |",
+        f"| variant | gate | score | atoms/s | DFT F MAE | dimer repulsive | {focus_label} RMSD | max fmax | params |",
         "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
@@ -225,7 +277,7 @@ def format_markdown(rows: list[dict[str, Any]], front: list[dict[str, Any]]) -> 
                 atoms=fmt(row.get("atoms_per_second")),
                 df=fmt(row.get("dft_f_mae_mev_a")),
                 dimer=fmt(row.get("dimer_short_repulsive_fraction")),
-                cn=fmt(row.get("cn_rattle_final_rmsd_a")),
+                cn=fmt(row.get("focus_rattle_final_rmsd_a")),
                 fmax=fmt(row.get("rattle_max_fmax_ev_a")),
                 params=fmt(row.get("num_parameters")),
             )
@@ -235,7 +287,7 @@ def format_markdown(rows: list[dict[str, Any]], front: list[dict[str, Any]]) -> 
             "",
             "## Physical Pareto Front",
             "",
-            "| variant | score | atoms/s | DFT F MAE | C/N RMSD | max fmax |",
+            f"| variant | score | atoms/s | DFT F MAE | {focus_label} RMSD | max fmax |",
             "|---|---:|---:|---:|---:|---:|",
         ])
         for row in front:
@@ -245,7 +297,7 @@ def format_markdown(rows: list[dict[str, Any]], front: list[dict[str, Any]]) -> 
                     score=fmt(row.get("physical_score")),
                     atoms=fmt(row.get("atoms_per_second")),
                     df=fmt(row.get("dft_f_mae_mev_a")),
-                    cn=fmt(row.get("cn_rattle_final_rmsd_a")),
+                    cn=fmt(row.get("focus_rattle_final_rmsd_a")),
                     fmax=fmt(row.get("rattle_max_fmax_ev_a")),
                 )
             )
@@ -253,8 +305,9 @@ def format_markdown(rows: list[dict[str, Any]], front: list[dict[str, Any]]) -> 
         "",
         "## Gate Definition",
         "",
-        "- `physical_score` is lower-is-better: normalized DFT force MAE + normalized C/N rattle RMSD + normalized rattle max fmax + dimer force/nonfinite penalties + short-range dimer energy-shape penalty.",
+        f"- `physical_score` is lower-is-better: benchmark score using DFT force RMSE when available plus optional E RMSE and E/F max-error terms, then normalized `{focus_label}` rattle RMSD, normalized rattle max fmax, dimer force/nonfinite penalties, and short-range dimer energy-shape penalty.",
         "- `physical_gate_pass` requires benchmark, dimer, and rattle gates to pass at the configured thresholds.",
+        "- The rattle focus label is a configurable stress-test dimension, not an architecture-specific or element-specialized training objective.",
         "- This score is a checkpoint-selection aid, not a replacement for the TECE path manifest or full Pareto table.",
         "",
     ])
@@ -272,7 +325,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--case", action="append", type=parse_case_arg, default=[])
     parser.add_argument("--max-dft-f-mae-mev-a", type=float, default=35.0)
-    parser.add_argument("--max-cn-rattle-rmsd-a", type=float, default=0.20)
+    parser.add_argument("--max-dft-f-rmse-mev-a", type=float, default=120.0)
+    parser.add_argument("--max-dft-e-rmse-mev-atom", type=float, default=250.0)
+    parser.add_argument("--max-dft-f-max-mev-a", type=float, default=1000.0)
+    parser.add_argument("--max-dft-e-max-mev-atom", type=float, default=500.0)
+    parser.add_argument("--rattle-focus-label", default="C_or_N")
+    parser.add_argument("--max-focus-rattle-rmsd-a", type=float, default=0.20)
+    parser.add_argument("--max-cn-rattle-rmsd-a", type=float, default=None, help="Deprecated alias for --max-focus-rattle-rmsd-a when --rattle-focus-label=C_or_N.")
     parser.add_argument("--max-rattle-fmax-ev-a", type=float, default=0.40)
     parser.add_argument("--dimer-energy-penalty-scale-ev", type=float, default=0.05)
     parser.add_argument("--output-json", type=Path, required=True)
@@ -282,6 +341,11 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    max_focus_rattle_rmsd_a = (
+        args.max_cn_rattle_rmsd_a
+        if args.max_cn_rattle_rmsd_a is not None and args.rattle_focus_label == "C_or_N"
+        else args.max_focus_rattle_rmsd_a
+    )
     rows = rank_physical_rows([
         make_physical_pareto_row(
             variant,
@@ -290,7 +354,12 @@ def main() -> None:
             dimer_scan=load_json(dimer_path),
             rattle_relax=load_json(rattle_path),
             max_dft_f_mae_mev_a=args.max_dft_f_mae_mev_a,
-            max_cn_rattle_rmsd_a=args.max_cn_rattle_rmsd_a,
+            max_dft_f_rmse_mev_a=args.max_dft_f_rmse_mev_a,
+            max_dft_e_rmse_mev_atom=args.max_dft_e_rmse_mev_atom,
+            max_dft_f_max_mev_a=args.max_dft_f_max_mev_a,
+            max_dft_e_max_mev_atom=args.max_dft_e_max_mev_atom,
+            rattle_focus_label=args.rattle_focus_label,
+            max_focus_rattle_rmsd_a=max_focus_rattle_rmsd_a,
             max_rattle_fmax_ev_a=args.max_rattle_fmax_ev_a,
             dimer_energy_penalty_scale_ev=args.dimer_energy_penalty_scale_ev,
         )
@@ -301,7 +370,13 @@ def main() -> None:
         "schema_version": "rtece_physical_pareto_summary.v1",
         "thresholds": {
             "max_dft_f_mae_mev_a": args.max_dft_f_mae_mev_a,
-            "max_cn_rattle_rmsd_a": args.max_cn_rattle_rmsd_a,
+            "max_dft_f_rmse_mev_a": args.max_dft_f_rmse_mev_a,
+            "max_dft_e_rmse_mev_atom": args.max_dft_e_rmse_mev_atom,
+            "max_dft_f_max_mev_a": args.max_dft_f_max_mev_a,
+            "max_dft_e_max_mev_atom": args.max_dft_e_max_mev_atom,
+            "rattle_focus_label": args.rattle_focus_label,
+            "max_focus_rattle_rmsd_a": max_focus_rattle_rmsd_a,
+            "max_cn_rattle_rmsd_a": max_focus_rattle_rmsd_a if args.rattle_focus_label == "C_or_N" else None,
             "max_rattle_fmax_ev_a": args.max_rattle_fmax_ev_a,
             "dimer_energy_penalty_scale_ev": args.dimer_energy_penalty_scale_ev,
         },

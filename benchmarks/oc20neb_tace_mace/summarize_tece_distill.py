@@ -122,9 +122,19 @@ def make_student_row(
         "peak_reserved_mb": dft_benchmark.get("peak_reserved_mb"),
         "num_parameters": dft_benchmark.get("num_parameters"),
         "dft_e_mae_mev_atom": dft_benchmark.get("mae_e_mev_atom"),
+        "dft_e_rmse_mev_atom": dft_benchmark.get("rmse_e_mev_atom"),
+        "dft_e_bias_mev_atom": dft_benchmark.get("bias_e_mev_atom") or dft_benchmark.get("mean_signed_e_mev_atom"),
+        "dft_e_max_abs_mev_atom": dft_benchmark.get("max_abs_e_mev_atom"),
         "dft_f_mae_mev_a": dft_benchmark.get("mae_f_mev_a"),
+        "dft_f_rmse_mev_a": dft_benchmark.get("rmse_f_mev_a"),
+        "dft_f_max_abs_mev_a": dft_benchmark.get("max_abs_f_mev_a"),
         "teacher_e_mae_mev_atom": teacher_benchmark.get("mae_e_mev_atom"),
+        "teacher_e_rmse_mev_atom": teacher_benchmark.get("rmse_e_mev_atom"),
+        "teacher_e_bias_mev_atom": teacher_benchmark.get("bias_e_mev_atom") or teacher_benchmark.get("mean_signed_e_mev_atom"),
+        "teacher_e_max_abs_mev_atom": teacher_benchmark.get("max_abs_e_mev_atom"),
         "teacher_f_mae_mev_a": teacher_benchmark.get("mae_f_mev_a"),
+        "teacher_f_rmse_mev_a": teacher_benchmark.get("rmse_f_mev_a"),
+        "teacher_f_max_abs_mev_a": teacher_benchmark.get("max_abs_f_mev_a"),
         "dft_benchmark": dft_benchmark.get("model"),
         "teacher_benchmark": teacher_benchmark.get("model"),
     }
@@ -172,8 +182,8 @@ def rank_student_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
         rows,
         key=lambda row: (
             -float(row.get("atoms_per_second") or 0.0),
-            float(row.get("teacher_f_mae_mev_a") or 1.0e30),
-            float(row.get("dft_f_mae_mev_a") or 1.0e30),
+            float(row.get("teacher_f_rmse_mev_a") or row.get("teacher_f_mae_mev_a") or 1.0e30),
+            float(row.get("dft_f_rmse_mev_a") or row.get("dft_f_mae_mev_a") or 1.0e30),
         ),
     )
 
@@ -268,7 +278,9 @@ def manifest_group_rows(
         scalar_path_ids = [path.get("id") for path in scalar_paths]
         atoms_values = _finite_values(group_rows, "atoms_per_second")
         dft_force_values = _finite_values(group_rows, "dft_f_mae_mev_a")
+        dft_force_rmse_values = _finite_values(group_rows, "dft_f_rmse_mev_a")
         teacher_force_values = _finite_values(group_rows, "teacher_f_mae_mev_a")
+        teacher_force_rmse_values = _finite_values(group_rows, "teacher_f_rmse_mev_a")
         projection = projection_by_manifest.get(manifest_hash) or projection_by_paths.get(_scalar_path_key(scalar_path_ids))
         groups.append({
             "manifest_hash": manifest_hash,
@@ -288,7 +300,9 @@ def manifest_group_rows(
             "graph_backends": _sorted_unique_strings([row.get("graph_construction_backend") for row in group_rows]),
             "best_atoms_per_second": max(atoms_values) if atoms_values else None,
             "best_dft_f_mae_mev_a": min(dft_force_values) if dft_force_values else None,
+            "best_dft_f_rmse_mev_a": min(dft_force_rmse_values) if dft_force_rmse_values else None,
             "best_teacher_f_mae_mev_a": min(teacher_force_values) if teacher_force_values else None,
+            "best_teacher_f_rmse_mev_a": min(teacher_force_rmse_values) if teacher_force_rmse_values else None,
             "projection_relative_residual": projection.get("relative_residual") if projection else None,
             "projection_deleted_scalar_path_ids": list(projection.get("deleted_scalar_path_ids") or []) if projection else [],
             "projection_num_samples": projection.get("num_samples") if projection else None,
@@ -324,20 +338,24 @@ def append_front_section(lines: list[str], title: str, rows: list[dict[str, Any]
         "",
         title,
         "",
-        "| variant | TECE route | manifest | graph backend | force mode | atoms/s | DFT F MAE | teacher F MAE | params |",
-        "|---|---|---|---|---|---:|---:|---:|---:|",
+        "| variant | TECE route | manifest | graph backend | force mode | atoms/s | error | DFT F RMSE | DFT F MAE | DFT F max | DFT E RMSE | DFT E bias | params |",
+        "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
     ])
     for row in front:
         lines.append(
-            "| {variant} | {route} | {manifest} | {graph_backend} | {force_mode} | {atoms} | {df} | {tf} | {params} |".format(
+            "| {variant} | {route} | {manifest} | {graph_backend} | {force_mode} | {atoms} | {err} | {dfrmse} | {dfmae} | {dfmax} | {dermse} | {debias} | {params} |".format(
                 variant=row["variant"],
                 route=fmt((row.get("tece_route") or {}).get("semantic_tier")),
                 manifest=fmt(row.get("tece_path_manifest_hash")),
                 graph_backend=fmt(row.get("graph_construction_backend")),
                 force_mode=fmt(row.get("force_mode")),
                 atoms=fmt(row.get("atoms_per_second")),
-                df=fmt(row.get("dft_f_mae_mev_a")),
-                tf=fmt(row.get("teacher_f_mae_mev_a")),
+                err=fmt(row.get(error_key)),
+                dfrmse=fmt(row.get("dft_f_rmse_mev_a")),
+                dfmae=fmt(row.get("dft_f_mae_mev_a")),
+                dfmax=fmt(row.get("dft_f_max_abs_mev_a")),
+                dermse=fmt(row.get("dft_e_rmse_mev_atom")),
+                debias=fmt(row.get("dft_e_bias_mev_atom")),
                 params=fmt(row.get("num_parameters"), digits=0),
             )
         )
@@ -389,12 +407,12 @@ def format_markdown(
         "",
         "## Students",
         "",
-        "| variant | TECE route | manifest | graph backend | force mode | atoms/s | configs/s | peak alloc MB | params | teacher E MAE | teacher F MAE | DFT E MAE | DFT F MAE |",
-        "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+        "| variant | TECE route | manifest | graph backend | force mode | atoms/s | configs/s | peak alloc MB | params | teacher E RMSE | teacher F RMSE | teacher F max | DFT E RMSE | DFT E bias | DFT F RMSE | DFT F MAE | DFT F max |",
+        "|---|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
     ]
     for row in rows:
         lines.append(
-            "| {variant} | {route} | {manifest} | {graph_backend} | {force_mode} | {atoms} | {configs} | {mem} | {params} | {te} | {tf} | {de} | {df} |".format(
+            "| {variant} | {route} | {manifest} | {graph_backend} | {force_mode} | {atoms} | {configs} | {mem} | {params} | {termse} | {tfrmse} | {tfmax} | {dermse} | {debias} | {dfrmse} | {dfmae} | {dfmax} |".format(
                 variant=row["variant"],
                 route=fmt((row.get("tece_route") or {}).get("semantic_tier")),
                 manifest=fmt(row.get("tece_path_manifest_hash")),
@@ -404,14 +422,20 @@ def format_markdown(
                 configs=fmt(row.get("configs_per_second")),
                 mem=fmt(row.get("peak_allocated_mb")),
                 params=fmt(row.get("num_parameters"), digits=0),
-                te=fmt(row.get("teacher_e_mae_mev_atom")),
-                tf=fmt(row.get("teacher_f_mae_mev_a")),
-                de=fmt(row.get("dft_e_mae_mev_atom")),
-                df=fmt(row.get("dft_f_mae_mev_a")),
+                termse=fmt(row.get("teacher_e_rmse_mev_atom")),
+                tfrmse=fmt(row.get("teacher_f_rmse_mev_a")),
+                tfmax=fmt(row.get("teacher_f_max_abs_mev_a")),
+                dermse=fmt(row.get("dft_e_rmse_mev_atom")),
+                debias=fmt(row.get("dft_e_bias_mev_atom")),
+                dfrmse=fmt(row.get("dft_f_rmse_mev_a")),
+                dfmae=fmt(row.get("dft_f_mae_mev_a")),
+                dfmax=fmt(row.get("dft_f_max_abs_mev_a")),
             )
         )
-    append_front_section(lines, "## DFT Force Pareto Front", rows, "dft_f_mae_mev_a")
-    append_front_section(lines, "## Teacher Force Pareto Front", rows, "teacher_f_mae_mev_a")
+    append_front_section(lines, "## DFT Force RMSE Pareto Front", rows, "dft_f_rmse_mev_a")
+    append_front_section(lines, "## Teacher Force RMSE Pareto Front", rows, "teacher_f_rmse_mev_a")
+    append_front_section(lines, "## DFT Force MAE Pareto Front", rows, "dft_f_mae_mev_a")
+    append_front_section(lines, "## Teacher Force MAE Pareto Front", rows, "teacher_f_mae_mev_a")
     append_manifest_group_section(lines, rows, projection_rows=projection_rows)
     if baselines:
         lines.extend([
@@ -469,6 +493,26 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def make_summary_payload(
+    rows: list[dict[str, Any]],
+    *,
+    baselines: list[dict[str, Any]],
+    projection_rows: list[dict[str, Any]] | None = None,
+) -> dict[str, Any]:
+    projection_rows = projection_rows or []
+    return {
+        "primary_error_metric": "dft_f_rmse_mev_a",
+        "students": rows,
+        "projection_diagnostics": projection_rows,
+        "manifest_groups": manifest_group_rows(rows, projection_rows=projection_rows),
+        "dft_force_rmse_pareto_front": pareto_front_rows(rows, error_key="dft_f_rmse_mev_a"),
+        "teacher_force_rmse_pareto_front": pareto_front_rows(rows, error_key="teacher_f_rmse_mev_a"),
+        "dft_force_pareto_front": pareto_front_rows(rows, error_key="dft_f_mae_mev_a"),
+        "teacher_force_pareto_front": pareto_front_rows(rows, error_key="teacher_f_mae_mev_a"),
+        "baselines": baselines,
+    }
+
+
 def main() -> None:
     args = parse_args()
     rows = rank_student_rows([
@@ -485,14 +529,7 @@ def main() -> None:
         item["name"] = name
         baselines.append(item)
     projection_rows = load_projection_diagnostic_rows(args.projection_diagnostic)
-    payload = {
-        "students": rows,
-        "projection_diagnostics": projection_rows,
-        "manifest_groups": manifest_group_rows(rows, projection_rows=projection_rows),
-        "dft_force_pareto_front": pareto_front_rows(rows, error_key="dft_f_mae_mev_a"),
-        "teacher_force_pareto_front": pareto_front_rows(rows, error_key="teacher_f_mae_mev_a"),
-        "baselines": baselines,
-    }
+    payload = make_summary_payload(rows, baselines=baselines, projection_rows=projection_rows)
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
     args.output_md.parent.mkdir(parents=True, exist_ok=True)
     args.output_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

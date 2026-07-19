@@ -36,6 +36,7 @@ DEFAULT_MODEL_CONFIG = {
         "r_min": 0.0,
         "radial_basis": "j0",
         "num_radial_basis": 8,
+        "active_indices": None,
         "distance_transform": None,
         "cutoff_fn": 'c2poly',
         "polynomial_cutoff": 5,

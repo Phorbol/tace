@@ -179,6 +179,7 @@ def train_steps(
     lr: float,
     valid_samples: list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]] | None = None,
     eval_interval: int = 0,
+    min_eval_step: int = 0,
     best_checkpoint_path: str | Path | None = None,
     config: RTECEScalarConfig | None = None,
     energy_weight: float = 1.0,
@@ -190,6 +191,7 @@ def train_steps(
         raise ValueError("train_steps requires at least one sample")
     if best_checkpoint_path is not None and config is None:
         raise ValueError("config is required when best_checkpoint_path is set")
+    min_eval_step = max(0, int(min_eval_step))
     model.train()
     opt = torch.optim.AdamW(model.parameters(), lr=lr)
     final_loss: float | None = None
@@ -212,7 +214,7 @@ def train_steps(
         opt.step()
         final_loss = float(loss.detach().cpu())
         step_num = step + 1
-        if valid_samples is not None and eval_interval > 0 and step_num % eval_interval == 0:
+        if valid_samples is not None and eval_interval > 0 and step_num >= min_eval_step and step_num % eval_interval == 0:
             valid_loss = evaluate_loss(
                 model,
                 valid_samples,
@@ -226,7 +228,7 @@ def train_steps(
                 best_step = step_num
                 if best_checkpoint_path is not None:
                     save_checkpoint(best_checkpoint_path, model, config)
-    if valid_samples is not None and best_valid_loss is None:
+    if valid_samples is not None and best_valid_loss is None and max_steps >= min_eval_step:
         best_valid_loss = evaluate_loss(
             model,
             valid_samples,

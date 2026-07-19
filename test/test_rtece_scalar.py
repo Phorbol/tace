@@ -16,6 +16,7 @@ from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
     compute_pair_geometry,
     compute_atomic_moments,
     atomic_scalar_descriptors,
+    build_rtece_config_from_path_ids,
     build_rtece_config,
     cell_list_packed_element_density_descriptors,
     descriptor_dim,
@@ -23,6 +24,7 @@ from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
     _project_radial_edge_channels,
     packed_element_density_descriptors,
     rtece_descriptors,
+    short_range_repulsive_energy,
     rtece_path_manifest,
     rtece_route_contract,
 )
@@ -97,6 +99,9 @@ def test_rtece_route_contract_classifies_semantic_and_runtime_degradation():
     assert pair["force_realization"] == "analytic_scalar_chain_rule"
     assert pair["fused_force"] is False
     assert pair["graph_semantics"] == "direct_active_nopbc"
+    assert "stress" not in pair["ase_implemented_outputs"]
+    assert pair["stress_realization"] == "not_available_for_selected_force_mode"
+    assert "ase_stress_requires_autograd_force_mode" in pair["missing_output_contracts"]
     assert "persistent_equivariant_edge_state" in pair["deleted_tece_groups"]
 
     assert element["semantic_tier"] == "T3_element_conditioned_scalar_density"
@@ -465,6 +470,161 @@ def test_rtece_path_manifest_has_stable_path_ids_and_hash():
     assert "persistent_equivariant_edge_state" in manifest["deleted_tece_groups"]
 
 
+def test_rtece_route_and_manifest_expose_ase_stress_and_unimplemented_virial_contract():
+    config = build_rtece_config("rtece_cavity_radial_edge_sketch14")
+
+    route = rtece_route_contract(config)
+    manifest = rtece_path_manifest(config)
+
+    assert route["implemented_outputs"] == ["energy", "atomic_energy", "forces"]
+    assert route["ase_implemented_outputs"] == ["energy", "free_energy", "forces", "stress"]
+    assert route["stress_realization"] == "ase_autograd_finite_strain_inference"
+    assert route["virial_realization"] == "not_implemented"
+    assert "validated_edge_gradient_virial" in route["missing_output_contracts"]
+    assert "stress" not in route["implemented_outputs"]
+    assert "ase_stress" not in route["missing_output_contracts"]
+    assert manifest["output_contract"]["implemented"] == ["energy", "atomic_energy", "forces"]
+    assert manifest["output_contract"]["ase_implemented"] == ["energy", "free_energy", "forces", "stress"]
+    assert manifest["output_contract"]["missing"] == {"virial": "requires validated edge-gradient virial backend"}
+    assert manifest["compiler_status"] == "explicit_manifest_not_full_compiler"
+
+
+def test_rtece_path_manifest_scalar_paths_have_compiler_semantics():
+    manifest = rtece_path_manifest(build_rtece_config("rtece_cavity_radial_edge_sketch14"))
+
+    required = {"id", "placement", "inputs", "contraction", "cavity", "parity", "cutoff_power", "radial_gate", "cost_group"}
+    for path in manifest["scalar_paths"]:
+        assert required <= set(path), path
+        assert path["parity"] in (-1, 1)
+        assert isinstance(path["cutoff_power"], int)
+        assert path["cutoff_power"] >= 0
+    edge_direct = next(path for path in manifest["scalar_paths"] if path["id"] == "edge.direct.radial")
+    assert edge_direct["radial_gate"] == "edge_cutoff_envelope"
+    assert edge_direct["cutoff_power"] == 1
+
+
+def test_rtece_moment_l_max_controls_atomic_descriptor_bandwidth():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import config_with_moment_l_max
+
+    base = RTECEScalarConfig(variant="lmax", num_radial=3, hidden_channels=(4,))
+
+    l0 = config_with_moment_l_max(base, 0)
+    l1 = config_with_moment_l_max(base, 1)
+    l2 = config_with_moment_l_max(base, 2)
+
+    assert descriptor_dim(l0) == 3
+    assert [item["ell"] for item in rtece_path_manifest(l0)["moments"]] == [0]
+    assert [item["id"] for item in rtece_path_manifest(l0)["scalar_paths"]] == ["atomic.radial_density"]
+    assert descriptor_dim(l1) == 6
+    assert [item["ell"] for item in rtece_path_manifest(l1)["moments"]] == [0, 1]
+    assert "atomic.vector_norm" in [item["id"] for item in rtece_path_manifest(l1)["scalar_paths"]]
+    assert descriptor_dim(l2) == 9
+    assert [item["ell"] for item in rtece_path_manifest(l2)["moments"]] == [0, 1, 2]
+    assert "atomic.quadrupole_norm" in [item["id"] for item in rtece_path_manifest(l2)["scalar_paths"]]
+    assert rtece_route_contract(l2)["moment_l_max"] == 2
+    assert "angular_bandwidth_l_max" in rtece_route_contract(l2)["pareto_axes"]
+
+
+def test_rtece_path_id_moment_l_max_keeps_vector_cavity_at_l1():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
+
+    config = build_rtece_config_from_path_ids(
+        "l1_cavity",
+        ("atomic.radial_density", "edge.cavity.vector_dot", "edge.direct.radial"),
+        num_radial=3,
+        moment_l_max=1,
+    )
+    graph = RTECEGraph(
+        z=torch.tensor([1, 6, 8], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.8, 0.1, 0.0], [0.2, 0.9, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    manifest = rtece_path_manifest(config)
+    descriptors = rtece_descriptors(graph, config)
+
+    assert config.moment_l_max == 1
+    assert config.use_atomic_moments is False
+    assert [item["ell"] for item in manifest["moments"]] == [0, 1]
+    assert descriptors.shape == (3, descriptor_dim(config))
+
+
+def test_rtece_moment_l_max_rejects_unsupported_orders():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import config_with_moment_l_max
+
+    with pytest.raises(ValueError, match="moment_l_max"):
+        config_with_moment_l_max(RTECEScalarConfig(variant="bad"), 3)
+
+
+def test_rtece_learnable_radial_mixing_initializes_as_fixed_feature_extractor():
+    fixed = RTECEScalarModel(RTECEScalarConfig(variant="fixed", num_radial=3, hidden_channels=(4,))).double()
+    learnable_config = RTECEScalarConfig(
+        variant="learnable",
+        num_radial=3,
+        hidden_channels=(4,),
+        learnable_radial_mixing=True,
+    )
+    learnable = RTECEScalarModel(learnable_config).double()
+    learnable.energy_head.load_state_dict(fixed.energy_head.state_dict())
+    graph = RTECEGraph(
+        z=torch.tensor([1, 6, 8], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.8, 0.1, 0.0], [0.2, 0.9, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    fixed_out = fixed(graph)
+    learnable_out = learnable(graph)
+
+    assert "radial_mixing.weight" in learnable.state_dict()
+    assert torch.allclose(learnable.radial_mixing.weight, torch.eye(3, dtype=torch.float64))
+    assert torch.allclose(learnable_out["energy"], fixed_out["energy"], atol=1e-12)
+    assert torch.allclose(learnable_out["forces"], fixed_out["forces"], atol=1e-12)
+
+
+def test_rtece_learnable_radial_mixing_is_manifested_as_trainable_feature_path():
+    config = RTECEScalarConfig(
+        variant="learnable_radial",
+        num_radial=4,
+        hidden_channels=(8,),
+        learnable_radial_mixing=True,
+    )
+
+    route = rtece_route_contract(config)
+    manifest = rtece_path_manifest(config)
+
+    assert route["feature_extractor"] == "learnable_radial_linear_mixing"
+    assert "trainable_low_rank_radial_mixing" in route["retained_tece_groups"]
+    assert "trainable_feature_extractor" in route["pareto_axes"]
+    assert manifest["config"]["learnable_radial_mixing"] is True
+    assert manifest["moments"][0]["radial_projection"] == "learnable_identity_initialized_linear_mixing"
+
+
+def test_rtece_zbl_short_range_prior_matches_tace_zbl_basis():
+    from tace.models.radial import ZBLBasis
+
+    graph = RTECEGraph(
+        z=torch.tensor([1, 6], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.35, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(2),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+    config = RTECEScalarConfig(
+        variant="zbl",
+        use_short_range_repulsion=True,
+        short_range_repulsion_potential="zbl",
+    )
+    _, distances, _ = compute_pair_geometry(graph)
+    node_attrs = torch.eye(2, dtype=torch.float64)
+    atomic_numbers = torch.tensor([1, 6], dtype=torch.long)
+    zbl = ZBLBasis("c2poly", trainable=False).to(dtype=torch.float64)
+
+    expected = zbl(distances[:, None], node_attrs, graph.edge_index, atomic_numbers).sum().view(1)
+
+    assert torch.allclose(short_range_repulsive_energy(graph, config), expected)
+
+
 def test_rtece_short_range_repulsive_core_adds_conservative_repulsion():
     config = RTECEScalarConfig(
         variant="rtece_pair",
@@ -498,6 +658,38 @@ def test_rtece_short_range_repulsive_core_adds_conservative_repulsion():
     assert short_out["energy"].item() > long_out["energy"].item() + 0.5
     assert short_out["forces"][0, 0].item() < 0.0
     assert torch.allclose(short_out["forces"].sum(dim=0), torch.zeros(3, dtype=torch.float64), atol=1e-10)
+
+
+def test_rtece_analytic_force_backend_rejects_training_mode():
+    config = RTECEScalarConfig(variant="rtece_pair")
+    model = RTECEScalarModel(config).double().train()
+    graph = RTECEGraph(
+        z=torch.tensor([1, 1], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(2),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+
+    with pytest.raises(RuntimeError, match="inference-only rTECE force backend"):
+        model.forward_pair_analytic_forces(graph)
+
+
+def test_rtece_analytic_force_backend_rejects_periodic_image_shifts():
+    config = RTECEScalarConfig(variant="rtece_pair")
+    model = RTECEScalarModel(config).double().eval()
+    edge_index = torch.tensor([[0, 1], [1, 0]], dtype=torch.long)
+    graph = RTECEGraph(
+        z=torch.tensor([1, 1], dtype=torch.long),
+        pos=torch.tensor([[0.1, 0.0, 0.0], [4.9, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=edge_index,
+        batch=torch.zeros(2, dtype=torch.long),
+        cell=torch.eye(3, dtype=torch.float64).unsqueeze(0) * 5.0,
+        edge_shifts=torch.tensor([[1, 0, 0], [-1, 0, 0]], dtype=torch.long),
+        edge_batch=torch.zeros(edge_index.shape[1], dtype=torch.long),
+    )
+
+    with pytest.raises(ValueError, match="periodic image shifts"):
+        model.forward_pair_analytic_forces(graph)
 
 
 def test_rtece_short_range_repulsive_core_rejects_analytic_force_backend():
@@ -589,6 +781,22 @@ def test_rtece_config_from_manifest_reconstructs_architecture_hash():
     assert rtece_path_manifest(rebuilt, force_mode="autograd")["manifest_hash"] == manifest["manifest_hash"]
 
 
+def test_rtece_formal_models_import_does_not_eager_load_optional_tace_backends():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    script = "import importlib.abc\nimport json\nimport sys\n\noptional = {\n    'tace.models._cart',\n    'tace.models._e3nn',\n    'tace.models.adapter',\n    'tace.models.compile',\n}\nattempts = []\n\nclass OptionalBackendProbe(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname in optional or any(fullname.startswith(name + '.') for name in optional):\n            attempts.append(fullname)\n            raise ImportError(f'blocked optional backend {fullname}')\n        return None\n\nsys.meta_path.insert(0, OptionalBackendProbe())\nfrom tace.models import RTECEScalarModel  # noqa: F401\nprint(json.dumps(attempts))"
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout.strip().splitlines()[-1]) == []
+
+
 def test_rtece_route_registry_has_formal_tace_models_entrypoint():
     from benchmarks.oc20neb_tace_mace import rtece_scalar_model as benchmark_rtece
     from tace.models import (
@@ -633,6 +841,54 @@ def test_rtece_path_id_config_drives_atomic_descriptor_order_and_dim():
     assert torch.allclose(descriptors[:, :4], moments["density"])
     assert torch.allclose(descriptors[:, 4:8], moments["density"].square())
     assert torch.allclose(descriptors[:, 8:12], (moments["vector"] ** 2).sum(dim=-1))
+
+
+def test_rtece_path_id_config_selects_atomic_cross_radial_moment_invariants():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
+
+    config = build_rtece_config_from_path_ids(
+        "rtece_atomic_cross_radial",
+        (
+            "atomic.radial_density",
+            "atomic.vector_cross_radial_dot",
+            "atomic.quadrupole_cross_radial_frobenius",
+        ),
+        num_radial=4,
+        hidden_channels=(8,),
+        moment_l_max=2,
+    )
+    graph = RTECEGraph(
+        z=torch.tensor([6, 1, 8], dtype=torch.long),
+        pos=torch.tensor(
+            [[0.0, 0.0, 0.0], [0.7, 0.1, 0.0], [0.2, 0.9, 0.1]],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    moments = compute_atomic_moments(graph, config)
+    vector_shells = _project_radial_edge_channels(moments["vector"], 2)
+    quadrupole_shells = _project_radial_edge_channels(moments["quadrupole"], 2)
+    expected_vector_cross = (vector_shells[:, 0] * vector_shells[:, 1]).sum(dim=-1, keepdim=True)
+    expected_quadrupole_cross = (quadrupole_shells[:, 0] * quadrupole_shells[:, 1]).sum(
+        dim=(-1, -2),
+    ).unsqueeze(-1)
+
+    descriptors = rtece_descriptors(graph, config)
+    manifest = rtece_path_manifest(config)
+
+    assert descriptor_dim(config) == 6
+    assert descriptors.shape == (3, 6)
+    assert torch.allclose(descriptors[:, :4], moments["density"])
+    assert torch.allclose(descriptors[:, 4:5], expected_vector_cross)
+    assert torch.allclose(descriptors[:, 5:6], expected_quadrupole_cross)
+    assert [path["id"] for path in manifest["scalar_paths"]] == [
+        "atomic.radial_density",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_cross_radial_frobenius",
+    ]
+    assert "atomic_cross_radial_invariants" in manifest["retained_tece_groups"]
 
 
 def test_rtece_path_id_manifest_reconstructs_selected_atomic_paths():
@@ -743,6 +999,87 @@ def test_rtece_path_id_config_selects_named_cavity_edge_column():
     ]
 
 
+def test_rtece_path_id_config_selects_full_moment_shell_edge_columns():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
+
+    selected = build_rtece_config_from_path_ids(
+        "rtece_path_full_shell_vector_dot",
+        ("atomic.radial_density", "edge.full_moment.vector_shell_dot"),
+        num_radial=4,
+        hidden_channels=(8,),
+    )
+    full = RTECEScalarConfig(
+        variant="rtece_edge_sketch16_reference",
+        num_radial=4,
+        hidden_channels=(8,),
+        use_atomic_moments=True,
+        num_edge_sketches=16,
+    )
+    graph = RTECEGraph(
+        z=torch.tensor([6, 1, 8], dtype=torch.long),
+        pos=torch.tensor(
+            [[0.0, 0.0, 0.0], [0.7, 0.1, 0.0], [0.2, 0.9, 0.1]],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    selected_descriptors = rtece_descriptors(graph, selected)
+    full_edge_sketches = edge_relational_sketches(graph, full)
+    manifest = rtece_path_manifest(selected)
+
+    assert selected.scalar_path_ids == ("atomic.radial_density", "edge.full_moment.vector_shell_dot")
+    assert selected.num_edge_sketches == 2
+    assert descriptor_dim(selected) == 6
+    assert selected_descriptors.shape == (3, 6)
+    assert torch.allclose(selected_descriptors[:, :4], compute_atomic_moments(graph, selected)["density"])
+    assert torch.allclose(selected_descriptors[:, 4:6], full_edge_sketches[:, 8:10])
+    assert [path["id"] for path in manifest["scalar_paths"]] == [
+        "atomic.radial_density",
+        "edge.full_moment.vector_shell_dot",
+    ]
+
+
+def test_rtece_path_id_config_selects_mixed_full_shell_and_direct_edge_paths():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
+
+    selected = build_rtece_config_from_path_ids(
+        "rtece_path_full_shell_cross_direct",
+        (
+            "atomic.radial_density",
+            "edge.full_moment.vector_cross_shell_dot",
+            "edge.direct.radial",
+        ),
+        num_radial=4,
+        hidden_channels=(8,),
+    )
+    full = RTECEScalarConfig(
+        variant="rtece_edge_sketch16_reference",
+        num_radial=4,
+        hidden_channels=(8,),
+        use_atomic_moments=True,
+        num_edge_sketches=16,
+    )
+    graph = RTECEGraph(
+        z=torch.tensor([6, 1, 8], dtype=torch.long),
+        pos=torch.tensor(
+            [[0.0, 0.0, 0.0], [0.7, 0.1, 0.0], [0.2, 0.9, 0.1]],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    selected_edge = edge_relational_sketches(graph, selected)
+    full_edge = edge_relational_sketches(graph, full)
+
+    assert selected.num_edge_sketches == 3
+    assert descriptor_dim(selected) == 7
+    assert torch.allclose(selected_edge[:, :1], full_edge[:, 10:11])
+    assert torch.allclose(selected_edge[:, 1:3], full_edge[:, 6:8])
+
+
 def test_rtece_path_id_edge_manifest_reconstructs_selected_edge_paths():
     from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
         build_rtece_config_from_manifest,
@@ -767,6 +1104,39 @@ def test_rtece_path_id_edge_manifest_reconstructs_selected_edge_paths():
     assert rtece_path_manifest(rebuilt)["manifest_hash"] == manifest["manifest_hash"]
 
 
+def test_rtece_atomic_cross_radial_sketch_channels_control_descriptor_rank():
+    from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
+
+    config = build_rtece_config_from_path_ids(
+        "l1_cross_k3",
+        ("atomic.radial_density", "atomic.vector_norm", "atomic.vector_cross_radial_dot"),
+        num_radial=6,
+        moment_l_max=1,
+        atomic_cross_radial_sketch_channels=3,
+    )
+    graph = RTECEGraph(
+        z=torch.tensor([6, 1, 8], dtype=torch.long),
+        pos=torch.tensor(
+            [[0.0, 0.0, 0.0], [0.7, 0.1, 0.0], [0.2, 0.9, 0.1]],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    desc = atomic_scalar_descriptors(graph, config)
+    manifest = rtece_path_manifest(config)
+    cross_path = next(path for path in manifest["scalar_paths"] if path["id"] == "atomic.vector_cross_radial_dot")
+
+    assert config.atomic_cross_radial_sketch_channels == 3
+    assert descriptor_dim(config) == 6 + 6 + 3
+    assert desc.shape == (3, 15)
+    assert cross_path["radial_projection"] == "fixed_3_shell_mean"
+    assert cross_path["contraction"] == "off_diagonal_shell_dot"
+    assert manifest["config"]["atomic_cross_radial_sketch_channels"] == 3
+    assert "radial_rank" in manifest["route"]["pareto_axes"]
+
+
 def test_rtece_path_manifest_hash_is_independent_of_variant_label():
     from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
 
@@ -780,6 +1150,20 @@ def test_rtece_path_manifest_hash_is_independent_of_variant_label():
     assert left_manifest["config"]["variant"] == "left_label"
     assert right_manifest["config"]["variant"] == "right_label"
     assert left_manifest["manifest_hash"] == right_manifest["manifest_hash"]
+
+
+def test_edge_sketch16_manifest_names_shell_resolved_scalar_paths():
+    config = build_rtece_config("rtece_edge_sketch16")
+    manifest = rtece_path_manifest(config)
+    path_ids = [path["id"] for path in manifest["scalar_paths"]]
+
+    assert "edge.full_moment.vector_dot" in path_ids
+    assert "edge.full_moment.vector_shell_dot" in path_ids
+    assert "edge.full_moment.vector_cross_shell_dot" in path_ids
+    assert "edge.full_moment.quadrupole_shell_frobenius" in path_ids
+    assert "edge.full_moment.quadrupole_cross_shell_frobenius" in path_ids
+    assert "edge.full_moment.vector_shell_contrast_projection" in path_ids
+    assert len(path_ids) == len(set(path_ids))
 
 
 def test_rtece_projection_residual_metrics_detects_spanned_and_deleted_components():
@@ -989,6 +1373,101 @@ def test_rtece_rattle_relax_summary_tracks_rmsd_and_force_spikes():
     assert groups["not_CHNO"]["converged_fraction"] == pytest.approx(0.0)
 
 
+def test_make_rattle_distill_configs_preserves_training_labels_and_records_source_metadata():
+    import numpy as np
+    from ase import Atoms
+
+    from benchmarks.oc20neb_tace_mace.make_rattle_distill_configs import make_rattle_distill_configs
+    from benchmarks.oc20neb_tace_mace.rattle_relax_rtece import positions_rmsd
+
+    atoms = Atoms(
+        "CH",
+        positions=[[0.0, 0.0, 0.0], [0.8, 0.1, 0.0]],
+        cell=[8.0, 8.0, 8.0],
+        pbc=True,
+    )
+    atoms.info["energy"] = -1.25
+    atoms.info["case_id"] = "case-7"
+    atoms.arrays["forces"] = np.array([[0.1, 0.0, 0.0], [-0.1, 0.0, 0.0]], dtype=np.float64)
+
+    rattled, summary = make_rattle_distill_configs(
+        [atoms],
+        copies_per_config=2,
+        rattle_std_a=0.05,
+        seed=123,
+    )
+
+    assert len(rattled) == 2
+    assert summary["configs"] == 2
+    assert summary["source_configs"] == 1
+    assert summary["mean_initial_rmsd_a"] > 0.0
+    assert rattled[0].info["energy"] == pytest.approx(-1.25)
+    assert np.allclose(rattled[0].arrays["forces"], atoms.arrays["forces"])
+    assert rattled[0].info["rattle_source_config_index"] == 0
+    assert rattled[0].info["rattle_copy_index"] == 0
+    assert rattled[0].info["rattle_source_case_id"] == "case-7"
+    assert positions_rmsd(rattled[0].positions, atoms.positions) == pytest.approx(rattled[0].info["rattle_initial_rmsd_a"])
+    assert np.allclose((rattled[0].positions - atoms.positions).mean(axis=0), np.zeros(3), atol=1e-14)
+    assert not np.allclose(rattled[0].positions, rattled[1].positions)
+
+
+def test_make_rattle_distill_configs_cli_runs_from_repo_script_path(tmp_path):
+    import json
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    source = tmp_path / "source.extxyz"
+    output = tmp_path / "rattled.extxyz"
+    summary = tmp_path / "summary.json"
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.75, 0.0, 0.0]])
+    atoms.info["energy"] = -0.5
+    atoms.arrays["forces"] = np.zeros((2, 3), dtype=np.float64)
+    ase.io.write(source, [atoms], format="extxyz")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/oc20neb_tace_mace/make_rattle_distill_configs.py",
+            "--input",
+            str(source),
+            "--output",
+            str(output),
+            "--summary",
+            str(summary),
+            "--copies-per-config",
+            "1",
+            "--rattle-std-a",
+            "0.01",
+            "--seed",
+            "9",
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(result.stdout)
+    assert payload["configs"] == 1
+    assert output.exists()
+    assert summary.exists()
+
+
+def test_make_rattle_distill_configs_requires_standard_energy_force_targets():
+    from ase import Atoms
+
+    from benchmarks.oc20neb_tace_mace.make_rattle_distill_configs import make_rattle_distill_configs
+
+    atoms = Atoms("H", positions=[[0.0, 0.0, 0.0]])
+
+    with pytest.raises(KeyError, match="energy"):
+        make_rattle_distill_configs([atoms], copies_per_config=1, rattle_std_a=0.01, seed=5)
+
+
 def test_rtece_physical_pareto_row_combines_benchmark_dimer_and_rattle_gates():
     from benchmarks.oc20neb_tace_mace.summarize_rtece_physical_pareto import (
         make_physical_pareto_row,
@@ -1049,6 +1528,45 @@ def test_rtece_physical_pareto_row_combines_benchmark_dimer_and_rattle_gates():
     assert [item["variant"] for item in front] == ["fast_tradeoff", "radial_core_balanced"]
 
 
+def test_rtece_physical_pareto_accepts_non_cn_rattle_focus_label():
+    from benchmarks.oc20neb_tace_mace.summarize_rtece_physical_pareto import format_markdown, make_physical_pareto_row
+
+    benchmark = {"atoms_per_second": 3.0e6, "mae_f_mev_a": 29.0, "rmse_f_mev_a": 101.0}
+    dimer = {
+        "pair_summaries": [
+            {"pair": "O-Cu", "summary": {"short_force_repulsive": True, "has_nonfinite": False, "short_force_parallel_ev_a": -0.20}}
+        ]
+    }
+    rattle = {
+        "summary": {
+            "mean_final_rmsd_a": 0.16,
+            "max_fmax_ev_a": 0.20,
+            "focus_groups": [
+                {"label": "O_or_Cu", "mean_final_rmsd_a": 0.12, "max_fmax_ev_a": 0.20},
+                {"label": "C_or_N", "mean_final_rmsd_a": 0.30, "max_fmax_ev_a": 0.20},
+            ],
+        }
+    }
+
+    row = make_physical_pareto_row(
+        "generic_focus",
+        dft_benchmark=benchmark,
+        dimer_scan=dimer,
+        rattle_relax=rattle,
+        rattle_focus_label="O_or_Cu",
+        max_focus_rattle_rmsd_a=0.15,
+    )
+
+    assert row["rattle_focus_label"] == "O_or_Cu"
+    assert row["focus_rattle_final_rmsd_a"] == pytest.approx(0.12)
+    assert row["cn_rattle_final_rmsd_a"] == pytest.approx(0.30)
+    assert row["max_cn_rattle_rmsd_a"] is None
+    assert row["rattle_gate_pass"] is True
+    markdown = format_markdown([row], [row])
+    assert "O_or_Cu RMSD" in markdown
+    assert "configurable stress-test dimension" in markdown
+
+
 def test_rtece_physical_pareto_penalizes_negative_dimer_energy_lift():
     from benchmarks.oc20neb_tace_mace.summarize_rtece_physical_pareto import make_physical_pareto_row
 
@@ -1084,7 +1602,60 @@ def test_rtece_physical_pareto_penalizes_negative_dimer_energy_lift():
     assert row["dimer_gate_pass"] is True
     assert row["dimer_min_short_energy_lift_eV"] == pytest.approx(-0.02)
     assert row["dimer_energy_shape_penalty"] == pytest.approx(0.02)
-    assert row["physical_score"] == pytest.approx(29.0 / 35.0 + 0.16 / 0.20 + 0.20 / 0.40 + 0.02 / 0.05)
+    assert row["physical_score"] == pytest.approx(101.0 / 120.0 + 0.16 / 0.20 + 0.20 / 0.40 + 0.02 / 0.05)
+
+
+def test_rtece_physical_pareto_uses_rmse_and_max_error_in_score():
+    from benchmarks.oc20neb_tace_mace.summarize_rtece_physical_pareto import make_physical_pareto_row
+
+    benchmark = {
+        "atoms_per_second": 3.0e6,
+        "mae_e_mev_atom": 5.0,
+        "rmse_e_mev_atom": 50.0,
+        "max_abs_e_mev_atom": 250.0,
+        "mae_f_mev_a": 10.0,
+        "rmse_f_mev_a": 80.0,
+        "max_abs_f_mev_a": 300.0,
+    }
+    rattle = {
+        "summary": {
+            "mean_final_rmsd_a": 0.10,
+            "max_fmax_ev_a": 0.20,
+            "focus_groups": [{"label": "C_or_N", "mean_final_rmsd_a": 0.10, "max_fmax_ev_a": 0.20}],
+        }
+    }
+    dimer = {
+        "pair_summaries": [
+            {
+                "pair": "C-N",
+                "summary": {
+                    "short_force_repulsive": True,
+                    "has_nonfinite": False,
+                    "short_force_parallel_ev_a": -0.25,
+                    "short_minus_long_energy_eV": 0.01,
+                },
+            }
+        ]
+    }
+
+    row = make_physical_pareto_row(
+        "rmse_weighted",
+        dft_benchmark=benchmark,
+        dimer_scan=dimer,
+        rattle_relax=rattle,
+        max_dft_f_rmse_mev_a=100.0,
+        max_dft_e_rmse_mev_atom=100.0,
+        max_dft_f_max_mev_a=600.0,
+        max_dft_e_max_mev_atom=500.0,
+    )
+
+    assert row["benchmark_gate_pass"] is True
+    assert row["dft_e_rmse_mev_atom"] == pytest.approx(50.0)
+    assert row["dft_f_rmse_mev_a"] == pytest.approx(80.0)
+    assert row["dft_e_max_abs_mev_atom"] == pytest.approx(250.0)
+    assert row["dft_f_max_abs_mev_a"] == pytest.approx(300.0)
+    assert row["benchmark_score"] == pytest.approx(0.8 + 0.5 + 0.5 + 0.5)
+    assert row["physical_score"] == pytest.approx(0.8 + 0.5 + 0.5 + 0.5 + 0.10 / 0.20 + 0.20 / 0.40)
 
 
 def test_rtece_force_error_stratification_reports_element_and_focus_groups():
@@ -1192,6 +1763,791 @@ def test_rtece_projection_diagnostic_builds_species_path_config():
     )
 
 
+def test_rtece_projection_config_accepts_atomic_cross_radial_sketch_channels():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import build_projection_config
+
+    config = build_projection_config(
+        "l1_cross_k3_projection",
+        ("atomic.radial_density", "atomic.vector_norm", "atomic.vector_cross_radial_dot"),
+        num_radial=6,
+        atomic_cross_radial_sketch_channels=3,
+    )
+
+    assert config.atomic_cross_radial_sketch_channels == 3
+    assert descriptor_dim(config) == 6 + 6 + 3
+
+
+def test_rtece_projection_cli_help_does_not_import_torch_or_tace():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    script = "import importlib.abc\nimport sys\nblocked_roots = ('torch', 'tace')\nclass HeavyImportProbe(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname in blocked_roots or any(fullname.startswith(root + '.') for root in blocked_roots):\n            raise ImportError(f'blocked heavy import {fullname}')\n        return None\nsys.meta_path.insert(0, HeavyImportProbe())\nfrom benchmarks.oc20neb_tace_mace import analyze_rtece_projection_error as mod\nsys.argv = ['analyze_rtece_projection_error.py', '--help']\ntry:\n    mod.main()\nexcept SystemExit as exc:\n    raise SystemExit(exc.code)"
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--auto-candidate-strategy" in result.stdout
+    assert "--atomic-cross-radial-sketch-channels" in result.stdout
+    assert "--energy-target-key" in result.stdout
+
+
+def test_rtece_projection_candidate_helpers_do_not_import_torch_or_tace():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    script = "import importlib.abc\nimport json\nimport sys\nblocked_roots = ('torch', 'tace')\nattempts = []\nclass HeavyImportProbe(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname in blocked_roots or any(fullname.startswith(root + '.') for root in blocked_roots):\n            attempts.append(fullname)\n            raise ImportError(f'blocked heavy import {fullname}')\n        return None\nsys.meta_path.insert(0, HeavyImportProbe())\nfrom benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import generate_projection_candidate_specs, rank_projection_rows\ngenerate_projection_candidate_specs(('atomic.radial_density', 'edge.direct.radial'))\nrank_projection_rows([{'candidate': 'x', 'relative_residual': 0.0, 'candidate_dim': 1}])\nprint(json.dumps(attempts))"
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert json.loads(result.stdout.strip().splitlines()[-1]) == []
+
+
+def test_rtece_projection_candidate_generator_builds_single_delete_path_sets():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import generate_projection_candidate_specs
+
+    reference_paths = (
+        "atomic.radial_density",
+        "edge.full_moment.vector_dot",
+        "edge.full_moment.vector_shell_dot",
+        "edge.direct.radial",
+    )
+
+    candidates = generate_projection_candidate_specs(reference_paths, strategies=("single_delete",))
+
+    assert candidates == [
+        (
+            "single_delete_edge_full_moment_vector_dot",
+            ("atomic.radial_density", "edge.full_moment.vector_shell_dot", "edge.direct.radial"),
+        ),
+        (
+            "single_delete_edge_full_moment_vector_shell_dot",
+            ("atomic.radial_density", "edge.full_moment.vector_dot", "edge.direct.radial"),
+        ),
+        (
+            "single_delete_edge_direct_radial",
+            ("atomic.radial_density", "edge.full_moment.vector_dot", "edge.full_moment.vector_shell_dot"),
+        ),
+    ]
+
+
+def test_rtece_projection_candidate_generator_builds_prefix_path_sets():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import generate_projection_candidate_specs
+
+    reference_paths = (
+        "atomic.radial_density",
+        "edge.full_moment.vector_dot",
+        "edge.full_moment.vector_shell_dot",
+        "edge.direct.radial",
+    )
+
+    candidates = generate_projection_candidate_specs(reference_paths, strategies=("prefix",))
+
+    assert candidates == [
+        ("prefix_001", ("atomic.radial_density",)),
+        ("prefix_002", ("atomic.radial_density", "edge.full_moment.vector_dot")),
+        (
+            "prefix_003",
+            ("atomic.radial_density", "edge.full_moment.vector_dot", "edge.full_moment.vector_shell_dot"),
+        ),
+    ]
+
+
+def test_rtece_projection_rows_are_ranked_by_residual_then_descriptor_dim():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import rank_projection_rows
+
+    rows = [
+        {"candidate": "wide_worse", "relative_residual": 0.20, "candidate_dim": 8},
+        {"candidate": "small_best", "relative_residual": 0.10, "candidate_dim": 3},
+        {"candidate": "wide_best_tie", "relative_residual": 0.10, "candidate_dim": 5},
+    ]
+
+    ranked = rank_projection_rows(rows)
+
+    assert [row["candidate"] for row in ranked] == ["small_best", "wide_best_tie", "wide_worse"]
+    assert [row["projection_rank"] for row in ranked] == [1, 2, 3]
+
+
+def test_rtece_projection_rows_add_energy_force_ranks_and_pareto_flags():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import rank_projection_rows
+
+    rows = [
+        {"candidate": "energy_best", "relative_residual": 0.4, "candidate_dim": 16, "energy_per_atom_rmse": 0.10, "force_rmse": 0.50},
+        {"candidate": "balanced", "relative_residual": 0.2, "candidate_dim": 12, "energy_per_atom_rmse": 0.20, "force_rmse": 0.20},
+        {"candidate": "dominated", "relative_residual": 0.1, "candidate_dim": 14, "energy_per_atom_rmse": 0.30, "force_rmse": 0.30},
+        {"candidate": "force_best", "relative_residual": 0.3, "candidate_dim": 20, "energy_per_atom_rmse": 0.50, "force_rmse": 0.10},
+    ]
+
+    ranked = rank_projection_rows(rows)
+    by_candidate = {row["candidate"]: row for row in ranked}
+
+    assert [row["candidate"] for row in ranked] == ["dominated", "balanced", "force_best", "energy_best"]
+    assert by_candidate["energy_best"]["energy_rank"] == 1
+    assert by_candidate["force_best"]["force_rank"] == 1
+    assert by_candidate["balanced"]["ef_combined_rank"] == 1
+    assert by_candidate["balanced"]["ef_rank_max"] == 2
+    assert by_candidate["balanced"]["ef_rank_sum"] == 4
+    assert by_candidate["dominated"]["ef_pareto_dominated"] is True
+    assert by_candidate["balanced"]["ef_pareto_dominated"] is False
+    assert by_candidate["energy_best"]["ef_energy_metric"] == "energy_per_atom_rmse"
+    assert by_candidate["energy_best"]["ef_force_metric"] == "force_rmse"
+
+
+def test_rtece_projection_rows_use_total_energy_rank_when_per_atom_metric_missing():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import rank_projection_rows
+
+    ranked = rank_projection_rows([
+        {"candidate": "a", "relative_residual": 0.0, "candidate_dim": 2, "energy_rmse": 2.0},
+        {"candidate": "b", "relative_residual": 0.1, "candidate_dim": 1, "energy_rmse": 1.0},
+    ])
+    by_candidate = {row["candidate"]: row for row in ranked}
+
+    assert by_candidate["b"]["energy_rank"] == 1
+    assert by_candidate["b"]["ef_energy_metric"] == "energy_rmse"
+    assert "force_rank" not in by_candidate["b"]
+    assert "ef_combined_rank" not in by_candidate["b"]
+
+
+def test_rtece_projection_rows_cache_reference_descriptors(monkeypatch):
+    from benchmarks.oc20neb_tace_mace import analyze_rtece_projection_error as mod
+
+    reference = RTECEScalarConfig(variant="reference", num_radial=1)
+    candidate_a = RTECEScalarConfig(variant="candidate_a", num_radial=1)
+    candidate_b = RTECEScalarConfig(variant="candidate_b", num_radial=1)
+    calls = {"reference": 0, "candidate_a": 0, "candidate_b": 0}
+
+    def fake_descriptor_matrices(graphs, config):
+        calls[config.variant] += 1
+        if config.variant == "reference":
+            matrix = torch.tensor([[1.0], [2.0], [3.0]], dtype=torch.float64)
+            return matrix, matrix
+        if config.variant == "candidate_a":
+            matrix = torch.tensor([[1.0], [2.0], [3.0]], dtype=torch.float64)
+            return matrix, matrix
+        matrix = torch.tensor([[1.0], [1.0], [1.0]], dtype=torch.float64)
+        return matrix, matrix
+
+    monkeypatch.setattr(mod, "_descriptor_matrices", fake_descriptor_matrices)
+
+    rows = mod.make_projection_diagnostic_rows(
+        [
+            ("candidate_a", candidate_a),
+            ("candidate_b", candidate_b),
+        ],
+        reference_config=reference,
+        graphs=[object()],
+    )
+
+    assert [row["candidate"] for row in rows] == ["candidate_a", "candidate_b"]
+    assert calls == {"reference": 1, "candidate_a": 1, "candidate_b": 1}
+
+
+def test_rtece_projection_subset_candidates_slice_reference_descriptors(monkeypatch):
+    from benchmarks.oc20neb_tace_mace import analyze_rtece_projection_error as mod
+
+    reference = mod.build_projection_config(
+        "reference",
+        ("atomic.radial_density", "atomic.vector_norm"),
+        num_radial=1,
+    )
+    candidate = mod.build_projection_config(
+        "candidate",
+        ("atomic.radial_density",),
+        num_radial=1,
+    )
+    calls = {"reference": 0, "candidate": 0}
+
+    def fake_descriptor_matrices(graphs, config):
+        calls[config.variant] += 1
+        if config.variant == "reference":
+            matrix = torch.tensor([[1.0, 10.0], [2.0, 20.0], [3.0, 30.0]], dtype=torch.float64)
+            return matrix, matrix
+        raise AssertionError("subset candidate should be sliced from the reference descriptor matrix")
+
+    monkeypatch.setattr(mod, "_descriptor_matrices", fake_descriptor_matrices)
+
+    rows = mod.make_projection_diagnostic_rows(
+        [("radial_only", candidate)],
+        reference_config=reference,
+        graphs=[object()],
+    )
+
+    assert rows[0]["candidate"] == "radial_only"
+    assert rows[0]["candidate_dim"] == 1
+    assert calls == {"reference": 1, "candidate": 0}
+
+
+def test_rtece_projection_reference_slice_matches_explicit_candidate_descriptors():
+    from benchmarks.oc20neb_tace_mace import analyze_rtece_projection_error as mod
+
+    graph = RTECEGraph(
+        z=torch.tensor([1, 6, 8], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.8, 0.1, 0.0], [0.2, 0.9, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+    reference = mod.build_projection_config(
+        "reference",
+        (
+            "atomic.radial_density",
+            "atomic.vector_norm",
+            "atomic.vector_cross_radial_dot",
+            "edge.cavity.vector_dot",
+            "edge.direct.radial",
+        ),
+        num_radial=3,
+        atomic_cross_radial_sketch_channels=2,
+    )
+    candidate = mod.build_projection_config(
+        "candidate",
+        ("atomic.vector_cross_radial_dot", "atomic.radial_density", "edge.direct.radial"),
+        num_radial=3,
+        atomic_cross_radial_sketch_channels=2,
+    )
+
+    reference_descriptors = mod._descriptor_matrix([graph], reference)
+    sliced = mod.candidate_descriptors_from_reference(
+        reference_descriptors,
+        candidate_config=candidate,
+        reference_config=reference,
+    )
+    explicit = mod._descriptor_matrix([graph], candidate)
+
+    assert sliced is not None
+    assert torch.allclose(sliced, explicit, atol=1e-12, rtol=1e-12)
+
+
+def test_rtece_energy_label_projection_metrics_report_error_statistics():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import energy_label_projection_metrics
+
+    source = torch.tensor([[1.0, 0.0], [1.0, 1.0], [1.0, 2.0]], dtype=torch.float64)
+    target = torch.tensor([1.0, 2.0, 4.0], dtype=torch.float64)
+
+    metrics = energy_label_projection_metrics(source, target, ridge=0.0)
+
+    assert metrics["energy_num_samples"] == 3
+    assert metrics["energy_source_dim"] == 2
+    assert metrics["energy_target_dim"] == 1
+    assert metrics["energy_rmse"] == pytest.approx((1.0 / 18.0) ** 0.5)
+    assert metrics["energy_mae"] == pytest.approx(2.0 / 9.0)
+    assert metrics["energy_bias"] == pytest.approx(0.0, abs=1e-12)
+    assert metrics["energy_max_abs"] == pytest.approx(1.0 / 3.0)
+    assert metrics["energy_per_atom_rmse"] is None
+
+
+def test_rtece_energy_label_projection_metrics_reports_holdout_error():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import energy_label_projection_metrics
+
+    source = torch.tensor([[0.0], [1.0], [2.0], [3.0]], dtype=torch.float64)
+    target = torch.tensor([0.0, 1.0, 2.0, 10.0], dtype=torch.float64)
+
+    metrics = energy_label_projection_metrics(
+        source,
+        target,
+        ridge=0.0,
+        fit_indices=torch.tensor([0, 1, 2], dtype=torch.long),
+        eval_indices=torch.tensor([3], dtype=torch.long),
+    )
+
+    assert metrics["energy_fit_num_samples"] == 3
+    assert metrics["energy_eval_num_samples"] == 1
+    assert metrics["energy_degrees_of_freedom"] == 2
+    assert metrics["energy_underdetermined"] is False
+    assert metrics["energy_rmse"] == pytest.approx(7.0)
+    assert metrics["energy_mae"] == pytest.approx(7.0)
+    assert metrics["energy_bias"] == pytest.approx(7.0)
+    assert metrics["energy_max_abs"] == pytest.approx(7.0)
+
+
+def test_rtece_force_label_projection_metrics_reports_holdout_error():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import force_label_projection_metrics
+
+    source = torch.tensor([[0.0], [1.0], [2.0], [3.0]], dtype=torch.float64)
+    target = torch.tensor([0.0, 1.0, 2.0, 10.0], dtype=torch.float64)
+
+    metrics = force_label_projection_metrics(
+        source,
+        target,
+        ridge=0.0,
+        fit_indices=torch.tensor([0, 1, 2], dtype=torch.long),
+        eval_indices=torch.tensor([3], dtype=torch.long),
+    )
+
+    assert metrics["force_fit_num_samples"] == 3
+    assert metrics["force_eval_num_samples"] == 1
+    assert metrics["force_degrees_of_freedom"] == 2
+    assert metrics["force_underdetermined"] is False
+    assert metrics["force_rmse"] == pytest.approx(7.0)
+    assert metrics["force_mae"] == pytest.approx(7.0)
+    assert metrics["force_bias"] == pytest.approx(7.0)
+    assert metrics["force_max_abs"] == pytest.approx(7.0)
+
+
+def test_rtece_energy_label_projection_metrics_can_fit_element_count_baseline():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import energy_label_projection_metrics
+
+    source = torch.zeros((2, 1), dtype=torch.float64)
+    baseline = torch.tensor([[1.0, 0.0], [0.0, 1.0]], dtype=torch.float64)
+    target = torch.tensor([1.25, -2.5], dtype=torch.float64)
+
+    metrics = energy_label_projection_metrics(
+        source,
+        target,
+        ridge=0.0,
+        baseline_features=baseline,
+    )
+
+    assert metrics["energy_source_dim"] == 1
+    assert metrics["energy_baseline_dim"] == 2
+    assert metrics["energy_fit_dim"] == 3
+    assert metrics["energy_degrees_of_freedom"] == -1
+    assert metrics["energy_underdetermined"] is True
+    assert metrics["energy_rmse"] == pytest.approx(0.0, abs=1e-12)
+
+
+def test_rtece_projection_rows_reuse_single_descriptor_pass_for_energy_reference(monkeypatch):
+    from benchmarks.oc20neb_tace_mace import analyze_rtece_projection_error as mod
+
+    reference = mod.build_projection_config(
+        "reference",
+        ("atomic.radial_density", "atomic.vector_norm"),
+        num_radial=1,
+    )
+    candidate = mod.build_projection_config(
+        "candidate",
+        ("atomic.radial_density",),
+        num_radial=1,
+    )
+    calls = {"reference": 0}
+
+    def fake_descriptor_matrices(graphs, config):
+        calls[config.variant] += 1
+        if config.variant == "reference":
+            matrix = torch.tensor([[1.0, 10.0], [2.0, 20.0], [3.0, 30.0]], dtype=torch.float64)
+            return matrix, matrix
+        raise AssertionError("subset candidate should be sliced from the reference descriptor matrices")
+
+    monkeypatch.setattr(mod, "_descriptor_matrices", fake_descriptor_matrices)
+    monkeypatch.setattr(mod, "_descriptor_matrix", lambda graphs, config: (_ for _ in ()).throw(AssertionError("separate node descriptor pass should not run")))
+    monkeypatch.setattr(mod, "_graph_descriptor_matrix", lambda graphs, config: (_ for _ in ()).throw(AssertionError("separate graph descriptor pass should not run")))
+
+    rows = mod.make_projection_diagnostic_rows(
+        [("radial_only", candidate)],
+        reference_config=reference,
+        graphs=[object(), object(), object()],
+        energy_targets=torch.tensor([1.0, 2.0, 3.0], dtype=torch.float64),
+    )
+
+    assert rows[0]["energy_rmse"] == pytest.approx(0.0, abs=1e-12)
+    assert calls == {"reference": 1}
+
+
+def test_rtece_projection_rows_add_energy_label_metrics_from_sliced_reference_graph_descriptors(monkeypatch):
+    from benchmarks.oc20neb_tace_mace import analyze_rtece_projection_error as mod
+
+    reference = mod.build_projection_config(
+        "reference",
+        ("atomic.radial_density", "atomic.vector_norm"),
+        num_radial=1,
+    )
+    candidate = mod.build_projection_config(
+        "candidate",
+        ("atomic.radial_density",),
+        num_radial=1,
+    )
+    calls = {"reference": 0, "candidate": 0}
+
+    def fake_descriptor_matrices(graphs, config):
+        calls[config.variant] += 1
+        if config.variant == "reference":
+            matrix = torch.tensor([[1.0, 10.0], [2.0, 20.0], [3.0, 30.0]], dtype=torch.float64)
+            return matrix, matrix
+        raise AssertionError("subset candidate graph descriptors should be sliced from the reference graph matrix")
+
+    monkeypatch.setattr(mod, "_descriptor_matrices", fake_descriptor_matrices)
+
+    rows = mod.make_projection_diagnostic_rows(
+        [("radial_only", candidate)],
+        reference_config=reference,
+        graphs=[object(), object(), object()],
+        energy_targets=torch.tensor([1.0, 2.0, 3.0], dtype=torch.float64),
+        atom_counts=torch.tensor([1.0, 1.0, 1.0], dtype=torch.float64),
+    )
+
+    assert rows[0]["candidate"] == "radial_only"
+    assert rows[0]["energy_rmse"] == pytest.approx(0.0, abs=1e-12)
+    assert rows[0]["energy_per_atom_rmse"] == pytest.approx(0.0, abs=1e-12)
+    assert calls == {"reference": 1, "candidate": 0}
+
+
+def test_rtece_projection_element_focus_weights_are_atom_aligned_and_mean_normalized():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import element_focus_sample_weights
+
+    graph = RTECEGraph(
+        z=torch.tensor([8, 14, 29, 1], dtype=torch.long),
+        pos=torch.zeros((4, 3), dtype=torch.float64),
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=torch.zeros(4, dtype=torch.long),
+    )
+
+    weights = element_focus_sample_weights([graph], focus_atomic_numbers=(8, 29), focus_weight=4.0)
+
+    assert weights.shape == (4,)
+    assert weights.mean().item() == pytest.approx(1.0)
+    assert weights[[0, 2]].tolist() == pytest.approx([1.6, 1.6])
+    assert weights[[1, 3]].tolist() == pytest.approx([0.4, 0.4])
+
+
+def test_rtece_projection_cli_generates_focus_element_weights(tmp_path):
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    configs = tmp_path / "hocnonspecific.xyz"
+    output = tmp_path / "projection_focus.json"
+    atoms = Atoms("HOCu", positions=[[0.0, 0.0, 0.0], [0.74, 0.0, 0.0], [1.9, 0.0, 0.0]])
+    atoms.info["energy"] = 0.0
+    atoms.arrays["forces"] = np.zeros((3, 3), dtype=np.float64)
+    ase.io.write(configs, [atoms], format="extxyz")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/oc20neb_tace_mace/analyze_rtece_projection_error.py",
+            "--configs",
+            str(configs),
+            "--output-json",
+            str(output),
+            "--reference-path-ids",
+            "atomic.radial_density,edge.direct.radial",
+            "--auto-candidate-strategy",
+            "single_delete",
+            "--num-radial",
+            "3",
+            "--limit-configs",
+            "1",
+            "--neighborlist-backend",
+            "ase",
+            "--focus-elements",
+            "O,Cu",
+            "--focus-weight",
+            "4.0",
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=240,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["weighted"] is True
+    assert payload["sample_weight_source"] == "element_focus:O,Cu:weight=4"
+    assert payload["focus_elements"] == ["O", "Cu"]
+    assert payload["focus_atomic_numbers"] == [8, 29]
+    assert payload["rows"][0]["weighted"] is True
+    assert payload["rows"][0]["weight_sum"] == pytest.approx(3.0)
+
+
+def test_rtece_projection_cli_adds_energy_label_projection_metrics(tmp_path):
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    configs = tmp_path / "h2_energy.xyz"
+    output = tmp_path / "projection_energy.json"
+    atoms_a = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.74, 0.0, 0.0]])
+    atoms_b = Atoms("H2", positions=[[0.0, 0.0, 0.0], [1.10, 0.0, 0.0]])
+    for idx, atoms in enumerate([atoms_a, atoms_b], start=1):
+        atoms.info["teacher_energy"] = float(idx)
+        atoms.info["energy"] = -10.0
+        atoms.arrays["forces"] = np.zeros((2, 3), dtype=np.float64)
+    ase.io.write(configs, [atoms_a, atoms_b], format="extxyz")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/oc20neb_tace_mace/analyze_rtece_projection_error.py",
+            "--configs",
+            str(configs),
+            "--output-json",
+            str(output),
+            "--reference-path-ids",
+            "atomic.radial_density,edge.direct.radial",
+            "--auto-candidate-strategy",
+            "single_delete",
+            "--num-radial",
+            "3",
+            "--limit-configs",
+            "2",
+            "--neighborlist-backend",
+            "ase",
+            "--energy-target-key",
+            "teacher_energy",
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=240,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["energy_target_key"] == "teacher_energy"
+    assert payload["energy_target_num_configs"] == 2
+    assert "energy_rmse" in payload["rows"][0]
+    assert "energy_per_atom_rmse" in payload["rows"][0]
+
+
+def test_rtece_projection_cli_adds_energy_holdout_split_metadata(tmp_path):
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    configs = tmp_path / "h2_energy_split.xyz"
+    output = tmp_path / "projection_energy_split.json"
+    atoms_list = []
+    for idx, distance in enumerate([0.70, 0.80, 0.90, 1.00]):
+        atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [distance, 0.0, 0.0]])
+        atoms.info["teacher_energy"] = float(idx)
+        atoms.arrays["forces"] = np.zeros((2, 3), dtype=np.float64)
+        atoms_list.append(atoms)
+    ase.io.write(configs, atoms_list, format="extxyz")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/oc20neb_tace_mace/analyze_rtece_projection_error.py",
+            "--configs",
+            str(configs),
+            "--output-json",
+            str(output),
+            "--reference-path-ids",
+            "atomic.radial_density,edge.direct.radial",
+            "--auto-candidate-strategy",
+            "single_delete",
+            "--num-radial",
+            "3",
+            "--limit-configs",
+            "4",
+            "--neighborlist-backend",
+            "ase",
+            "--energy-target-key",
+            "teacher_energy",
+            "--energy-eval-stride",
+            "2",
+            "--energy-eval-offset",
+            "1",
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=240,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["energy_eval_stride"] == 2
+    assert payload["energy_eval_offset"] == 1
+    assert payload["energy_fit_num_configs"] == 2
+    assert payload["energy_eval_num_configs"] == 2
+    assert payload["rows"][0]["energy_fit_num_samples"] == 2
+    assert payload["rows"][0]["energy_eval_num_samples"] == 2
+
+
+def test_rtece_projection_cli_adds_force_label_projection_metrics(tmp_path):
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    configs = tmp_path / "h2_force_split.xyz"
+    output = tmp_path / "projection_force_split.json"
+    atoms_list = []
+    for idx, distance in enumerate([0.70, 0.80, 0.90, 1.00]):
+        atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [distance, 0.0, 0.0]])
+        atoms.info["energy"] = 0.0
+        atoms.arrays["forces"] = np.zeros((2, 3), dtype=np.float64)
+        atoms.arrays["teacher_forces"] = np.full((2, 3), float(idx), dtype=np.float64)
+        atoms_list.append(atoms)
+    ase.io.write(configs, atoms_list, format="extxyz")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/oc20neb_tace_mace/analyze_rtece_projection_error.py",
+            "--configs",
+            str(configs),
+            "--output-json",
+            str(output),
+            "--reference-path-ids",
+            "atomic.radial_density,edge.direct.radial",
+            "--auto-candidate-strategy",
+            "single_delete",
+            "--num-radial",
+            "3",
+            "--limit-configs",
+            "4",
+            "--neighborlist-backend",
+            "ase",
+            "--force-target-key",
+            "teacher_forces",
+            "--force-eval-stride",
+            "2",
+            "--force-eval-offset",
+            "1",
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=240,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["force_target_key"] == "teacher_forces"
+    assert payload["force_target_num_configs"] == 4
+    assert payload["force_eval_stride"] == 2
+    assert payload["force_eval_offset"] == 1
+    assert payload["force_fit_num_configs"] == 2
+    assert payload["force_eval_num_configs"] == 2
+    assert payload["rows"][0]["force_fit_num_samples"] == 12
+    assert payload["rows"][0]["force_eval_num_samples"] == 12
+    assert "force_rmse" in payload["rows"][0]
+    assert "force_max_abs" in payload["rows"][0]
+
+
+def test_rtece_projection_cli_adds_combined_energy_force_ranking_fields(tmp_path):
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    configs = tmp_path / "h2_energy_force_split.xyz"
+    output = tmp_path / "projection_energy_force_split.json"
+    atoms_list = []
+    for idx, distance in enumerate([0.70, 0.80, 0.90, 1.00]):
+        atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [distance, 0.0, 0.0]])
+        atoms.info["teacher_energy"] = float(idx)
+        atoms.arrays["forces"] = np.zeros((2, 3), dtype=np.float64)
+        atoms.arrays["teacher_forces"] = np.full((2, 3), float(idx), dtype=np.float64)
+        atoms_list.append(atoms)
+    ase.io.write(configs, atoms_list, format="extxyz")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/oc20neb_tace_mace/analyze_rtece_projection_error.py",
+            "--configs",
+            str(configs),
+            "--output-json",
+            str(output),
+            "--reference-path-ids",
+            "atomic.radial_density,edge.direct.radial",
+            "--auto-candidate-strategy",
+            "single_delete",
+            "--candidate",
+            "full_reference:atomic.radial_density,edge.direct.radial",
+            "--num-radial",
+            "3",
+            "--limit-configs",
+            "4",
+            "--neighborlist-backend",
+            "ase",
+            "--energy-target-key",
+            "teacher_energy",
+            "--energy-eval-stride",
+            "2",
+            "--force-target-key",
+            "teacher_forces",
+            "--force-eval-stride",
+            "2",
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=240,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["rank_metrics"]["energy"] == "energy_per_atom_rmse"
+    assert payload["rank_metrics"]["force"] == "force_rmse"
+    assert payload["rank_metrics"]["combined"] == "minimize max(energy_rank, force_rank), then rank sum, then descriptor dim"
+    assert all("energy_rank" in row for row in payload["rows"])
+    assert all("force_rank" in row for row in payload["rows"])
+    assert all("ef_combined_rank" in row for row in payload["rows"])
+    assert all("ef_pareto_dominated" in row for row in payload["rows"])
+
+
+def test_rtece_projection_cli_generates_auto_candidates_and_ranks_rows(tmp_path):
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    configs = tmp_path / "h2.xyz"
+    output = tmp_path / "projection.json"
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.74, 0.0, 0.0]])
+    atoms.info["energy"] = 0.0
+    atoms.arrays["forces"] = np.zeros((2, 3), dtype=np.float64)
+    ase.io.write(configs, [atoms], format="extxyz")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/oc20neb_tace_mace/analyze_rtece_projection_error.py",
+            "--configs",
+            str(configs),
+            "--output-json",
+            str(output),
+            "--reference-path-ids",
+            "atomic.radial_density,edge.direct.radial",
+            "--auto-candidate-strategy",
+            "single_delete",
+            "--num-radial",
+            "3",
+            "--limit-configs",
+            "1",
+            "--neighborlist-backend",
+            "ase",
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=240,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["auto_candidate_strategies"] == ["single_delete"]
+    assert payload["auto_candidate_count"] == 1
+    assert len(payload["rows"]) == 1
+    row = payload["rows"][0]
+    assert row["candidate"] == "single_delete_edge_direct_radial"
+    assert row["candidate_scalar_path_ids"] == ["atomic.radial_density"]
+    assert row["deleted_scalar_path_ids"] == ["edge.direct.radial"]
+    assert row["projection_rank"] == 1
+    assert row["relative_residual"] >= 0.0
+
+
 def test_rtece_projection_diagnostic_row_reports_deleted_path_residual():
     from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import make_projection_diagnostic_row
     from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
@@ -1229,6 +2585,10 @@ def test_rtece_projection_diagnostic_row_reports_deleted_path_residual():
     assert row["candidate_dim"] == 4
     assert row["reference_dim"] == 6
     assert row["deleted_scalar_path_ids"] == ["edge.direct.radial"]
+    assert row["deleted_cost_groups"] == ["direct_pair_radial"]
+    assert row["deleted_descriptor_dim"] == 2
+    assert row["descriptor_dim_reduction"] == 2
+    assert row["retained_cost_groups"] == ["atomic_scalar_density", "edge_cavity_relations"]
     assert row["relative_residual"] >= 0.0
     assert row["candidate_manifest_hash"] == rtece_path_manifest(candidate)["manifest_hash"]
     assert row["reference_manifest_hash"] == rtece_path_manifest(reference)["manifest_hash"]
@@ -1280,6 +2640,58 @@ def test_rtece_species_basis_variant_has_route_contract():
     assert route["semantic_tier"] == "T3_low_rank_species_density"
     assert route["descriptor_family"] == "species_basis_density"
     assert "low_rank_neighbor_species_basis" in route["retained_tece_groups"]
+
+
+def test_learnable_species_basis_initializes_as_fixed_z_power_and_is_trainable():
+    fixed = build_rtece_config_from_path_ids(
+        "fixed_species_basis",
+        ("atomic.radial_density", "atomic.species_basis_density"),
+        num_radial=3,
+        species_basis_channels=4,
+    )
+    learnable = build_rtece_config_from_path_ids(
+        "learnable_species_basis",
+        ("atomic.radial_density", "atomic.species_basis_density"),
+        num_radial=3,
+        species_basis_channels=4,
+        species_basis_mode="learnable_embedding",
+    )
+    graph = RTECEGraph(
+        z=torch.tensor([6, 8, 1, 7], dtype=torch.long),
+        pos=torch.tensor(
+            [
+                [0.0, 0.0, 0.0],
+                [0.8, 0.1, 0.0],
+                [0.2, 0.9, 0.1],
+                [-0.3, 0.4, 0.7],
+            ],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(4),
+        batch=torch.zeros(4, dtype=torch.long),
+    )
+    model = RTECEScalarModel(learnable).double()
+
+    assert learnable.species_basis_mode == "learnable_embedding"
+    assert "species_basis_embedding.weight" in dict(model.named_parameters())
+    powers = torch.arange(1, 5, dtype=torch.float64)
+    expected_c = (torch.tensor(6.0, dtype=torch.float64) / float(learnable.max_atomic_number)).pow(powers)
+    assert torch.allclose(model.species_basis_embedding.weight[6], expected_c)
+
+    fixed_descriptors = rtece_descriptors(graph, fixed)
+    learnable_descriptors = rtece_descriptors(
+        graph,
+        learnable,
+        species_basis_embedding=model.species_basis_embedding.weight,
+    )
+
+    assert torch.allclose(learnable_descriptors, fixed_descriptors, atol=1e-12, rtol=1e-12)
+    route = rtece_route_contract(learnable)
+    manifest = rtece_path_manifest(learnable)
+    assert "learnable_low_rank_species_basis" in route["retained_tece_groups"]
+    assert "trainable_species_basis" in route["pareto_axes"]
+    assert manifest["config"]["species_basis_mode"] == "learnable_embedding"
+    assert manifest["moments"][1]["chemistry_basis"] == "learnable_embedding_4"
 
 
 def test_rtece_species_cavity_path_reports_both_retained_groups():
@@ -1421,6 +2833,32 @@ def test_edge_relational_sketches_are_rotation_invariant():
         assert torch.allclose(full, full_rot, atol=1e-10, rtol=1e-10)
 
 
+def test_edge_sketch16_adds_non_repeated_relational_paths():
+    config = build_rtece_config("rtece_edge_sketch16")
+    z = torch.tensor([6, 8, 1, 7], dtype=torch.long)
+    pos = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [0.7, 0.2, 0.1],
+            [-0.3, 0.6, -0.2],
+            [0.4, -0.5, 0.3],
+        ],
+        dtype=torch.float64,
+    )
+    graph = RTECEGraph(
+        z=z,
+        pos=pos,
+        edge_index=complete_directed_edges(4),
+        batch=torch.zeros(4, dtype=torch.long),
+    )
+
+    sketches = edge_relational_sketches(graph, config)
+
+    assert sketches.shape == (4, 16)
+    assert not torch.allclose(sketches[:, :8], sketches[:, 8:], atol=1e-12, rtol=1e-12)
+
+
+
 def test_radial_edge_projection_preserves_shell_information_lost_by_mean():
     channels_a = torch.tensor([[[1.0], [1.0], [0.0], [0.0]]], dtype=torch.float64)
     channels_b = torch.tensor([[[0.0], [0.0], [1.0], [1.0]]], dtype=torch.float64)
@@ -1431,6 +2869,88 @@ def test_radial_edge_projection_preserves_shell_information_lost_by_mean():
 
     assert projected_a.shape == (1, 2, 1)
     assert not torch.allclose(projected_a, projected_b)
+
+
+def test_radial_edge_projection_accepts_explicit_projection_matrix():
+    channels = torch.tensor(
+        [
+            [[1.0], [2.0], [4.0], [8.0]],
+            [[0.5], [1.5], [2.5], [3.5]],
+        ],
+        dtype=torch.float64,
+    )
+    projection = torch.tensor(
+        [
+            [1.0, 0.0, 0.0, 0.0],
+            [0.0, 0.5, 0.5, 0.0],
+        ],
+        dtype=torch.float64,
+    )
+
+    projected = _project_radial_edge_channels(channels, 2, projection)
+
+    expected = torch.tensor([[[1.0], [3.0]], [[0.5], [2.0]]], dtype=torch.float64)
+    assert projected.shape == (2, 2, 1)
+    assert torch.allclose(projected, expected)
+
+
+def test_learnable_atomic_cross_radial_projection_is_manifested_and_trainable():
+    config = build_rtece_config_from_path_ids(
+        "learnable_cross_projection",
+        ("atomic.radial_density", "atomic.vector_norm", "atomic.vector_cross_radial_dot"),
+        moment_l_max=1,
+        atomic_cross_radial_sketch_channels=2,
+        atomic_cross_radial_projection="learnable",
+    )
+    model = RTECEScalarModel(config)
+    manifest = rtece_path_manifest(config)
+
+    assert model.atomic_cross_radial_projection is not None
+    assert tuple(model.atomic_cross_radial_projection.weight.shape) == (2, config.num_radial)
+    assert any(
+        path["id"] == "atomic.vector_cross_radial_dot"
+        and path["radial_projection"] == "learnable_2x8_cross_radial_projection"
+        for path in manifest["scalar_paths"]
+    )
+    assert "learnable_atomic_cross_radial_projection" in manifest["retained_tece_groups"]
+
+
+def test_pod_fixed_atomic_cross_radial_projection_is_manifested_and_not_trainable():
+    projection = ((1.0, 0.0, 0.0, 0.0), (0.0, 0.25, 0.25, 0.5))
+    config = build_rtece_config_from_path_ids(
+        "pod_fixed_cross_projection",
+        ("atomic.radial_density", "atomic.vector_norm", "atomic.vector_cross_radial_dot"),
+        num_radial=4,
+        moment_l_max=1,
+        atomic_cross_radial_sketch_channels=2,
+        atomic_cross_radial_projection="pod_fixed",
+        atomic_cross_radial_projection_matrix=projection,
+    )
+    model = RTECEScalarModel(config)
+    manifest = rtece_path_manifest(config)
+
+    assert model.atomic_cross_radial_projection is None
+    assert tuple(model.atomic_cross_radial_projection_buffer.shape) == (2, 4)
+    assert not any(name == "atomic_cross_radial_projection_buffer" for name, _ in model.named_parameters())
+    assert any(
+        path["id"] == "atomic.vector_cross_radial_dot"
+        and path["radial_projection"] == "pod_fixed_2x4_cross_radial_projection"
+        for path in manifest["scalar_paths"]
+    )
+    assert "pod_fixed_atomic_cross_radial_projection" in manifest["retained_tece_groups"]
+
+
+def test_pod_fixed_atomic_cross_radial_projection_requires_matrix_shape():
+    with pytest.raises(ValueError, match="atomic_cross_radial_projection_matrix must have shape"):
+        build_rtece_config_from_path_ids(
+            "bad_pod_fixed_cross_projection",
+            ("atomic.radial_density", "atomic.vector_norm", "atomic.vector_cross_radial_dot"),
+            num_radial=4,
+            moment_l_max=1,
+            atomic_cross_radial_sketch_channels=2,
+            atomic_cross_radial_projection="pod_fixed",
+            atomic_cross_radial_projection_matrix=((1.0, 0.0), (0.0, 1.0)),
+        )
 
 
 def test_cavity_edge_sketches_remove_self_edge_leakage_for_isolated_pair():
@@ -1732,18 +3252,30 @@ def test_rtece_benchmark_row_is_summary_compatible():
         "num_parameters": 1234,
         "mae_e_mev_atom": 10.0,
         "rmse_e_mev_atom": 20.0,
+        "bias_e_mev_atom": -3.0,
+        "max_abs_e_mev_atom": 55.0,
         "mae_f_mev_a": 40.0,
         "rmse_f_mev_a": 80.0,
+        "max_abs_f_mev_a": 700.0,
     }
     teacher = dict(dft)
     teacher["mae_f_mev_a"] = 39.0
+    teacher["rmse_f_mev_a"] = 79.0
+    teacher["max_abs_f_mev_a"] = 690.0
 
     row = make_student_row("rtece_edge_sketch8", dft_benchmark=dft, teacher_benchmark=teacher)
 
     assert row["variant"] == "rtece_edge_sketch8"
     assert row["atoms_per_second"] == 100000.0
     assert row["dft_f_mae_mev_a"] == 40.0
+    assert row["dft_f_rmse_mev_a"] == 80.0
+    assert row["dft_f_max_abs_mev_a"] == 700.0
+    assert row["dft_e_rmse_mev_atom"] == 20.0
+    assert row["dft_e_bias_mev_atom"] == -3.0
+    assert row["dft_e_max_abs_mev_atom"] == 55.0
     assert row["teacher_f_mae_mev_a"] == 39.0
+    assert row["teacher_f_rmse_mev_a"] == 79.0
+    assert row["teacher_f_max_abs_mev_a"] == 690.0
 
 
 def test_train_rtece_scalar_builds_config_from_scalar_path_ids():
@@ -1790,6 +3322,265 @@ def test_train_rtece_scalar_builds_species_cavity_path_id_config():
     assert config.species_basis_channels == 4
     assert config.num_edge_sketches == 1
     assert config.use_cavity_edge_sketches is True
+
+
+def test_training_config_builders_forward_species_basis_mode():
+    from types import SimpleNamespace
+
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import build_training_config as script_build
+    from tace.lightning.rtece import build_training_config as lightning_build
+
+    args = SimpleNamespace(
+        variant="species_learnable",
+        scalar_path_ids="atomic.radial_density,atomic.species_basis_density",
+        species_basis_channels=8,
+        species_basis_mode="learnable_embedding",
+        hidden_channels="32,32",
+        num_radial=4,
+    )
+
+    script_config = script_build(args)
+    lightning_config = lightning_build(
+        variant="species_learnable",
+        scalar_path_ids="atomic.radial_density,atomic.species_basis_density",
+        species_basis_channels=8,
+        species_basis_mode="learnable_embedding",
+        hidden_channels="32,32",
+        num_radial=4,
+    )
+
+    assert script_config.species_basis_mode == "learnable_embedding"
+    assert lightning_config.species_basis_mode == "learnable_embedding"
+
+
+def test_train_rtece_scalar_builds_config_with_moment_l_max():
+    import argparse
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import build_training_config
+
+    args = argparse.Namespace(
+        variant="rtece_pair",
+        scalar_path_ids=None,
+        hidden_channels="4",
+        num_radial=3,
+        species_basis_channels=0,
+        use_short_range_repulsion=False,
+        short_range_repulsion_potential="softplus_overlap",
+        short_range_repulsion_strength=0.0,
+        short_range_repulsion_beta=10.0,
+        short_range_repulsion_radius_scale=0.75,
+        learnable_radial_mixing=False,
+        moment_l_max=2,
+    )
+
+    config = build_training_config(args)
+
+    assert config.moment_l_max == 2
+    assert config.use_atomic_moments is True
+    assert descriptor_dim(config) == 9
+
+
+def test_train_rtece_scalar_builds_config_with_learnable_radial_mixing():
+    import argparse
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import build_training_config
+
+    args = argparse.Namespace(
+        variant="radial_learnable",
+        scalar_path_ids="atomic.radial_density",
+        hidden_channels="4",
+        num_radial=3,
+        species_basis_channels=0,
+        use_short_range_repulsion=False,
+        short_range_repulsion_strength=0.0,
+        short_range_repulsion_beta=10.0,
+        short_range_repulsion_radius_scale=0.75,
+        learnable_radial_mixing=True,
+    )
+
+    config = build_training_config(args)
+
+    assert config.learnable_radial_mixing is True
+    assert config.scalar_path_ids == ("atomic.radial_density",)
+
+
+def test_train_rtece_scalar_builds_config_with_atomic_cross_radial_sketch_channels():
+    import argparse
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import build_training_config
+
+    args = argparse.Namespace(
+        variant="l1_cross_k4",
+        scalar_path_ids="atomic.radial_density,atomic.vector_norm,atomic.vector_cross_radial_dot",
+        hidden_channels="4",
+        num_radial=8,
+        species_basis_channels=0,
+        moment_l_max=1,
+        atomic_cross_radial_sketch_channels=4,
+        atomic_cross_radial_projection="learnable",
+        use_short_range_repulsion=False,
+        short_range_repulsion_potential="softplus_overlap",
+        short_range_repulsion_strength=0.0,
+        short_range_repulsion_beta=10.0,
+        short_range_repulsion_radius_scale=0.75,
+        learnable_radial_mixing=False,
+    )
+
+    config = build_training_config(args)
+
+    assert config.atomic_cross_radial_sketch_channels == 4
+    assert config.atomic_cross_radial_projection == "learnable"
+    assert descriptor_dim(config) == 8 + 8 + 6
+
+
+def test_lightning_build_training_config_accepts_atomic_cross_radial_projection():
+    from tace.lightning.rtece import build_training_config
+
+    config = build_training_config(
+        variant="l1_cross_learnproj",
+        scalar_path_ids="atomic.radial_density,atomic.vector_norm,atomic.vector_cross_radial_dot",
+        moment_l_max=1,
+        atomic_cross_radial_sketch_channels=2,
+        atomic_cross_radial_projection="learnable",
+    )
+
+    assert config.atomic_cross_radial_projection == "learnable"
+
+
+def test_train_rtece_scalar_loads_pod_fixed_atomic_cross_radial_projection_json(tmp_path):
+    from tace.scripts.rtece_train_scalar import load_atomic_cross_radial_projection_matrix
+
+    path = tmp_path / "radial_pod.json"
+    path.write_text(json.dumps({"projection_matrix": [[1.0, 0.0, 0.0, 0.0], [0.0, 0.25, 0.25, 0.5]]}))
+
+    matrix = load_atomic_cross_radial_projection_matrix(path)
+
+    assert matrix == ((1.0, 0.0, 0.0, 0.0), (0.0, 0.25, 0.25, 0.5))
+
+
+def test_lightning_build_training_config_accepts_pod_fixed_atomic_cross_radial_projection_matrix():
+    from tace.lightning.rtece import build_training_config
+
+    config = build_training_config(
+        variant="l1_cross_podproj",
+        scalar_path_ids="atomic.radial_density,atomic.vector_norm,atomic.vector_cross_radial_dot",
+        num_radial=4,
+        moment_l_max=1,
+        atomic_cross_radial_sketch_channels=2,
+        atomic_cross_radial_projection="pod_fixed",
+        atomic_cross_radial_projection_matrix=((1.0, 0.0, 0.0, 0.0), (0.0, 0.25, 0.25, 0.5)),
+    )
+
+    assert config.atomic_cross_radial_projection == "pod_fixed"
+    assert config.atomic_cross_radial_projection_matrix == ((1.0, 0.0, 0.0, 0.0), (0.0, 0.25, 0.25, 0.5))
+
+
+def test_descriptor_residual_conditioner_is_identity_initialized_and_manifested():
+    base = build_rtece_config_from_path_ids(
+        "l1_cross_base",
+        ("atomic.radial_density", "atomic.vector_norm", "atomic.vector_cross_radial_dot"),
+        num_radial=4,
+        hidden_channels=(8,),
+        moment_l_max=1,
+        atomic_cross_radial_sketch_channels=2,
+    )
+    conditioned_config = build_rtece_config_from_path_ids(
+        "l1_cross_conditioned",
+        ("atomic.radial_density", "atomic.vector_norm", "atomic.vector_cross_radial_dot"),
+        num_radial=4,
+        hidden_channels=(8,),
+        moment_l_max=1,
+        atomic_cross_radial_sketch_channels=2,
+        descriptor_conditioner="residual_mlp",
+        descriptor_conditioner_hidden_channels=5,
+    )
+    base_model = RTECEScalarModel(base).double()
+    conditioned_model = RTECEScalarModel(conditioned_config).double()
+    conditioned_model.energy_head.load_state_dict(base_model.energy_head.state_dict())
+    graph = RTECEGraph(
+        z=torch.tensor([6, 1, 8], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.7, 0.1, 0.0], [0.2, 0.9, 0.1]], dtype=torch.float64),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    base_out = base_model(graph)
+    conditioned_out = conditioned_model(graph)
+    manifest = rtece_path_manifest(conditioned_config)
+    route = rtece_route_contract(conditioned_config)
+
+    assert conditioned_config.descriptor_conditioner == "residual_mlp"
+    assert conditioned_config.descriptor_conditioner_hidden_channels == 5
+    assert conditioned_model.descriptor_conditioner is not None
+    assert tuple(conditioned_model.descriptor_conditioner[0].weight.shape) == (5, descriptor_dim(conditioned_config))
+    assert torch.allclose(conditioned_model.descriptor_conditioner[-1].weight, torch.zeros_like(conditioned_model.descriptor_conditioner[-1].weight))
+    assert torch.allclose(conditioned_out["energy"], base_out["energy"], atol=1e-12)
+    assert torch.allclose(conditioned_out["forces"], base_out["forces"], atol=1e-12)
+    assert manifest["config"]["descriptor_conditioner"] == "residual_mlp"
+    assert manifest["config"]["descriptor_conditioner_hidden_channels"] == 5
+    assert "trainable_scalar_descriptor_conditioner" in manifest["retained_tece_groups"]
+    assert "scalar_descriptor_conditioning" in route["pareto_axes"]
+
+
+def test_descriptor_conditioner_rejects_inference_only_analytic_backends():
+    config = build_rtece_config_from_path_ids(
+        "conditioned_pair",
+        ("atomic.radial_density",),
+        num_radial=4,
+        hidden_channels=(8,),
+        descriptor_conditioner="residual_mlp",
+        descriptor_conditioner_hidden_channels=4,
+    )
+    model = RTECEScalarModel(config).double().eval()
+    graph = RTECEGraph(
+        z=torch.tensor([1, 1], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.75, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(2),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+
+    with pytest.raises(ValueError, match="descriptor conditioner"):
+        model.forward_pair_analytic_forces(graph)
+
+
+def test_train_and_lightning_build_config_accept_descriptor_conditioner():
+    import argparse
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import build_training_config as benchmark_build_training_config
+    from tace.lightning.rtece import build_training_config as lightning_build_training_config
+
+    args = argparse.Namespace(
+        variant="l1_conditioned",
+        scalar_path_ids="atomic.radial_density,atomic.vector_norm",
+        hidden_channels="8",
+        num_radial=4,
+        species_basis_channels=0,
+        moment_l_max=1,
+        atomic_cross_radial_sketch_channels=2,
+        atomic_cross_radial_projection="fixed_shell_mean",
+        atomic_cross_radial_projection_matrix=None,
+        use_short_range_repulsion=False,
+        short_range_repulsion_potential="softplus_overlap",
+        short_range_repulsion_strength=0.0,
+        short_range_repulsion_beta=10.0,
+        short_range_repulsion_radius_scale=0.75,
+        learnable_radial_mixing=True,
+        descriptor_conditioner="residual_mlp",
+        descriptor_conditioner_hidden_channels=6,
+    )
+
+    benchmark_config = benchmark_build_training_config(args)
+    lightning_config = lightning_build_training_config(
+        variant="l1_conditioned",
+        scalar_path_ids="atomic.radial_density,atomic.vector_norm",
+        hidden_channels="8",
+        num_radial=4,
+        moment_l_max=1,
+        learnable_radial_mixing=True,
+        descriptor_conditioner="residual_mlp",
+        descriptor_conditioner_hidden_channels=6,
+    )
+
+    assert benchmark_config.descriptor_conditioner == "residual_mlp"
+    assert benchmark_config.descriptor_conditioner_hidden_channels == 6
+    assert lightning_config.descriptor_conditioner == "residual_mlp"
+    assert lightning_config.descriptor_conditioner_hidden_channels == 6
 
 
 def test_train_rtece_scalar_builds_config_with_short_range_repulsive_core():
@@ -2079,6 +3870,8 @@ def test_train_rtece_scalar_cli_fits_atomic_energies_by_default(tmp_path):
     summary = json.loads((out_dir / "train_summary.json").read_text())
     assert summary["atomic_energies"] == pytest.approx({"1": -0.5, "6": -3.0})
     assert summary["energy_per_atom_shift"] == 0.0
+    assert summary["learnable_radial_mixing"] is False
+    assert summary["short_range_repulsion_potential"] == "softplus_overlap"
 
 
 def test_train_rtece_scalar_cli_trains_scalar_path_id_route(tmp_path):
@@ -2225,6 +4018,35 @@ def test_train_steps_saves_best_validation_checkpoint(tmp_path):
     assert loaded_config.variant == "rtece_pair"
     assert isinstance(loaded_model, RTECEScalarModel)
     assert summary["best_step"] in (1, 2)
+    assert torch.isfinite(torch.tensor(summary["best_valid_loss"]))
+
+
+def test_train_steps_respects_min_eval_step_for_best_checkpoint(tmp_path):
+    from ase import Atoms
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import atoms_to_graph, train_steps
+
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]])
+    atoms.info["energy"] = -0.5
+    atoms.arrays["forces"] = torch.zeros((2, 3), dtype=torch.float64).numpy()
+    config = build_rtece_config("rtece_pair")
+    model = RTECEScalarModel(config).double()
+    sample = atoms_to_graph(atoms, cutoff=config.cutoff, device=torch.device("cpu"), dtype=torch.float64)
+    best_path = tmp_path / "rtece_scalar_best.pt"
+
+    summary = train_steps(
+        model,
+        [sample],
+        max_steps=3,
+        lr=1e-3,
+        valid_samples=[sample],
+        eval_interval=1,
+        min_eval_step=3,
+        best_checkpoint_path=best_path,
+        config=config,
+    )
+
+    assert best_path.exists()
+    assert summary["best_step"] == 3
     assert torch.isfinite(torch.tensor(summary["best_valid_loss"]))
 
 
@@ -3274,6 +5096,24 @@ def test_prediction_error_payload_summarizes_available_predictions():
     assert payload["mae_f_mev_a"] == 0.0
 
 
+def test_benchmark_error_summary_reports_signed_energy_bias_and_absolute_max_errors():
+    import numpy as np
+    from benchmarks.oc20neb_tace_mace.benchmark_models import summarize_errors
+
+    pred_e = np.array([2.0, 0.0])
+    ref_e = np.array([1.0, 2.0])
+    natoms = np.array([2.0, 1.0])
+    pred_f = np.array([[0.0, -3.0, 1.0], [4.0, 0.0, -1.0]])
+    ref_f = np.zeros((2, 3))
+
+    summary = summarize_errors(pred_e, pred_f, ref_e, ref_f, natoms)
+
+    assert summary["bias_e_mev_atom"] == pytest.approx(-750.0)
+    assert summary["mean_signed_e_mev_atom"] == pytest.approx(-750.0)
+    assert summary["max_abs_e_mev_atom"] == pytest.approx(2000.0)
+    assert summary["max_abs_f_mev_a"] == pytest.approx(4000.0)
+
+
 def test_rtece_benchmark_help_exposes_force_mode():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     result = subprocess.run(
@@ -3326,8 +5166,319 @@ def test_rtece_train_help_exposes_num_radial():
 
     assert result.returncode == 0, result.stderr
     assert "--num-radial" in result.stdout
+    assert "--moment-l-max" in result.stdout
+    assert "--learnable-radial-mixing" in result.stdout
     assert "--seed" in result.stdout
 
+
+
+
+def test_stage_sweep_summary_collects_benchmarks_and_marks_missing_rows(tmp_path):
+    from benchmarks.oc20neb_tace_mace.summarize_rtece_stage_sweep import collect_stage_sweep_results
+
+    index = tmp_path / "rtece_pareto_sweep_index.json"
+    index.write_text(
+        json.dumps(
+            {
+                "schema_version": "rtece_pareto_sweep.v1",
+                "row_set": "unit-stage",
+                "rows": [
+                    {
+                        "name": "fast",
+                        "hidden_channels": "64,64",
+                        "moment_l_max": 1,
+                        "scalar_path_ids": "atomic.radial_density",
+                        "tece_axes": ["scalar_head_capacity"],
+                    },
+                    {
+                        "name": "missing",
+                        "hidden_channels": "128,128",
+                        "moment_l_max": 2,
+                        "scalar_path_ids": "atomic.radial_density,atomic.quadrupole_norm",
+                        "tece_axes": ["atomic_l2_scalar_paths"],
+                    },
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    result_dir = tmp_path / "results" / "fast"
+    result_dir.mkdir(parents=True)
+    (result_dir / "fast_limit1024_benchmark.json").write_text(
+        json.dumps(
+            {
+                "variant": "fast",
+                "configs": 1024,
+                "atoms": 59193,
+                "num_parameters": 5505,
+                "hidden_channels": [64, 64],
+                "moment_l_max": 1,
+                "atoms_per_second": 4.2e6,
+                "rmse_f_mev_a": 90.0,
+                "mae_f_mev_a": 35.0,
+                "max_abs_f_mev_a": 700.0,
+                "rmse_e_mev_atom": 120.0,
+                "mae_e_mev_atom": 80.0,
+                "bias_e_mev_atom": -3.0,
+                "max_abs_e_mev_atom": 260.0,
+                "tece_path_manifest": {"manifest_hash": "abc", "scalar_paths": [{"id": "atomic.radial_density"}]},
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = collect_stage_sweep_results(index, benchmark_roots=[tmp_path / "results"])
+
+    assert payload["schema_version"] == "rtece_stage_sweep_summary.v1"
+    assert payload["row_set"] == "unit-stage"
+    assert payload["primary_error_metric"] == "dft_f_rmse_mev_a"
+    assert payload["missing_benchmark_rows"] == ["missing"]
+    by_name = {row["name"]: row for row in payload["rows"]}
+    assert by_name["fast"]["status"] == "benchmark_found"
+    assert by_name["fast"]["dft_f_rmse_mev_a"] == 90.0
+    assert by_name["fast"]["dft_f_max_abs_mev_a"] == 700.0
+    assert by_name["fast"]["dft_e_bias_mev_atom"] == -3.0
+    assert by_name["fast"]["atoms_per_second"] == 4.2e6
+    assert by_name["missing"]["status"] == "missing_benchmark"
+    assert by_name["missing"]["dft_f_rmse_mev_a"] is None
+    assert [row["name"] for row in payload["dft_force_rmse_pareto_front"]] == ["fast"]
+
+
+def test_stage_sweep_summary_preserves_design_metadata_for_pending_rows(tmp_path):
+    from benchmarks.oc20neb_tace_mace.summarize_rtece_stage_sweep import collect_stage_sweep_results, format_markdown
+
+    index = tmp_path / "rtece_pareto_sweep_index.json"
+    index.write_text(
+        json.dumps(
+            {
+                "schema_version": "rtece_pareto_sweep.v1",
+                "row_set": "representation-ladder-stage118",
+                "rows": [
+                    {
+                        "name": "l2_species_cavity_edge_h128",
+                        "train_variant": "l2_species_cavity_edge_h128",
+                        "hidden_channels": "128,128",
+                        "moment_l_max": 2,
+                        "scalar_path_ids": "atomic.radial_density,atomic.species_basis_density,edge.cavity.vector_dot",
+                        "tece_axes": ["representation_ladder", "low_rank_neighbor_species_basis"],
+                        "stage_basis": "stage118_representation_ladder",
+                        "num_parameters_estimate": 22593,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = collect_stage_sweep_results(index, benchmark_roots=[tmp_path / "missing-results"])
+    row = payload["rows"][0]
+    markdown = format_markdown(payload)
+
+    assert row["status"] == "missing_benchmark"
+    assert row["train_variant"] == "l2_species_cavity_edge_h128"
+    assert row["num_parameters_estimate"] == 22593
+    assert row["num_parameters_source"] == "index_estimate"
+    assert row["tece_axes"] == ["representation_ladder", "low_rank_neighbor_species_basis"]
+    assert "l2_species_cavity_edge_h128" in markdown
+    assert "22593" in markdown
+    assert "representation_ladder, low_rank_neighbor_species_basis" in markdown
+
+
+def test_stage_sweep_summary_collects_force_stratification_and_physical_diagnostics(tmp_path):
+    from benchmarks.oc20neb_tace_mace.summarize_rtece_stage_sweep import collect_stage_sweep_results
+
+    index = tmp_path / "rtece_pareto_sweep_index.json"
+    index.write_text(
+        json.dumps(
+            {
+                "schema_version": "rtece_pareto_sweep.v1",
+                "row_set": "unit-stage",
+                "rows": [{"name": "l1_cross_k2", "hidden_channels": "16,16", "moment_l_max": 1}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    benchmark_dir = tmp_path / "benchmarks" / "l1_cross_k2"
+    benchmark_dir.mkdir(parents=True)
+    (benchmark_dir / "l1_cross_k2_limit1024_benchmark.json").write_text(
+        json.dumps(
+            {
+                "variant": "l1_cross_k2",
+                "atoms_per_second": 4.9e6,
+                "rmse_f_mev_a": 119.0,
+                "mae_f_mev_a": 44.0,
+                "max_abs_f_mev_a": 5075.0,
+                "rmse_e_mev_atom": 284.0,
+                "mae_e_mev_atom": 224.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+    diagnostics = tmp_path / "diagnostics"
+    diagnostics.mkdir()
+    (diagnostics / "l1_cross_k2_teacher_valid256_force_stratification.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "rtece_force_error_stratification.v1",
+                "selection_focus_label": "C_or_N",
+                "selection_score_mev_a": 571.0,
+                "focus_groups": [
+                    {
+                        "label": "C_or_N",
+                        "atom_fraction": 0.031,
+                        "mae_f_mev_a": 305.7,
+                        "rmse_f_mev_a": 494.3,
+                        "max_abs_f_mev_a": 5106.5,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    (diagnostics / "l1_cross_k2_physical_pareto_placeholder.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "rtece_physical_pareto_summary.v1",
+                "rows": [
+                    {
+                        "variant": "l1_cross_k2",
+                        "physical_score": 2.0e6,
+                        "physical_gate_pass": False,
+                        "benchmark_gate_pass": False,
+                        "dimer_gate_pass": True,
+                        "rattle_gate_pass": False,
+                        "dimer_short_repulsive_fraction": 1.0,
+                        "rattle_focus_label": "C_or_N",
+                        "focus_rattle_final_rmsd_a": None,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = collect_stage_sweep_results(
+        index,
+        benchmark_roots=[tmp_path / "benchmarks"],
+        diagnostic_roots=[diagnostics],
+    )
+
+    row = payload["rows"][0]
+    assert row["status"] == "benchmark_found"
+    assert row["force_stratification_path"].endswith("l1_cross_k2_teacher_valid256_force_stratification.json")
+    assert row["focus_force_label"] == "C_or_N"
+    assert row["focus_f_rmse_mev_a"] == pytest.approx(494.3)
+    assert row["focus_f_max_abs_mev_a"] == pytest.approx(5106.5)
+    assert row["force_selection_score_mev_a"] == pytest.approx(571.0)
+    assert row["physical_pareto_path"].endswith("l1_cross_k2_physical_pareto_placeholder.json")
+    assert row["physical_score"] == pytest.approx(2.0e6)
+    assert row["physical_gate_pass"] is False
+    assert row["dimer_gate_pass"] is True
+    assert row["rattle_gate_pass"] is False
+
+
+def test_stage_sweep_summary_cli_writes_json_and_markdown(tmp_path):
+    from pathlib import Path
+
+    index = tmp_path / "index.json"
+    index.write_text(
+        json.dumps(
+            {
+                "schema_version": "rtece_pareto_sweep.v1",
+                "row_set": "cli-stage",
+                "rows": [{"name": "row", "hidden_channels": "64,64", "moment_l_max": 1, "scalar_path_ids": "atomic.radial_density"}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    result_dir = tmp_path / "bench" / "row"
+    result_dir.mkdir(parents=True)
+    (result_dir / "row_limit1024_benchmark.json").write_text(
+        json.dumps(
+            {
+                "variant": "row",
+                "atoms_per_second": 1.5e6,
+                "rmse_f_mev_a": 77.0,
+                "mae_f_mev_a": 30.0,
+                "max_abs_f_mev_a": 500.0,
+                "rmse_e_mev_atom": 100.0,
+                "mae_e_mev_atom": 70.0,
+                "bias_e_mev_atom": 4.0,
+                "max_abs_e_mev_atom": 220.0,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    script = "benchmarks/oc20neb_tace_mace/summarize_rtece_stage_sweep.py"
+    result = subprocess.run(
+        [
+            sys.executable,
+            script,
+            "--index",
+            str(index),
+            "--benchmark-root",
+            str(tmp_path / "bench"),
+            "--output-json",
+            str(tmp_path / "summary.json"),
+            "--output-md",
+            str(tmp_path / "summary.md"),
+        ],
+        cwd=Path(__file__).resolve().parents[1],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    payload = json.loads((tmp_path / "summary.json").read_text())
+    markdown = (tmp_path / "summary.md").read_text()
+    assert payload["row_set"] == "cli-stage"
+    assert payload["rows"][0]["dft_f_rmse_mev_a"] == 77.0
+    assert "| row | benchmark_found | NA | atomic.radial_density | 1.500e+06 | 77.000 | 30.000 | 500.000 | 100.000 | 70.000 | 4.000 | 220.000 |" in markdown
+    assert str(tmp_path / "summary.json") in result.stdout
+
+
+def test_summary_payload_includes_rmse_first_pareto_fronts():
+    from benchmarks.oc20neb_tace_mace.summarize_tece_distill import make_summary_payload
+
+    rows = [
+        {
+            "variant": "fast_mae_bad_rmse",
+            "atoms_per_second": 20.0,
+            "dft_f_mae_mev_a": 35.0,
+            "dft_f_rmse_mev_a": 130.0,
+            "teacher_f_mae_mev_a": 34.0,
+            "teacher_f_rmse_mev_a": 128.0,
+        },
+        {
+            "variant": "slower_rmse_good",
+            "atoms_per_second": 18.0,
+            "dft_f_mae_mev_a": 37.0,
+            "dft_f_rmse_mev_a": 118.0,
+            "teacher_f_mae_mev_a": 36.0,
+            "teacher_f_rmse_mev_a": 117.0,
+        },
+        {
+            "variant": "dominated",
+            "atoms_per_second": 12.0,
+            "dft_f_mae_mev_a": 39.0,
+            "dft_f_rmse_mev_a": 150.0,
+            "teacher_f_mae_mev_a": 38.0,
+            "teacher_f_rmse_mev_a": 149.0,
+        },
+    ]
+
+    payload = make_summary_payload(rows, baselines=[])
+
+    assert [row["variant"] for row in payload["dft_force_rmse_pareto_front"]] == [
+        "fast_mae_bad_rmse",
+        "slower_rmse_good",
+    ]
+    assert [row["variant"] for row in payload["teacher_force_rmse_pareto_front"]] == [
+        "fast_mae_bad_rmse",
+        "slower_rmse_good",
+    ]
+    assert payload["primary_error_metric"] == "dft_f_rmse_mev_a"
 
 def test_summary_extracts_force_throughput_pareto_front():
     from benchmarks.oc20neb_tace_mace.summarize_tece_distill import pareto_front_rows
@@ -3796,13 +5947,39 @@ def test_rtece_matrix_sbatch_separates_training_and_benchmark_validation_files()
     assert '--configs "${DFT_VALID_FILE}"' in script
 
 
+def test_rtece_matrix_sbatch_forwards_species_basis_mode():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
+
+    assert "SPECIES_BASIS_MODE=${SPECIES_BASIS_MODE:-fixed_z_power}" in script
+    assert 'echo "species_basis_mode=${SPECIES_BASIS_MODE}"' in script
+    assert '--species-basis-mode "${SPECIES_BASIS_MODE}"' in script
+
+
+def test_rtece_matrix_sbatch_forwards_atomic_cross_radial_projection_file_without_sbatch_export():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
+
+    assert "ATOMIC_CROSS_RADIAL_PROJECTION_FILE=${ATOMIC_CROSS_RADIAL_PROJECTION_FILE:-}" in script
+    assert "atomic_cross_radial_projection_file_args=()" in script
+    assert '--atomic-cross-radial-projection-file "${ATOMIC_CROSS_RADIAL_PROJECTION_FILE}"' in script
+    assert "--export" not in script
+    assert "--mem" not in script
+    assert "--cpus-per-task" not in script
+
+
 def test_rtece_matrix_sbatch_forwards_scalar_path_ids_without_sbatch_export():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
 
     assert "SCALAR_PATH_IDS=${SCALAR_PATH_IDS:-}" in script
+    assert "ATOMIC_CROSS_RADIAL_SKETCH_CHANNELS=${ATOMIC_CROSS_RADIAL_SKETCH_CHANNELS:-2}" in script
+    assert "ATOMIC_CROSS_RADIAL_PROJECTION=${ATOMIC_CROSS_RADIAL_PROJECTION:-fixed_shell_mean}" in script
     assert "scalar_path_args=()" in script
+    assert "atomic_cross_radial_args=()" in script
     assert "--scalar-path-ids" in script
+    assert "--atomic-cross-radial-sketch-channels" in script
+    assert "--atomic-cross-radial-projection" in script
     assert "--export" not in script
 
 
@@ -3811,8 +5988,13 @@ def test_rtece_matrix_sbatch_forwards_short_range_repulsive_core_without_sbatch_
     script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
 
     assert "USE_SHORT_RANGE_REPULSION=${USE_SHORT_RANGE_REPULSION:-0}" in script
+    assert "SHORT_RANGE_REPULSION_POTENTIAL=${SHORT_RANGE_REPULSION_POTENTIAL:-softplus_overlap}" in script
+    assert "LEARNABLE_RADIAL_MIXING=${LEARNABLE_RADIAL_MIXING:-0}" in script
+    assert "learnable_radial_args=()" in script
     assert "short_range_args=()" in script
+    assert "--learnable-radial-mixing" in script
     assert "--use-short-range-repulsion" in script
+    assert '--short-range-repulsion-potential "${SHORT_RANGE_REPULSION_POTENTIAL}"' in script
     assert '--short-range-repulsion-strength "${SHORT_RANGE_REPULSION_STRENGTH}"' in script
     assert '--short-range-repulsion-beta "${SHORT_RANGE_REPULSION_BETA}"' in script
     assert '--short-range-repulsion-radius-scale "${SHORT_RANGE_REPULSION_RADIUS_SCALE}"' in script
@@ -3838,6 +6020,7 @@ def test_rtece_benchmark_submit_helper_generates_wrapper_without_sbatch_export(t
     wrapper = write_rtece_benchmark_wrapper(
         tmp_path,
         model="/tmp/rtece.pt",
+        configs="/tmp/valid.extxyz",
         force_mode="analytic_element_direct_padded_descriptor_force",
         limit_configs_list="64",
         measure_passes=1,
@@ -3853,9 +6036,634 @@ def test_rtece_benchmark_submit_helper_generates_wrapper_without_sbatch_export(t
     assert "--mem" not in text
     assert "--cpus-per-task" not in text
     assert "MODEL=/tmp/rtece.pt" in text
+    assert "CONFIGS=/tmp/valid.extxyz" in text
     assert "FORCE_MODE=analytic_element_direct_padded_descriptor_force" in text
     assert "exec /bin/bash" in text
     assert "rtece_scalar_benchmark.sbatch" in text
+
+
+def test_atomic_cross_radial_pod_projection_returns_orthonormal_rows():
+    from benchmarks.oc20neb_tace_mace.make_atomic_cross_radial_pod_projection import (
+        compute_atomic_cross_radial_pod_projection,
+    )
+
+    config = RTECEScalarConfig(variant="pod", cutoff=4.0, num_radial=4)
+    graph = RTECEGraph(
+        z=torch.tensor([6, 1, 8], dtype=torch.long),
+        pos=torch.tensor(
+            [[0.0, 0.0, 0.0], [0.9, 0.1, 0.0], [0.1, 1.1, 0.2]],
+            dtype=torch.float64,
+        ),
+        edge_index=torch.tensor([[0, 0, 1, 1, 2, 2], [1, 2, 0, 2, 0, 1]], dtype=torch.long),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    matrix = compute_atomic_cross_radial_pod_projection([graph], config, num_sketches=2, moment="vector")
+    gram = matrix @ matrix.T
+
+    assert matrix.shape == (2, 4)
+    assert torch.allclose(gram, torch.eye(2, dtype=torch.float64), atol=1e-10)
+
+
+def test_atomic_cross_radial_pod_covariance_accepts_atom_weights():
+    from benchmarks.oc20neb_tace_mace.make_atomic_cross_radial_pod_projection import (
+        _accumulate_radial_covariance,
+    )
+
+    moment = torch.tensor(
+        [
+            [[2.0], [0.0]],
+            [[0.0], [5.0]],
+        ],
+        dtype=torch.float64,
+    )
+    covariance = torch.zeros((2, 2), dtype=torch.float64)
+
+    unweighted = _accumulate_radial_covariance(covariance, moment)
+    weighted = _accumulate_radial_covariance(
+        covariance,
+        moment,
+        atom_weights=torch.tensor([10.0, 1.0], dtype=torch.float64),
+    )
+
+    assert torch.allclose(unweighted, torch.tensor([[4.0, 0.0], [0.0, 25.0]], dtype=torch.float64))
+    assert torch.allclose(weighted, torch.tensor([[40.0, 0.0], [0.0, 25.0]], dtype=torch.float64))
+
+
+def test_atomic_cross_radial_pod_projection_validates_graph_atom_weights():
+    from benchmarks.oc20neb_tace_mace.make_atomic_cross_radial_pod_projection import (
+        compute_atomic_cross_radial_pod_projection,
+    )
+
+    config = RTECEScalarConfig(variant="pod", cutoff=4.0, num_radial=4)
+    graph = RTECEGraph(
+        z=torch.tensor([6, 1, 8], dtype=torch.long),
+        pos=torch.tensor(
+            [[0.0, 0.0, 0.0], [0.9, 0.1, 0.0], [0.1, 1.1, 0.2]],
+            dtype=torch.float64,
+        ),
+        edge_index=torch.tensor([[0, 0, 1, 1, 2, 2], [1, 2, 0, 2, 0, 1]], dtype=torch.long),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    with pytest.raises(ValueError, match="atom_weights length"):
+        compute_atomic_cross_radial_pod_projection(
+            [graph],
+            config,
+            num_sketches=2,
+            moment="vector",
+            atom_weights=[torch.ones(2, dtype=torch.float64)],
+        )
+
+
+def test_atomic_cross_radial_pod_force_magnitude_weights_are_mean_normalized():
+    from ase import Atoms
+    from benchmarks.oc20neb_tace_mace.make_atomic_cross_radial_pod_projection import (
+        force_magnitude_atom_weights,
+    )
+
+    first = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.8, 0.0, 0.0]])
+    first.arrays["teacher_forces"] = torch.tensor(
+        [[3.0, 4.0, 0.0], [0.0, 0.0, 0.0]],
+        dtype=torch.float64,
+    ).numpy()
+    second = Atoms("H", positions=[[0.0, 0.0, 0.0]])
+    second.arrays["teacher_forces"] = torch.tensor([[0.0, 12.0, 0.0]], dtype=torch.float64).numpy()
+
+    weights, source = force_magnitude_atom_weights([first, second], force_key="teacher_forces")
+
+    assert source == "force_magnitude:teacher_forces:mean1"
+    assert [item.shape for item in weights] == [(2,), (1,)]
+    assert torch.cat(weights).mean().item() == pytest.approx(1.0)
+    assert torch.cat(weights).tolist() == pytest.approx([15.0 / 17.0, 0.0, 36.0 / 17.0])
+
+
+def test_rtece_pareto_sweep_default_rows_cover_documented_design_axes():
+    from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import default_pareto_rows
+
+    rows = default_pareto_rows()
+    names = [row["name"] for row in rows]
+
+    assert names == [
+        "l0_scalar_fixed",
+        "l0_scalar_learnable_zbl",
+        "l1_vector_learnable_zbl",
+        "l2_atomic_learnable_zbl",
+        "l1_vector_cross_radial_learnable_zbl",
+        "l2_atomic_cross_radial_learnable_zbl",
+        "l1_vector_cross_radial_k3_learnable_zbl",
+        "l2_atomic_cross_radial_k3_learnable_zbl",
+        "l1_cavity_vector_learnable_zbl",
+        "l2_cavity_vector_quad_learnable_zbl",
+    ]
+    assert {row["moment_l_max"] for row in rows} == {0, 1, 2}
+    assert any(row["learnable_radial_mixing"] for row in rows)
+    assert any(row["short_range_repulsion_potential"] == "zbl" for row in rows)
+    assert any("edge.cavity.vector_dot" in row["scalar_path_ids"] for row in rows)
+    assert any("atomic.vector_cross_radial_dot" in row["scalar_path_ids"] for row in rows)
+    assert any(row["atomic_cross_radial_sketch_channels"] == 3 for row in rows)
+    assert any("cross_radial_invariants" in row["tece_axes"] for row in rows)
+    assert all("tece_axes" in row for row in rows)
+    assert "angular_bandwidth_l_max" in rows[0]["tece_axes"]
+
+
+def test_rtece_stage115_ef_active_rows_follow_stage114_architecture_decision():
+    from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage115_ef_active_rows
+
+    rows = stage115_ef_active_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    assert list(by_name) == ["l0_radial", "l1_cross_k2", "l2_atomic_no_edge_k2"]
+    assert by_name["l0_radial"]["scalar_path_ids"] == "atomic.radial_density"
+    assert by_name["l0_radial"]["moment_l_max"] == 0
+    assert by_name["l1_cross_k2"]["scalar_path_ids"] == (
+        "atomic.radial_density,atomic.vector_norm,atomic.vector_cross_radial_dot"
+    )
+    assert by_name["l1_cross_k2"]["moment_l_max"] == 1
+    assert by_name["l2_atomic_no_edge_k2"]["scalar_path_ids"] == (
+        "atomic.radial_density,atomic.vector_norm,atomic.vector_cross_radial_dot,"
+        "atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius"
+    )
+    assert by_name["l2_atomic_no_edge_k2"]["moment_l_max"] == 2
+    assert not any("edge." in row["scalar_path_ids"] for row in rows)
+    assert all(row["stage_basis"] == "stage114_ef_active_rank" for row in rows)
+    assert all("stage114_ef_active_selection" in row["tece_axes"] for row in rows)
+
+
+def test_rtece_stage116_capacity_ladder_keeps_paths_fixed_and_scales_head():
+    from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage116_capacity_ladder_rows
+
+    rows = stage116_capacity_ladder_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    assert list(by_name) == [
+        "l1_cross_k2_h64",
+        "l1_cross_k2_h128",
+        "l1_cross_k2_h128x3",
+        "l2_atomic_no_edge_k2_h64",
+        "l2_atomic_no_edge_k2_h128",
+        "l2_atomic_no_edge_k2_h128x3",
+    ]
+    assert {row["hidden_channels"] for row in rows} == {"64,64", "128,128", "128,128,128"}
+    assert by_name["l1_cross_k2_h64"]["scalar_path_ids"] == (
+        "atomic.radial_density,atomic.vector_norm,atomic.vector_cross_radial_dot"
+    )
+    assert by_name["l1_cross_k2_h128x3"]["scalar_path_ids"] == by_name["l1_cross_k2_h64"]["scalar_path_ids"]
+    assert by_name["l2_atomic_no_edge_k2_h64"]["scalar_path_ids"] == (
+        "atomic.radial_density,atomic.vector_norm,atomic.vector_cross_radial_dot,"
+        "atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius"
+    )
+    assert by_name["l2_atomic_no_edge_k2_h128x3"]["scalar_path_ids"] == by_name["l2_atomic_no_edge_k2_h64"]["scalar_path_ids"]
+    assert {row["moment_l_max"] for row in rows if row["name"].startswith("l1_")} == {1}
+    assert {row["moment_l_max"] for row in rows if row["name"].startswith("l2_")} == {2}
+    assert all(row["stage_basis"] == "stage116_capacity_ladder" for row in rows)
+    assert all("scalar_head_capacity_ladder" in row["tece_axes"] for row in rows)
+    assert all(row["short_range_repulsion_potential"] == "zbl" for row in rows)
+    assert all(row["learnable_radial_mixing"] for row in rows)
+
+
+def test_rtece_stage118_representation_ladder_rows_follow_tece_review_axes():
+    from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage118_representation_ladder_rows
+
+    rows = stage118_representation_ladder_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    assert list(by_name) == [
+        "l2_atomic_cross_h128",
+        "l2_cavity_edge_h128",
+        "l2_cavity_radial_edge_h128",
+        "l2_species_cavity_edge_h128",
+        "l2_conditioned_cavity_edge_h128",
+        "l2_cavity_edge_h128x3",
+    ]
+    assert {row["hidden_channels"] for row in rows} == {"128,128", "128,128,128"}
+    assert all(row["stage_basis"] == "stage118_representation_ladder" for row in rows)
+    assert all(row["short_range_repulsion_potential"] == "zbl" for row in rows)
+    assert all(row["learnable_radial_mixing"] for row in rows)
+    assert all("representation_ladder" in row["tece_axes"] for row in rows)
+    assert "cross_radial_invariants" in by_name["l2_atomic_cross_h128"]["tece_axes"]
+    assert "cavity_edge_relational_scalar_sketches" in by_name["l2_cavity_edge_h128"]["tece_axes"]
+    assert "low_rank_radial_edge_moment_sketches" in by_name["l2_cavity_radial_edge_h128"]["tece_axes"]
+    assert by_name["l2_cavity_radial_edge_h128"]["train_variant"] == "rtece_cavity_radial_edge_sketch14"
+    assert by_name["l2_cavity_radial_edge_h128"]["radial_edge_sketch_channels"] == 2
+    assert "atomic.species_basis_density" in by_name["l2_species_cavity_edge_h128"]["scalar_path_ids"]
+    assert by_name["l2_species_cavity_edge_h128"]["species_basis_channels"] == 4
+    assert by_name["l2_conditioned_cavity_edge_h128"]["descriptor_conditioner"] == "residual_mlp"
+    assert by_name["l2_conditioned_cavity_edge_h128"]["descriptor_conditioner_hidden_channels"] == 64
+
+
+def test_rtece_stage119_frontloaded_representation_rows_keep_head_fixed_and_grow_front_features():
+    from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage119_frontloaded_representation_rows
+
+    rows = stage119_frontloaded_representation_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    assert list(by_name) == [
+        "l0_species8_learnembed_h64",
+        "l1_species16_cross_learnembed_h64",
+        "l2_species16_atomic_cross_learnembed_h64",
+        "l2_species16_cavity_edge_learnembed_h64",
+        "l2_species32_cavity_edge_learnembed_h64",
+        "l2_species32_cavity_atomic_cross_learnembed_h64",
+    ]
+    assert {row["hidden_channels"] for row in rows} == {"64,64"}
+    assert all(row["stage_basis"] == "stage119_frontloaded_representation_ladder" for row in rows)
+    assert all(row["species_basis_mode"] == "learnable_embedding" for row in rows)
+    assert all("frontloaded_representation_capacity" in row["tece_axes"] for row in rows)
+    assert all("trainable_species_basis" in row["tece_axes"] for row in rows)
+    assert "trainable_cross_radial_projection" in by_name["l2_species16_atomic_cross_learnembed_h64"]["tece_axes"]
+    assert "cavity_edge_relational_scalar_sketches" in by_name["l2_species16_cavity_edge_learnembed_h64"]["tece_axes"]
+    assert "direct_edge_radial_path" in by_name["l2_species32_cavity_atomic_cross_learnembed_h64"]["tece_axes"]
+    assert by_name["l2_species32_cavity_atomic_cross_learnembed_h64"]["species_basis_channels"] == 32
+    assert by_name["l2_species32_cavity_atomic_cross_learnembed_h64"]["num_parameters_estimate"] > by_name["l0_species8_learnembed_h64"]["num_parameters_estimate"]
+    assert by_name["l2_species32_cavity_atomic_cross_learnembed_h64"]["representation_parameters_estimate"] > by_name["l0_species8_learnembed_h64"]["representation_parameters_estimate"]
+    assert all(row["capacity_allocation"] == "frontloaded_representation_not_readout" for row in rows)
+
+
+def test_rtece_pareto_sweep_preflight_reports_malformed_extxyz(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import preflight_extxyz_file
+
+    malformed = tmp_path / "malformed.extxyz"
+    malformed.write_text(
+        "2\nProperties=species:S:1:pos:R:3\nH 0 0 0\nH 0 0 1\n"
+        "3\nProperties=species:S:1:pos:R:3\nH 0 0 0\n",
+        encoding="utf-8",
+    )
+
+    with pytest.raises(ValueError, match="malformed.extxyz.*readable frames=1"):
+        preflight_extxyz_file(malformed, limit_configs=2)
+
+
+def test_rtece_stage115_ef_active_sweep_writes_selected_wrappers_without_sbatch_export(tmp_path):
+    from pathlib import Path
+    from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage115_ef_active_rows, write_pareto_sweep
+
+    index = write_pareto_sweep(
+        tmp_path,
+        run_root="/tmp/rtece-stage115",
+        train_file="/tmp/train.extxyz",
+        train_valid_file="/tmp/train_valid.extxyz",
+        dft_valid_file="/tmp/dft_valid.extxyz",
+        teacher_valid_file="/tmp/teacher_valid.extxyz",
+        rows=stage115_ef_active_rows(),
+        limit_configs=2048,
+        valid_limit_configs=256,
+        bench_limit_configs=1024,
+        max_steps=20000,
+        batch_size=8,
+        valid_batch_size=16,
+        early_stopping_patience=400,
+        lr_warmup_steps=500,
+    )
+
+    assert (tmp_path / "rtece_pareto_sweep_index.json").exists()
+    assert index["row_set"] == "custom"
+    assert [row["name"] for row in index["rows"]] == ["l0_radial", "l1_cross_k2", "l2_atomic_no_edge_k2"]
+    l2 = next(row for row in index["rows"] if row["name"] == "l2_atomic_no_edge_k2")
+    text = Path(l2["wrapper"]).read_text()
+    assert "--export" not in text
+    assert "--mem" not in text
+    assert "--cpus-per-task" not in text
+    assert "RUN_ROOT=/tmp/rtece-stage115/l2_atomic_no_edge_k2" in text
+    assert (
+        "SCALAR_PATH_IDS=atomic.radial_density,atomic.vector_norm,atomic.vector_cross_radial_dot,"
+        "atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius"
+    ) in text
+    assert "MOMENT_L_MAX=2" in text
+    assert "ATOMIC_CROSS_RADIAL_SKETCH_CHANNELS=2" in text
+    assert "SHORT_RANGE_REPULSION_POTENTIAL=zbl" in text
+    assert "TRAINER_BACKEND=lightning" in text
+    assert "LR_WARMUP_STEPS=500" in text
+
+
+def test_rtece_pareto_sweep_writes_wrappers_without_sbatch_export(tmp_path):
+    from pathlib import Path
+    from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import write_pareto_sweep
+
+    index = write_pareto_sweep(
+        tmp_path,
+        run_root="/tmp/rtece-stage96",
+        train_file="/tmp/train.extxyz",
+        train_valid_file="/tmp/train_valid.extxyz",
+        dft_valid_file="/tmp/dft_valid.extxyz",
+        teacher_valid_file="/tmp/teacher_valid.extxyz",
+        limit_configs=2048,
+        valid_limit_configs=256,
+        bench_limit_configs=1024,
+        max_steps=20000,
+        batch_size=8,
+        valid_batch_size=16,
+        early_stopping_patience=400,
+    )
+
+    assert (tmp_path / "rtece_pareto_sweep_index.json").exists()
+    assert len(index["rows"]) == 10
+    first = index["rows"][0]
+    wrapper = Path(first["wrapper"])
+    text = wrapper.read_text()
+    assert "--export" not in text
+    assert "--mem" not in text
+    assert "--cpus-per-task" not in text
+    assert "RUN_ROOT=/tmp/rtece-stage96/l0_scalar_fixed" in text
+    assert "MOMENT_L_MAX=0" in text
+    assert "MAX_STEPS=20000" in text
+    zbl_row = next(row for row in index["rows"] if row["name"] == "l2_cavity_vector_quad_learnable_zbl")
+    zbl_text = Path(zbl_row["wrapper"]).read_text()
+    assert "SCALAR_PATH_IDS=atomic.radial_density,edge.cavity.vector_dot,edge.cavity.quadrupole_frobenius,edge.direct.radial" in zbl_text
+    assert "MOMENT_L_MAX=2" in zbl_text
+    assert "LEARNABLE_RADIAL_MIXING=1" in zbl_text
+    assert "SHORT_RANGE_REPULSION_POTENTIAL=zbl" in zbl_text
+
+
+def test_rtece_pareto_sweep_cli_runs_from_repo_script_path(tmp_path):
+    from pathlib import Path
+
+    script = "benchmarks/oc20neb_tace_mace/make_rtece_pareto_sweep.py"
+    result = subprocess.run(
+        [
+            sys.executable,
+            script,
+            "--output-dir",
+            str(tmp_path / "wrappers"),
+            "--run-root",
+            "/tmp/rtece-stage96",
+            "--train-file",
+            "train.extxyz",
+            "--train-valid-file",
+            "teacher-valid.extxyz",
+            "--dft-valid-file",
+            "dft-valid.extxyz",
+            "--teacher-valid-file",
+            "teacher-valid.extxyz",
+            "--limit-configs",
+            "8",
+            "--valid-limit-configs",
+            "4",
+            "--bench-limit-configs",
+            "4",
+            "--max-steps",
+            "10",
+        ],
+        check=True,
+        cwd=Path(__file__).resolve().parents[1],
+        text=True,
+        capture_output=True,
+    )
+
+    stdout = json.loads(result.stdout)
+    assert stdout["rows"] == 10
+    assert stdout["row_set"] == "design-space-default"
+    assert (tmp_path / "wrappers" / "rtece_pareto_sweep_index.json").exists()
+
+
+def test_rtece_stage115_ef_active_sweep_cli_generates_three_rows(tmp_path):
+    from pathlib import Path
+
+    script = "benchmarks/oc20neb_tace_mace/make_rtece_pareto_sweep.py"
+    result = subprocess.run(
+        [
+            sys.executable,
+            script,
+            "--output-dir",
+            str(tmp_path / "wrappers"),
+            "--run-root",
+            "/tmp/rtece-stage115",
+            "--train-file",
+            "train.extxyz",
+            "--train-valid-file",
+            "teacher-valid.extxyz",
+            "--dft-valid-file",
+            "dft-valid.extxyz",
+            "--teacher-valid-file",
+            "teacher-valid.extxyz",
+            "--row-set",
+            "ef-active-stage115",
+            "--limit-configs",
+            "8",
+            "--valid-limit-configs",
+            "4",
+            "--bench-limit-configs",
+            "4",
+            "--max-steps",
+            "10",
+        ],
+        check=True,
+        cwd=Path(__file__).resolve().parents[1],
+        text=True,
+        capture_output=True,
+    )
+
+    stdout = json.loads(result.stdout)
+    index = json.loads((tmp_path / "wrappers" / "rtece_pareto_sweep_index.json").read_text())
+    assert stdout["rows"] == 3
+    assert stdout["row_set"] == "ef-active-stage115"
+    assert index["row_set"] == "ef-active-stage115"
+    assert [row["name"] for row in index["rows"]] == ["l0_radial", "l1_cross_k2", "l2_atomic_no_edge_k2"]
+
+
+def test_rtece_wrapper_contract_audit_reports_training_and_slurm_readiness(tmp_path):
+    from benchmarks.oc20neb_tace_mace.audit_rtece_wrapper_contract import audit_wrapper_index
+
+    wrapper = tmp_path / "row" / "rtece_scalar_matrix_no_export.sbatch"
+    wrapper.parent.mkdir()
+    wrapper.write_text(
+        """#!/bin/bash
+#SBATCH --job-name=rtece
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gpus-per-node=1
+export VARIANTS=row
+export MAX_STEPS=20000
+export BATCH_SIZE=8
+export VALID_BATCH_SIZE=16
+export LR_SCHEDULER=plateau
+export EARLY_STOPPING_PATIENCE=400
+export DFT_VALID_FILE=runs/oc20neb_tace_mace/tece-distill-20260717/mixed_valid_tw0.75_regen.extxyz
+export SHORT_RANGE_REPULSION_POTENTIAL=zbl
+exec /bin/bash rtece_scalar_matrix.sbatch
+""",
+        encoding="utf-8",
+    )
+    bad = tmp_path / "bad" / "rtece_scalar_matrix_no_export.sbatch"
+    bad.parent.mkdir()
+    bad.write_text(
+        """#!/bin/bash
+#SBATCH --job-name=rtece
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gpus-per-node=1
+#SBATCH --mem=32G
+export VARIANTS=bad
+export MAX_STEPS=1000
+export BATCH_SIZE=1
+exec /bin/bash rtece_scalar_matrix.sbatch
+""",
+        encoding="utf-8",
+    )
+    index = tmp_path / "index.json"
+    index.write_text(
+        json.dumps(
+            {
+                "schema_version": "rtece_pareto_sweep.v1",
+                "row_set": "contract-stage",
+                "rows": [
+                    {"name": "row", "wrapper": str(wrapper)},
+                    {"name": "bad", "wrapper": str(bad)},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = audit_wrapper_index(
+        index,
+        expected_exports={
+            "MAX_STEPS": "20000",
+            "BATCH_SIZE": "8",
+            "VALID_BATCH_SIZE": "16",
+            "LR_SCHEDULER": "plateau",
+            "EARLY_STOPPING_PATIENCE": "400",
+            "DFT_VALID_FILE": "runs/oc20neb_tace_mace/tece-distill-20260717/mixed_valid_tw0.75_regen.extxyz",
+            "SHORT_RANGE_REPULSION_POTENTIAL": "zbl",
+        },
+    )
+
+    assert payload["schema_version"] == "rtece_wrapper_contract_audit.v1"
+    assert payload["row_set"] == "contract-stage"
+    assert payload["contract_pass"] is False
+    rows = {row["name"]: row for row in payload["rows"]}
+    assert rows["row"]["contract_pass"] is True
+    assert rows["row"]["forbidden_sbatch_options"] == []
+    assert rows["bad"]["contract_pass"] is False
+    assert "--mem" in rows["bad"]["forbidden_sbatch_options"]
+    assert rows["bad"]["mismatched_exports"]["MAX_STEPS"] == {"expected": "20000", "actual": "1000"}
+    assert rows["bad"]["missing_exports"] == [
+        "DFT_VALID_FILE",
+        "EARLY_STOPPING_PATIENCE",
+        "LR_SCHEDULER",
+        "SHORT_RANGE_REPULSION_POTENTIAL",
+        "VALID_BATCH_SIZE",
+    ]
+    assert payload["failed_rows"] == ["bad"]
+
+
+def test_rtece_stage116_capacity_ladder_sweep_cli_generates_six_rows(tmp_path):
+    from pathlib import Path
+
+    script = "benchmarks/oc20neb_tace_mace/make_rtece_pareto_sweep.py"
+    result = subprocess.run(
+        [
+            sys.executable,
+            script,
+            "--output-dir",
+            str(tmp_path / "wrappers"),
+            "--run-root",
+            "/tmp/rtece-stage116",
+            "--train-file",
+            "train.extxyz",
+            "--train-valid-file",
+            "teacher-valid.extxyz",
+            "--dft-valid-file",
+            "dft-valid.extxyz",
+            "--teacher-valid-file",
+            "teacher-valid.extxyz",
+            "--row-set",
+            "capacity-ladder-stage116",
+            "--limit-configs",
+            "8",
+            "--valid-limit-configs",
+            "4",
+            "--bench-limit-configs",
+            "4",
+            "--max-steps",
+            "10",
+        ],
+        check=True,
+        cwd=Path(__file__).resolve().parents[1],
+        text=True,
+        capture_output=True,
+    )
+
+    stdout = json.loads(result.stdout)
+    index = json.loads((tmp_path / "wrappers" / "rtece_pareto_sweep_index.json").read_text())
+    assert stdout["rows"] == 6
+    assert stdout["row_set"] == "capacity-ladder-stage116"
+    assert index["row_set"] == "capacity-ladder-stage116"
+    assert [row["hidden_channels"] for row in index["rows"]] == [
+        "64,64",
+        "128,128",
+        "128,128,128",
+        "64,64",
+        "128,128",
+        "128,128,128",
+    ]
+
+
+def test_rtece_stage118_representation_ladder_sweep_cli_generates_six_contract_rows(tmp_path):
+    from pathlib import Path
+
+    script = "benchmarks/oc20neb_tace_mace/make_rtece_pareto_sweep.py"
+    result = subprocess.run(
+        [
+            sys.executable,
+            script,
+            "--output-dir",
+            str(tmp_path / "wrappers"),
+            "--run-root",
+            "/tmp/rtece-stage118",
+            "--train-file",
+            "train.extxyz",
+            "--train-valid-file",
+            "teacher-valid.extxyz",
+            "--dft-valid-file",
+            "dft-valid.extxyz",
+            "--teacher-valid-file",
+            "teacher-valid.extxyz",
+            "--row-set",
+            "representation-ladder-stage118",
+            "--limit-configs",
+            "8",
+            "--valid-limit-configs",
+            "4",
+            "--bench-limit-configs",
+            "4",
+            "--max-steps",
+            "10",
+        ],
+        check=True,
+        cwd=Path(__file__).resolve().parents[1],
+        text=True,
+        capture_output=True,
+    )
+
+    stdout = json.loads(result.stdout)
+    index = json.loads((tmp_path / "wrappers" / "rtece_pareto_sweep_index.json").read_text())
+    assert stdout["rows"] == 6
+    assert stdout["row_set"] == "representation-ladder-stage118"
+    assert index["row_set"] == "representation-ladder-stage118"
+    by_name = {row["name"]: row for row in index["rows"]}
+    assert by_name["l2_cavity_radial_edge_h128"]["train_variant"] == "rtece_cavity_radial_edge_sketch14"
+    radial_text = Path(by_name["l2_cavity_radial_edge_h128"]["wrapper"]).read_text()
+    assert "VARIANTS=rtece_cavity_radial_edge_sketch14" in radial_text
+    assert "SCALAR_PATH_IDS=" not in radial_text
+    conditioned_text = Path(by_name["l2_conditioned_cavity_edge_h128"]["wrapper"]).read_text()
+    species_text = Path(by_name["l2_species_cavity_edge_h128"]["wrapper"]).read_text()
+    atomic_text = Path(by_name["l2_atomic_cross_h128"]["wrapper"]).read_text()
+    for text in (radial_text, conditioned_text, species_text, atomic_text):
+        assert "--export" not in text
+        assert "--mem" not in text
+        assert "--cpus-per-task" not in text
+        assert "TRAINER_BACKEND=lightning" in text
+        assert "BATCH_SIZE=8" in text
+        assert "VALID_BATCH_SIZE=16" in text
+        assert "LR_WARMUP_STEPS=500" in text
+        assert "SHORT_RANGE_REPULSION_POTENTIAL=zbl" in text
+        assert "LEARNABLE_RADIAL_MIXING=1" in text
+        assert "HIDDEN_CHANNELS=128,128" in text
+    assert "DESCRIPTOR_CONDITIONER=residual_mlp" in conditioned_text
+    assert "DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS=64" in conditioned_text
+    assert "SPECIES_BASIS_CHANNELS=4" in species_text
+    assert "ATOMIC_CROSS_RADIAL_PROJECTION=learnable" in atomic_text
 
 
 def test_rtece_matrix_submit_helper_generates_wrapper_without_sbatch_export(tmp_path):
@@ -3878,14 +6686,27 @@ def test_rtece_matrix_submit_helper_generates_wrapper_without_sbatch_export(tmp_
         max_steps=4,
         hidden_channels="16,16",
         num_radial=4,
+        moment_l_max=2,
         scalar_path_ids="atomic.radial_density,edge.cavity.vector_dot",
         species_basis_channels=4,
+        species_basis_mode="learnable_embedding",
+        atomic_cross_radial_sketch_channels=3,
+        atomic_cross_radial_projection="learnable",
         force_weight=30.0,
         force_focus_elements="C,N",
         force_focus_weight=4.0,
         force_mode="autograd",
         measure_passes=1,
         default_dtype="float32",
+        trainer_backend="lightning",
+        batch_size=2,
+        valid_batch_size=4,
+        lr_scheduler="plateau",
+        lr_patience=5,
+        lr_factor=0.25,
+        early_stopping_patience=8,
+        lr_warmup_steps=3,
+        gradient_clip_val=1.0,
     )
     command = build_sbatch_command(wrapper)
     text = wrapper.read_text()
@@ -3900,12 +6721,61 @@ def test_rtece_matrix_submit_helper_generates_wrapper_without_sbatch_export(tmp_
     assert "TRAIN_FILE=/tmp/train.extxyz" in text
     assert "BENCH_LIMIT_CONFIGS=32" in text
     assert "SCALAR_PATH_IDS=atomic.radial_density,edge.cavity.vector_dot" in text
+    assert "MOMENT_L_MAX=2" in text
     assert "SPECIES_BASIS_CHANNELS=4" in text
+    assert "SPECIES_BASIS_MODE=learnable_embedding" in text
+    assert "ATOMIC_CROSS_RADIAL_SKETCH_CHANNELS=3" in text
+    assert "ATOMIC_CROSS_RADIAL_PROJECTION=learnable" in text
     assert "FORCE_WEIGHT=30.0" in text
     assert "FORCE_FOCUS_ELEMENTS=C,N" in text
     assert "FORCE_FOCUS_WEIGHT=4.0" in text
+    assert "TRAINER_BACKEND=lightning" in text
+    assert "BATCH_SIZE=2" in text
+    assert "VALID_BATCH_SIZE=4" in text
+    assert "LR_SCHEDULER=plateau" in text
+    assert "LR_PATIENCE=5" in text
+    assert "LR_FACTOR=0.25" in text
+    assert "EARLY_STOPPING_PATIENCE=8" in text
+    assert "LR_WARMUP_STEPS=3" in text
+    assert "GRADIENT_CLIP_VAL=1.0" in text
     assert "exec /bin/bash" in text
     assert "rtece_scalar_matrix.sbatch" in text
+
+
+def test_rtece_matrix_submit_helper_forwards_atomic_cross_radial_projection_file_without_sbatch_export(tmp_path):
+    from benchmarks.oc20neb_tace_mace.submit_rtece_scalar_matrix import write_rtece_matrix_wrapper
+
+    wrapper = write_rtece_matrix_wrapper(
+        tmp_path,
+        variants="l1_cross_podproj",
+        run_root="/tmp/rtece-stage104",
+        atomic_cross_radial_projection="pod_fixed",
+        atomic_cross_radial_projection_file="/tmp/radial_pod.json",
+    )
+    text = wrapper.read_text()
+
+    assert "--export" not in text
+    assert "ATOMIC_CROSS_RADIAL_PROJECTION=pod_fixed" in text
+    assert "ATOMIC_CROSS_RADIAL_PROJECTION_FILE=/tmp/radial_pod.json" in text
+
+
+def test_rtece_matrix_submit_helper_forwards_min_eval_step_without_sbatch_export(tmp_path):
+    from benchmarks.oc20neb_tace_mace.submit_rtece_scalar_matrix import write_rtece_matrix_wrapper
+
+    wrapper = write_rtece_matrix_wrapper(
+        tmp_path,
+        variants="element_core_train2048",
+        run_root="/tmp/rtece-stage94",
+        eval_interval=256,
+        min_eval_step=2048,
+        checkpoint_name="rtece_scalar_best.pt",
+    )
+    text = wrapper.read_text()
+
+    assert "--export" not in text
+    assert "EVAL_INTERVAL=256" in text
+    assert "MIN_EVAL_STEP=2048" in text
+    assert "CHECKPOINT_NAME=rtece_scalar_best.pt" in text
 
 
 def test_rtece_matrix_submit_helper_forwards_short_range_core_without_sbatch_export(tmp_path):
@@ -3917,15 +6787,19 @@ def test_rtece_matrix_submit_helper_forwards_short_range_core_without_sbatch_exp
         run_root="/tmp/rtece-stage82",
         scalar_path_ids="atomic.radial_density",
         use_short_range_repulsion=True,
+        short_range_repulsion_potential="zbl",
         short_range_repulsion_strength=0.3,
         short_range_repulsion_beta=20.0,
         short_range_repulsion_radius_scale=0.9,
         force_mode="autograd",
+        learnable_radial_mixing=True,
     )
     text = wrapper.read_text()
 
     assert "--export" not in text
     assert "USE_SHORT_RANGE_REPULSION=1" in text
+    assert "SHORT_RANGE_REPULSION_POTENTIAL=zbl" in text
+    assert "LEARNABLE_RADIAL_MIXING=1" in text
     assert "SHORT_RANGE_REPULSION_STRENGTH=0.3" in text
     assert "SHORT_RANGE_REPULSION_BETA=20.0" in text
     assert "SHORT_RANGE_REPULSION_RADIUS_SCALE=0.9" in text
@@ -3948,7 +6822,9 @@ def test_rtece_matrix_sbatch_forwards_num_radial():
     script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
 
     assert "NUM_RADIAL=${NUM_RADIAL:-8}" in script
+    assert "MOMENT_L_MAX=${MOMENT_L_MAX:-}" in script
     assert '--num-radial "${NUM_RADIAL}"' in script
+    assert '--moment-l-max "${MOMENT_L_MAX}"' in script
 
 
 def test_rtece_matrix_sbatch_forwards_seed():
@@ -3979,3 +6855,376 @@ def test_rtece_benchmark_help_exposes_start_config():
 
     assert result.returncode == 0, result.stderr
     assert "--start-config" in result.stdout
+
+
+def test_rtece_ase_calculator_is_formal_package_entrypoint(tmp_path):
+    from ase import Atoms
+    from tace.interface.ase import RTECEAseCalc
+    from tace.models import RTECEScalarModel, save_rtece_checkpoint
+
+    config = RTECEScalarConfig(variant="rtece_pair", cutoff=2.0, num_radial=4, hidden_channels=(4,))
+    model = RTECEScalarModel(config).float().eval()
+    checkpoint = tmp_path / "rtece.pt"
+    save_rtece_checkpoint(checkpoint, model, config)
+
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.74, 0.0, 0.0]])
+    atoms.calc = RTECEAseCalc(str(checkpoint), device="cpu", dtype="float32", neighborlist_backend="ase")
+
+    energy = atoms.get_potential_energy()
+    forces = atoms.get_forces()
+
+    assert isinstance(energy, float)
+    assert forces.shape == (2, 3)
+    assert torch.isfinite(torch.tensor(energy))
+    assert torch.isfinite(torch.tensor(forces)).all()
+
+
+def test_rtece_ase_graph_builder_preserves_periodic_edge_shifts():
+    from ase import Atoms
+    from tace.interface.ase import atoms_to_rtece_graph
+
+    atoms = Atoms(
+        "H2",
+        positions=[[0.1, 0.0, 0.0], [4.9, 0.0, 0.0]],
+        cell=[5.0, 5.0, 5.0],
+        pbc=True,
+    )
+
+    graph = atoms_to_rtece_graph(
+        atoms,
+        cutoff=0.5,
+        device=torch.device("cpu"),
+        dtype=torch.float64,
+        neighborlist_backend="matscipy",
+    )
+    _vectors, distances, _unit = compute_pair_geometry(graph)
+
+    assert graph.cell is not None
+    assert graph.edge_shifts is not None
+    assert graph.edge_batch is not None
+    assert graph.edge_index.shape[1] == 2
+    assert torch.allclose(distances, torch.tensor([0.2, 0.2], dtype=torch.float64), atol=1e-12)
+
+
+def test_rattle_relax_rtece_calculator_uses_formal_package_entrypoint():
+    from benchmarks.oc20neb_tace_mace.rattle_relax_rtece import make_rtece_calculator
+    from tace.interface.ase import RTECEAseCalc
+
+    config = RTECEScalarConfig(variant="rtece_pair", cutoff=0.5, num_radial=4, hidden_channels=(4,))
+    model = RTECEScalarModel(config).double().eval()
+
+    calc = make_rtece_calculator(
+        model,
+        config,
+        device=torch.device("cpu"),
+        dtype=torch.float64,
+        force_mode="autograd",
+        neighborlist_backend="matscipy",
+    )
+
+    assert isinstance(calc, RTECEAseCalc)
+    assert calc.neighborlist_backend == "matscipy"
+
+
+def test_relax_lbfgs_compare_rtece_calculator_preserves_periodic_edge_shifts():
+    from ase import Atoms
+    from benchmarks.oc20neb_tace_mace.relax_lbfgs_compare import RTECECalculator
+
+    config = RTECEScalarConfig(variant="rtece_pair", cutoff=0.5, num_radial=4, hidden_channels=(4,))
+    model = RTECEScalarModel(config).double().eval()
+    calc = RTECECalculator(model, config, device="cpu", dtype=torch.float64, neighborlist_backend="matscipy")
+    atoms = Atoms(
+        "H2",
+        positions=[[0.1, 0.0, 0.0], [4.9, 0.0, 0.0]],
+        cell=[5.0, 5.0, 5.0],
+        pbc=True,
+    )
+
+    graph = calc.atoms_to_graph(atoms, cutoff=config.cutoff, device=torch.device("cpu"), dtype=torch.float64)
+    _vectors, distances, _unit = compute_pair_geometry(graph)
+
+    assert graph.cell is not None
+    assert graph.edge_shifts is not None
+    assert graph.edge_batch is not None
+    assert graph.edge_index.shape[1] == 2
+    assert torch.allclose(distances, torch.tensor([0.2, 0.2], dtype=torch.float64), atol=1e-12)
+
+
+def test_rtece_ase_calculator_stress_matches_ase_finite_strain(tmp_path):
+    import numpy as np
+    from ase import Atoms
+    from ase.calculators.fd import calculate_numerical_stress
+    from tace.interface.ase import RTECEAseCalc
+    from tace.models import RTECEScalarModel, save_rtece_checkpoint
+
+    config = RTECEScalarConfig(variant="rtece_pair", cutoff=2.5, num_radial=4, hidden_channels=(4,))
+    model = RTECEScalarModel(config).double().eval()
+    checkpoint = tmp_path / "rtece.pt"
+    save_rtece_checkpoint(checkpoint, model, config)
+
+    atoms = Atoms(
+        "H2",
+        positions=[[0.2, 0.1, 0.0], [0.95, 0.2, 0.15]],
+        cell=[5.0, 5.5, 6.0],
+        pbc=True,
+    )
+    atoms.calc = RTECEAseCalc(str(checkpoint), device="cpu", dtype="float64", neighborlist_backend="matscipy")
+
+    stress = atoms.get_stress()
+    reference = calculate_numerical_stress(atoms, eps=1.0e-5, voigt=True, force_consistent=False)
+
+    assert stress.shape == (6,)
+    assert torch.isfinite(torch.as_tensor(stress)).all()
+    assert np.allclose(stress, reference, rtol=2.0e-4, atol=2.0e-6)
+
+
+def test_rtece_ase_calculator_rejects_stress_for_non_autograd_force_backend(tmp_path):
+    from ase import Atoms
+    from ase.calculators.calculator import PropertyNotImplementedError
+    from tace.interface.ase import RTECEAseCalc
+    from tace.models import RTECEScalarModel, save_rtece_checkpoint
+
+    config = RTECEScalarConfig(variant="rtece_pair", cutoff=2.0, num_radial=4, hidden_channels=(4,))
+    model = RTECEScalarModel(config).float().eval()
+    checkpoint = tmp_path / "rtece.pt"
+    save_rtece_checkpoint(checkpoint, model, config)
+
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.74, 0.0, 0.0]], cell=[4.0, 4.0, 4.0], pbc=True)
+    atoms.calc = RTECEAseCalc(
+        str(checkpoint),
+        device="cpu",
+        dtype="float32",
+        force_mode="analytic_pair",
+        neighborlist_backend="matscipy",
+    )
+
+    with pytest.raises(PropertyNotImplementedError, match="autograd"):
+        atoms.get_stress()
+
+
+def test_rtece_eval_cli_is_registered_and_exposes_user_flags():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    pyproject = (root / "pyproject.toml").read_text()
+
+    assert 'tace-rtece-eval = "tace.scripts.rtece_eval:main"' in pyproject
+
+    result = subprocess.run(
+        [sys.executable, "-m", "tace.scripts.rtece_eval", "--help"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--model" in result.stdout
+    assert "--input" in result.stdout
+    assert "--force-mode" in result.stdout
+    assert "--neighborlist-backend" in result.stdout
+
+
+def test_rtece_train_cli_is_registered_and_exposes_user_flags():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    pyproject = (root / "pyproject.toml").read_text()
+
+    assert 'tace-rtece-train-scalar = "tace.scripts.rtece_train_scalar:main"' in pyproject
+
+    result = subprocess.run(
+        [sys.executable, "-m", "tace.scripts.rtece_train_scalar", "--help"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--train-file" in result.stdout
+    assert "--valid-file" in result.stdout
+    assert "--min-eval-step" in result.stdout
+    assert "--force-focus-elements" in result.stdout
+
+
+def test_rtece_matrix_sbatch_uses_package_train_entrypoint():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
+
+    assert 'TRAINER_BACKEND=${TRAINER_BACKEND:-lightning}' in script
+    assert 'BATCH_SIZE=${BATCH_SIZE:-1}' in script
+    assert 'LR_SCHEDULER=${LR_SCHEDULER:-plateau}' in script
+    assert '"${TACE_PYTHON}" -m tace.scripts.rtece_train_scalar' in script
+    assert '"${lightning_args[@]}"' in script
+    assert 'train_rtece_scalar.py"' not in script
+
+
+def test_rtece_lightning_fit_smoke_saves_portable_checkpoint(tmp_path):
+    import json
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+    from tace.lightning.rtece import fit_rtece_lightning
+    from tace.models.rtece_workflow import load_checkpoint
+
+    train = tmp_path / "train.xyz"
+    valid = tmp_path / "valid.xyz"
+    output_dir = tmp_path / "lightning"
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.74, 0.0, 0.0]])
+    atoms.info["energy"] = 0.0
+    atoms.arrays["forces"] = np.zeros((2, 3), dtype=np.float64)
+    ase.io.write(train, [atoms], format="extxyz")
+    ase.io.write(valid, [atoms], format="extxyz")
+
+    summary = fit_rtece_lightning(
+        variant="rtece_pair",
+        train_file=train,
+        valid_file=valid,
+        output_dir=output_dir,
+        limit_configs=1,
+        valid_limit_configs=1,
+        max_steps=1,
+        batch_size=1,
+        valid_batch_size=1,
+        hidden_channels="4",
+        num_radial=4,
+        accelerator="cpu",
+        devices=1,
+        default_dtype="float32",
+        neighborlist_backend="ase",
+        lr_warmup_steps=2,
+        enable_progress_bar=False,
+        logger=False,
+    )
+
+    assert summary["trainer_backend"] == "lightning"
+    assert summary["steps"] == 1
+    assert summary["best_step"] == 1
+    assert summary["batch_size"] == 1
+    assert summary["lr_warmup_steps"] == 2
+    assert summary["best_checkpoint"] == str(output_dir / "rtece_scalar_best.pt")
+    assert (output_dir / "rtece_scalar.pt").exists()
+    assert (output_dir / "rtece_scalar_best.pt").exists()
+    assert (output_dir / "train_summary.json").exists()
+    saved_summary = json.loads((output_dir / "train_summary.json").read_text())
+    assert saved_summary["trainer_backend"] == "lightning"
+    _model, loaded_config, _metadata = load_checkpoint(output_dir / "rtece_scalar_best.pt", dtype=torch.float32)
+    assert loaded_config.variant == "rtece_pair"
+
+
+def test_rtece_lightning_default_logger_setting_survives_multi_epoch_fit(tmp_path, monkeypatch):
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+    from tace.lightning.rtece import fit_rtece_lightning
+
+    monkeypatch.chdir(tmp_path)
+    train = tmp_path / "train.xyz"
+    valid = tmp_path / "valid.xyz"
+    output_dir = tmp_path / "lightning-default-logger"
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.74, 0.0, 0.0]])
+    atoms.info["energy"] = 0.0
+    atoms.arrays["forces"] = np.zeros((2, 3), dtype=np.float64)
+    ase.io.write(train, [atoms], format="extxyz")
+    ase.io.write(valid, [atoms], format="extxyz")
+
+    summary = fit_rtece_lightning(
+        variant="rtece_pair",
+        train_file=train,
+        valid_file=valid,
+        output_dir=output_dir,
+        limit_configs=1,
+        valid_limit_configs=1,
+        max_steps=3,
+        batch_size=1,
+        valid_batch_size=1,
+        hidden_channels="4",
+        num_radial=4,
+        accelerator="cpu",
+        devices=1,
+        default_dtype="float32",
+        neighborlist_backend="ase",
+        enable_progress_bar=False,
+    )
+
+    assert summary["steps"] == 3
+    assert (output_dir / "rtece_scalar_best.pt").exists()
+    assert not (tmp_path / "lightning_logs").exists()
+
+
+def test_rtece_train_cli_disables_lightning_csv_logger_by_default(tmp_path):
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+
+    train = tmp_path / "train.xyz"
+    valid = tmp_path / "valid.xyz"
+    output_dir = tmp_path / "cli-train"
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.74, 0.0, 0.0]])
+    atoms.info["energy"] = 0.0
+    atoms.arrays["forces"] = np.zeros((2, 3), dtype=np.float64)
+    ase.io.write(train, [atoms], format="extxyz")
+    ase.io.write(valid, [atoms], format="extxyz")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-m",
+            "tace.scripts.rtece_train_scalar",
+            "--variant",
+            "rtece_pair",
+            "--train-file",
+            str(train),
+            "--valid-file",
+            str(valid),
+            "--output-dir",
+            str(output_dir),
+            "--limit-configs",
+            "1",
+            "--valid-limit-configs",
+            "1",
+            "--max-steps",
+            "3",
+            "--hidden-channels",
+            "4",
+            "--num-radial",
+            "4",
+            "--device",
+            "cpu",
+            "--accelerator",
+            "cpu",
+            "--devices",
+            "1",
+            "--neighborlist-backend",
+            "ase",
+            "--no-progress-bar",
+        ],
+        cwd=tmp_path,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (output_dir / "rtece_scalar_best.pt").exists()
+    assert not (tmp_path / "lightning_logs").exists()
+
+
+def test_rtece_train_cli_defaults_to_lightning_and_exposes_training_controls():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "-m", "tace.scripts.rtece_train_scalar", "--help"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--trainer-backend" in result.stdout
+    assert "--batch-size" in result.stdout
+    assert "--valid-batch-size" in result.stdout
+    assert "--lr-scheduler" in result.stdout
+    assert "--early-stopping-patience" in result.stdout
+    assert "--lr-warmup-steps" in result.stdout

@@ -1,19 +1,27 @@
-try:
-    from ._cart import cartTACE
-except Exception:
-    cartTACE = None
-try:
-    from ._e3nn import e3nnTACE
-except Exception:
-    e3nnTACE = None
-try:
-    from .adapter import TensorModel
-except Exception:
-    TensorModel = None
-try:
-    from .compile import CompileTensorModel
-except Exception:
-    CompileTensorModel = None
+from importlib import import_module
+
+_OPTIONAL_MODEL_EXPORTS = {
+    "cartTACE": ("._cart", "cartTACE"),
+    "e3nnTACE": ("._e3nn", "e3nnTACE"),
+    "TensorModel": (".adapter", "TensorModel"),
+    "CompileTensorModel": (".compile", "CompileTensorModel"),
+}
+
+
+def __getattr__(name):
+    if name not in _OPTIONAL_MODEL_EXPORTS:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    module_name, symbol_name = _OPTIONAL_MODEL_EXPORTS[name]
+    try:
+        module = import_module(module_name, __name__)
+    except ImportError:
+        value = None
+    else:
+        value = getattr(module, symbol_name)
+    globals()[name] = value
+    return value
+
+
 from . import rtece_workflow as rtece_workflow
 
 RTECEWorkflow = rtece_workflow

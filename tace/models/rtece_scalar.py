@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import Any, Mapping
 import hashlib
 import json
@@ -15,19 +15,28 @@ class RTECEScalarConfig:
     cutoff: float = 5.0
     num_radial: int = 8
     hidden_channels: tuple[int, ...] = (64, 64)
+    moment_l_max: int | None = None
+    learnable_radial_mixing: bool = False
     max_atomic_number: int = 100
     use_element_density: bool = False
     use_density_quadratic: bool = False
     use_vector_moments: bool = False
     use_atomic_moments: bool = False
     species_basis_channels: int = 0
+    species_basis_mode: str = "fixed_z_power"
     num_edge_sketches: int = 0
     use_cavity_edge_sketches: bool = False
     radial_edge_sketch_channels: int = 0
+    atomic_cross_radial_sketch_channels: int = 2
+    atomic_cross_radial_projection: str = "fixed_shell_mean"
+    atomic_cross_radial_projection_matrix: tuple[tuple[float, ...], ...] | None = None
+    descriptor_conditioner: str = "none"
+    descriptor_conditioner_hidden_channels: int = 0
     scalar_path_ids: tuple[str, ...] | None = None
     energy_per_atom_shift: float = 0.0
     atomic_energies: Mapping[int, float] | None = None
     use_short_range_repulsion: bool = False
+    short_range_repulsion_potential: str = "softplus_overlap"
     short_range_repulsion_strength: float = 0.0
     short_range_repulsion_beta: float = 10.0
     short_range_repulsion_radius_scale: float = 0.75
@@ -39,7 +48,17 @@ _ATOMIC_SCALAR_PATH_IDS = {
     "atomic.species_basis_density",
     "atomic.density_square",
     "atomic.vector_norm",
+    "atomic.vector_cross_radial_dot",
     "atomic.quadrupole_norm",
+    "atomic.quadrupole_cross_radial_frobenius",
+}
+
+_EDGE_SHELL_SCALAR_PATH_DIMS = {
+    "edge.full_moment.vector_shell_dot": 2,
+    "edge.full_moment.vector_cross_shell_dot": 1,
+    "edge.full_moment.quadrupole_shell_frobenius": 2,
+    "edge.full_moment.quadrupole_cross_shell_frobenius": 1,
+    "edge.full_moment.vector_shell_contrast_projection": 2,
 }
 
 _EDGE_SCALAR_PATH_DIMS = {
@@ -47,6 +66,7 @@ _EDGE_SCALAR_PATH_DIMS = {
     "edge.cavity.vector_dot": 1,
     "edge.cavity.quadrupole_frobenius": 1,
     "edge.direct.radial": 2,
+    **_EDGE_SHELL_SCALAR_PATH_DIMS,
 }
 
 
@@ -93,6 +113,93 @@ def build_rtece_config(variant: str) -> RTECEScalarConfig:
     return RTECEScalarConfig(variant=variant, **kwargs)
 
 
+def _normalize_moment_l_max(moment_l_max: int | None) -> int | None:
+    if moment_l_max is None:
+        return None
+    value = int(moment_l_max)
+    if value not in {0, 1, 2}:
+        raise ValueError("moment_l_max must be one of 0, 1, or 2 for the current Cartesian rTECE implementation")
+    return value
+
+
+def _normalize_species_basis_mode(name: str) -> str:
+    mode = str(name or "fixed_z_power")
+    if mode not in {"fixed_z_power", "learnable_embedding"}:
+        raise ValueError("species_basis_mode must be fixed_z_power or learnable_embedding")
+    return mode
+
+
+def _normalize_descriptor_conditioner(name: str, hidden_channels: int) -> tuple[str, int]:
+    conditioner = str(name or "none")
+    if conditioner not in {"none", "residual_mlp"}:
+        raise ValueError("descriptor_conditioner must be none or residual_mlp")
+    hidden = int(hidden_channels)
+    if conditioner == "none":
+        return conditioner, 0
+    if hidden <= 0:
+        raise ValueError("descriptor_conditioner_hidden_channels must be positive for residual_mlp")
+    return conditioner, hidden
+
+
+def config_with_moment_l_max(config: RTECEScalarConfig, moment_l_max: int | None) -> RTECEScalarConfig:
+    value = _normalize_moment_l_max(moment_l_max)
+    if value is None:
+        return config
+    edge_kwargs: dict[str, object] = {}
+    if value < 2:
+        edge_kwargs = {
+            "num_edge_sketches": 0,
+            "use_cavity_edge_sketches": False,
+            "radial_edge_sketch_channels": 0,
+        }
+    return replace(
+        config,
+        moment_l_max=value,
+        use_vector_moments=(value == 1),
+        use_atomic_moments=(value >= 2),
+        **edge_kwargs,
+    )
+
+
+def _scalar_path_required_ell(path_id: str) -> int:
+    if path_id in _EDGE_SHELL_SCALAR_PATH_DIMS:
+        return 2
+    if "quadrupole" in path_id:
+        return 2
+    if "vector" in path_id:
+        return 1
+    return 0
+
+
+def _edge_paths_required_ell(config: RTECEScalarConfig) -> int:
+    if config.num_edge_sketches <= 0:
+        return 0
+    edge_path_ids = _selected_edge_path_ids(config.scalar_path_ids or ())
+    if not edge_path_ids:
+        return 2
+    return max(_scalar_path_required_ell(path_id) for path_id in edge_path_ids)
+
+
+def _normalize_atomic_cross_radial_projection_matrix(
+    matrix: object,
+    *,
+    num_sketches: int,
+    num_radial: int,
+) -> tuple[tuple[float, ...], ...]:
+    try:
+        rows = tuple(tuple(float(value) for value in row) for row in matrix)  # type: ignore[union-attr]
+    except TypeError as exc:
+        raise ValueError("atomic_cross_radial_projection_matrix must be a rank-2 numeric sequence") from exc
+    expected_shape = (int(num_sketches), int(num_radial))
+    if len(rows) != expected_shape[0] or any(len(row) != expected_shape[1] for row in rows):
+        actual_shape = (len(rows), len(rows[0]) if rows else 0)
+        raise ValueError(
+            "atomic_cross_radial_projection_matrix must have shape "
+            f"{expected_shape}, got {actual_shape}"
+        )
+    return rows
+
+
 def build_rtece_config_from_path_ids(
     variant: str,
     scalar_path_ids: tuple[str, ...] | list[str],
@@ -100,14 +207,23 @@ def build_rtece_config_from_path_ids(
     cutoff: float = 5.0,
     num_radial: int = 8,
     hidden_channels: tuple[int, ...] = (64, 64),
+    moment_l_max: int | None = None,
+    learnable_radial_mixing: bool = False,
     max_atomic_number: int = 100,
     species_basis_channels: int = 0,
+    species_basis_mode: str = "fixed_z_power",
     energy_per_atom_shift: float = 0.0,
     atomic_energies: Mapping[int, float] | None = None,
     use_short_range_repulsion: bool = False,
+    short_range_repulsion_potential: str = "softplus_overlap",
     short_range_repulsion_strength: float = 0.0,
     short_range_repulsion_beta: float = 10.0,
     short_range_repulsion_radius_scale: float = 0.75,
+    atomic_cross_radial_sketch_channels: int = 2,
+    atomic_cross_radial_projection: str = "fixed_shell_mean",
+    atomic_cross_radial_projection_matrix: object | None = None,
+    descriptor_conditioner: str = "none",
+    descriptor_conditioner_hidden_channels: int = 0,
 ) -> RTECEScalarConfig:
     paths = tuple(str(path_id) for path_id in scalar_path_ids)
     if not paths:
@@ -123,30 +239,78 @@ def build_rtece_config_from_path_ids(
         raise ValueError("atomic.radial_density is required as the base scalar path")
     if "atomic.species_basis_density" in paths and species_basis_channels <= 0:
         raise ValueError("species_basis_channels must be positive for atomic.species_basis_density")
+    normalized_species_basis_mode = _normalize_species_basis_mode(species_basis_mode)
     edge_paths = _selected_edge_path_ids(paths)
     has_cavity_edge_paths = any(path_id.startswith("edge.cavity.") for path_id in edge_paths)
     has_full_edge_paths = any(path_id.startswith("edge.full_moment.") for path_id in edge_paths)
     if has_cavity_edge_paths and has_full_edge_paths:
         raise ValueError("full-moment and cavity edge paths cannot be mixed in one path-id config")
+    normalized_l_max = _normalize_moment_l_max(moment_l_max)
+    required_l_max = max(_scalar_path_required_ell(path_id) for path_id in paths)
+    if normalized_l_max is not None and normalized_l_max < required_l_max:
+        raise ValueError(
+            f"moment_l_max={normalized_l_max} cannot realize scalar paths requiring ell<={required_l_max}"
+        )
+    atomic_cross_channels = int(atomic_cross_radial_sketch_channels)
+    atomic_cross_projection = str(atomic_cross_radial_projection)
+    if atomic_cross_projection not in {"fixed_shell_mean", "learnable", "pod_fixed"}:
+        raise ValueError("atomic_cross_radial_projection must be fixed_shell_mean, learnable, or pod_fixed")
+    has_atomic_cross_radial_paths = any("cross_radial" in path_id for path_id in _selected_atomic_path_ids(paths))
+    if atomic_cross_projection in {"learnable", "pod_fixed"} and not has_atomic_cross_radial_paths:
+        raise ValueError(f"atomic_cross_radial_projection={atomic_cross_projection} requires an atomic cross-radial path")
+    normalized_atomic_cross_projection_matrix = None
+    if atomic_cross_projection == "pod_fixed":
+        if atomic_cross_radial_projection_matrix is None:
+            raise ValueError("atomic_cross_radial_projection=pod_fixed requires atomic_cross_radial_projection_matrix")
+        normalized_atomic_cross_projection_matrix = _normalize_atomic_cross_radial_projection_matrix(
+            atomic_cross_radial_projection_matrix,
+            num_sketches=atomic_cross_channels,
+            num_radial=int(num_radial),
+        )
+    elif atomic_cross_radial_projection_matrix is not None:
+        raise ValueError("atomic_cross_radial_projection_matrix is only valid for atomic_cross_radial_projection=pod_fixed")
+    if has_atomic_cross_radial_paths:
+        if atomic_cross_channels < 2:
+            raise ValueError("atomic_cross_radial_sketch_channels must be at least 2")
+        if atomic_cross_channels > int(num_radial):
+            raise ValueError("atomic_cross_radial_sketch_channels cannot exceed num_radial")
+    normalized_descriptor_conditioner, normalized_descriptor_conditioner_hidden = _normalize_descriptor_conditioner(
+        descriptor_conditioner,
+        descriptor_conditioner_hidden_channels,
+    )
 
     return RTECEScalarConfig(
         variant=variant,
         cutoff=float(cutoff),
         num_radial=int(num_radial),
         hidden_channels=tuple(int(value) for value in hidden_channels),
+        moment_l_max=normalized_l_max,
+        learnable_radial_mixing=bool(learnable_radial_mixing),
         max_atomic_number=int(max_atomic_number),
         use_element_density="atomic.element_density" in paths,
         use_density_quadratic="atomic.density_square" in paths,
-        use_vector_moments="atomic.vector_norm" in paths,
-        use_atomic_moments="atomic.quadrupole_norm" in paths or bool(edge_paths),
+        use_vector_moments="atomic.vector_norm" in paths or "atomic.vector_cross_radial_dot" in paths,
+        use_atomic_moments=(
+            "atomic.quadrupole_norm" in paths
+            or "atomic.quadrupole_cross_radial_frobenius" in paths
+            or required_l_max >= 2
+            or (normalized_l_max is None and bool(edge_paths))
+        ),
         species_basis_channels=int(species_basis_channels) if "atomic.species_basis_density" in paths else 0,
+        species_basis_mode=normalized_species_basis_mode if "atomic.species_basis_density" in paths else "fixed_z_power",
         num_edge_sketches=sum(int(_EDGE_SCALAR_PATH_DIMS[path_id]) for path_id in edge_paths),
         use_cavity_edge_sketches=has_cavity_edge_paths,
         radial_edge_sketch_channels=0,
+        atomic_cross_radial_sketch_channels=atomic_cross_channels,
+        atomic_cross_radial_projection=atomic_cross_projection,
+        atomic_cross_radial_projection_matrix=normalized_atomic_cross_projection_matrix,
+        descriptor_conditioner=normalized_descriptor_conditioner,
+        descriptor_conditioner_hidden_channels=normalized_descriptor_conditioner_hidden,
         scalar_path_ids=paths,
         energy_per_atom_shift=float(energy_per_atom_shift),
         atomic_energies=atomic_energies,
         use_short_range_repulsion=bool(use_short_range_repulsion),
+        short_range_repulsion_potential=str(short_range_repulsion_potential),
         short_range_repulsion_strength=float(short_range_repulsion_strength),
         short_range_repulsion_beta=float(short_range_repulsion_beta),
         short_range_repulsion_radius_scale=float(short_range_repulsion_radius_scale),
@@ -169,23 +333,51 @@ def build_rtece_config_from_manifest(manifest: Mapping[str, Any]) -> RTECEScalar
         cutoff=float(payload.get("cutoff", 5.0)),
         num_radial=int(payload.get("num_radial", 8)),
         hidden_channels=hidden_channels,
+        moment_l_max=_normalize_moment_l_max(payload.get("moment_l_max", None)),
         max_atomic_number=int(payload.get("max_atomic_number", 100)),
+        learnable_radial_mixing=bool(payload.get("learnable_radial_mixing", False)),
         use_element_density=bool(payload.get("use_element_density", False)),
         use_density_quadratic=bool(payload.get("use_density_quadratic", False)),
         use_vector_moments=bool(payload.get("use_vector_moments", False)),
         use_atomic_moments=bool(payload.get("use_atomic_moments", False)),
         species_basis_channels=int(payload.get("species_basis_channels", 0)),
+        species_basis_mode=_normalize_species_basis_mode(str(payload.get("species_basis_mode", "fixed_z_power"))),
         num_edge_sketches=int(payload.get("num_edge_sketches", 0)),
         use_cavity_edge_sketches=bool(payload.get("use_cavity_edge_sketches", False)),
         radial_edge_sketch_channels=int(payload.get("radial_edge_sketch_channels", 0)),
+        atomic_cross_radial_sketch_channels=int(payload.get("atomic_cross_radial_sketch_channels", 2)),
+        atomic_cross_radial_projection=str(payload.get("atomic_cross_radial_projection", "fixed_shell_mean")),
+        atomic_cross_radial_projection_matrix=_normalize_atomic_cross_radial_projection_matrix(
+            payload["atomic_cross_radial_projection_matrix"],
+            num_sketches=int(payload.get("atomic_cross_radial_sketch_channels", 2)),
+            num_radial=int(payload.get("num_radial", 8)),
+        )
+        if payload.get("atomic_cross_radial_projection_matrix") is not None
+        else None,
+        descriptor_conditioner=_normalize_descriptor_conditioner(
+            str(payload.get("descriptor_conditioner", "none")),
+            int(payload.get("descriptor_conditioner_hidden_channels", 0)),
+        )[0],
+        descriptor_conditioner_hidden_channels=_normalize_descriptor_conditioner(
+            str(payload.get("descriptor_conditioner", "none")),
+            int(payload.get("descriptor_conditioner_hidden_channels", 0)),
+        )[1],
         scalar_path_ids=tuple(str(path_id) for path_id in payload["scalar_path_ids"])
         if "scalar_path_ids" in payload
         else None,
         use_short_range_repulsion=bool((payload.get("short_range_repulsion") or {}).get("enabled", payload.get("use_short_range_repulsion", False))),
+        short_range_repulsion_potential=str((payload.get("short_range_repulsion") or {}).get("potential", payload.get("short_range_repulsion_potential", "softplus_overlap"))),
         short_range_repulsion_strength=float((payload.get("short_range_repulsion") or {}).get("strength", payload.get("short_range_repulsion_strength", 0.0))),
         short_range_repulsion_beta=float((payload.get("short_range_repulsion") or {}).get("beta", payload.get("short_range_repulsion_beta", 10.0))),
         short_range_repulsion_radius_scale=float((payload.get("short_range_repulsion") or {}).get("radius_scale", payload.get("short_range_repulsion_radius_scale", 0.75))),
     )
+
+
+def _num_off_diagonal_shell_pairs(num_shells: int) -> int:
+    shells = int(num_shells)
+    if shells < 2:
+        raise ValueError("cross-radial scalar paths require at least two radial sketch channels")
+    return shells * (shells - 1) // 2
 
 
 def _scalar_path_descriptor_dim(path_id: str, config: RTECEScalarConfig) -> int:
@@ -201,6 +393,8 @@ def _scalar_path_descriptor_dim(path_id: str, config: RTECEScalarConfig) -> int:
         if config.species_basis_channels <= 0:
             raise ValueError("atomic.species_basis_density requires species_basis_channels > 0")
         return int(config.num_radial) * int(config.species_basis_channels)
+    if path_id in {"atomic.vector_cross_radial_dot", "atomic.quadrupole_cross_radial_frobenius"}:
+        return _num_off_diagonal_shell_pairs(config.atomic_cross_radial_sketch_channels)
     if path_id in _EDGE_SCALAR_PATH_DIMS:
         return int(_EDGE_SCALAR_PATH_DIMS[path_id])
     raise ValueError(f"unsupported scalar path id {path_id!r}")
@@ -254,6 +448,10 @@ def rtece_route_contract(
         semantic_tier = "T3_low_rank_species_density"
         descriptor_family = "species_basis_density"
         retained.append("low_rank_neighbor_species_basis")
+        if config.species_basis_mode == "learnable_embedding":
+            retained.append("learnable_low_rank_species_basis")
+            semantic_tier = f"{semantic_tier}_learnable_species_basis"
+            descriptor_family = f"{descriptor_family}_learnable_species_basis"
         if config.use_atomic_moments or config.num_edge_sketches:
             if config.use_cavity_edge_sketches:
                 semantic_tier = "T3_species_cavity_edge_scalar_sketch"
@@ -269,6 +467,8 @@ def rtece_route_contract(
                 descriptor_family = "species_basis_density_plus_atomic_moment_sketch"
                 retained.extend(["low_order_atomic_moments", "edge_relational_scalar_sketches"])
     elif config.use_atomic_moments or config.num_edge_sketches:
+        if config.scalar_path_ids and any("cross_radial" in path_id for path_id in config.scalar_path_ids):
+            retained.append("atomic_cross_radial_invariants")
         if config.use_cavity_edge_sketches:
             if config.radial_edge_sketch_channels:
                 semantic_tier = "T3_cavity_radial_edge_scalar_sketch"
@@ -299,10 +499,34 @@ def rtece_route_contract(
     else:
         semantic_tier = "T4_scalar_pair_density"
         descriptor_family = "pair_density"
+    if config.scalar_path_ids and any("cross_radial" in path_id for path_id in config.scalar_path_ids):
+        if "atomic_cross_radial_invariants" not in retained:
+            retained.append("atomic_cross_radial_invariants")
+    if config.scalar_path_ids and any("cross_radial" in path_id for path_id in config.scalar_path_ids):
+        retained.append(f"atomic_cross_radial_rank_{int(config.atomic_cross_radial_sketch_channels)}")
+        if config.atomic_cross_radial_projection == "learnable":
+            retained.append("learnable_atomic_cross_radial_projection")
+        if config.atomic_cross_radial_projection == "pod_fixed":
+            retained.append("pod_fixed_atomic_cross_radial_projection")
+    if config.species_basis_channels and config.species_basis_mode == "learnable_embedding":
+        if "learnable_low_rank_species_basis" not in retained:
+            retained.append("learnable_low_rank_species_basis")
+        if "learnable_species_basis" not in semantic_tier:
+            semantic_tier = f"{semantic_tier}_learnable_species_basis"
+            descriptor_family = f"{descriptor_family}_learnable_species_basis"
+    if config.learnable_radial_mixing:
+        retained.append("trainable_low_rank_radial_mixing")
+        semantic_tier = f"{semantic_tier}_learnable_radial_mixing"
+        descriptor_family = f"{descriptor_family}_learnable_radial_mixing"
     if config.use_short_range_repulsion:
-        retained.append("short_range_radial_core")
-        semantic_tier = f"{semantic_tier}_with_radial_core"
-        descriptor_family = f"{descriptor_family}_plus_radial_core"
+        short_range_group = "short_range_zbl_prior" if config.short_range_repulsion_potential == "zbl" else "short_range_radial_core"
+        retained.append(short_range_group)
+        semantic_tier = f"{semantic_tier}_with_{short_range_group}"
+        descriptor_family = f"{descriptor_family}_plus_{short_range_group}"
+    if config.descriptor_conditioner != "none":
+        retained.append("trainable_scalar_descriptor_conditioner")
+        semantic_tier = f"{semantic_tier}_scalar_conditioned"
+        descriptor_family = f"{descriptor_family}_scalar_conditioned"
 
     descriptor_realization = "pytorch_edge_scatter"
     force_realization = "autograd_conservative"
@@ -363,6 +587,20 @@ def rtece_route_contract(
         edge_state_lifetime = "caller_supplied_edge_index"
 
     pareto_axes = ["semantic_projection", "scalar_head_capacity", "force_realization"]
+    if config.moment_l_max is not None:
+        pareto_axes.append("angular_bandwidth_l_max")
+    if config.scalar_path_ids and any("cross_radial" in path_id for path_id in config.scalar_path_ids):
+        pareto_axes.append("radial_rank")
+        if config.atomic_cross_radial_projection == "learnable":
+            pareto_axes.append("trainable_cross_radial_projection")
+        if config.atomic_cross_radial_projection == "pod_fixed":
+            pareto_axes.append("pod_fixed_cross_radial_projection")
+    if config.species_basis_channels and config.species_basis_mode == "learnable_embedding":
+        pareto_axes.append("trainable_species_basis")
+    if config.learnable_radial_mixing:
+        pareto_axes.append("trainable_feature_extractor")
+    if config.descriptor_conditioner != "none":
+        pareto_axes.append("scalar_descriptor_conditioning")
     if config.use_short_range_repulsion:
         pareto_axes.append("short_range_physical_prior")
     if graph_construction_backend or graph_update_backend:
@@ -370,14 +608,29 @@ def rtece_route_contract(
     if fused_descriptor or fused_force:
         pareto_axes.append("kernel_fusion")
 
+    ase_implemented_outputs = ["energy", "free_energy", "forces"]
+    missing_output_contracts = ["validated_edge_gradient_virial"]
+    if force_mode == "autograd":
+        ase_implemented_outputs.append("stress")
+        stress_realization = "ase_autograd_finite_strain_inference"
+    else:
+        missing_output_contracts.append("ase_stress_requires_autograd_force_mode")
+        stress_realization = "not_available_for_selected_force_mode"
+
     return {
         "semantic_tier": semantic_tier,
         "descriptor_family": descriptor_family,
         "retained_tece_groups": retained,
         "deleted_tece_groups": deleted,
+        "implemented_outputs": ["energy", "atomic_energy", "forces"],
+        "ase_implemented_outputs": ase_implemented_outputs,
+        "missing_output_contracts": missing_output_contracts,
+        "stress_realization": stress_realization,
+        "virial_realization": "not_implemented",
         "descriptor_dim": descriptor_dim(config),
         "num_radial": int(config.num_radial),
         "hidden_channels": list(config.hidden_channels),
+        "moment_l_max": int(config.moment_l_max) if config.moment_l_max is not None else None,
         "force_mode": force_mode,
         "force_realization": force_realization,
         "descriptor_realization": descriptor_realization,
@@ -388,6 +641,11 @@ def rtece_route_contract(
         "graph_update_backend": graph_update_backend,
         "edge_state_lifetime": edge_state_lifetime,
         "energy_reference": "per_element_atomic_energies" if config.atomic_energies else ("global_per_atom_shift" if config.energy_per_atom_shift else "none"),
+        "feature_extractor": (
+            "learnable_radial_linear_mixing" if config.learnable_radial_mixing else "fixed_radial_basis"
+        )
+        + ("+learnable_species_basis" if config.species_basis_channels and config.species_basis_mode == "learnable_embedding" else "")
+        + ("+residual_scalar_descriptor_conditioner" if config.descriptor_conditioner != "none" else ""),
         "pareto_axes": pareto_axes,
     }
 
@@ -409,6 +667,9 @@ def _scalar_path_spec(
     contraction: str,
     radial_projection: str,
     cavity: bool = False,
+    parity: int = 1,
+    cutoff_power: int = 0,
+    radial_gate: str | None = None,
     cost_group: str,
 ) -> dict[str, object]:
     return {
@@ -418,8 +679,19 @@ def _scalar_path_spec(
         "contraction": contraction,
         "radial_projection": radial_projection,
         "cavity": bool(cavity),
+        "parity": int(parity),
+        "cutoff_power": int(cutoff_power),
+        "radial_gate": radial_gate,
         "cost_group": cost_group,
     }
+
+
+def _atomic_cross_radial_projection_label(config: RTECEScalarConfig) -> str:
+    if config.atomic_cross_radial_projection == "learnable":
+        return f"learnable_{int(config.atomic_cross_radial_sketch_channels)}x{int(config.num_radial)}_cross_radial_projection"
+    if config.atomic_cross_radial_projection == "pod_fixed":
+        return f"pod_fixed_{int(config.atomic_cross_radial_sketch_channels)}x{int(config.num_radial)}_cross_radial_projection"
+    return f"fixed_{int(config.atomic_cross_radial_sketch_channels)}_shell_mean"
 
 
 def _config_manifest_payload(config: RTECEScalarConfig) -> dict[str, object]:
@@ -428,23 +700,35 @@ def _config_manifest_payload(config: RTECEScalarConfig) -> dict[str, object]:
         "cutoff": float(config.cutoff),
         "num_radial": int(config.num_radial),
         "hidden_channels": list(config.hidden_channels),
+        "moment_l_max": int(config.moment_l_max) if config.moment_l_max is not None else None,
+        "learnable_radial_mixing": bool(config.learnable_radial_mixing),
         "max_atomic_number": int(config.max_atomic_number),
         "use_element_density": bool(config.use_element_density),
         "use_density_quadratic": bool(config.use_density_quadratic),
         "use_vector_moments": bool(config.use_vector_moments),
         "use_atomic_moments": bool(config.use_atomic_moments),
         "species_basis_channels": int(config.species_basis_channels),
+        "species_basis_mode": str(config.species_basis_mode),
         "num_edge_sketches": int(config.num_edge_sketches),
         "use_cavity_edge_sketches": bool(config.use_cavity_edge_sketches),
         "radial_edge_sketch_channels": int(config.radial_edge_sketch_channels),
+        "atomic_cross_radial_sketch_channels": int(config.atomic_cross_radial_sketch_channels),
+        "atomic_cross_radial_projection": str(config.atomic_cross_radial_projection),
+        "descriptor_conditioner": str(config.descriptor_conditioner),
+        "descriptor_conditioner_hidden_channels": int(config.descriptor_conditioner_hidden_channels),
         "energy_reference": "per_element_atomic_energies" if config.atomic_energies else ("global_per_atom_shift" if config.energy_per_atom_shift else "none"),
         "short_range_repulsion": {
             "enabled": bool(config.use_short_range_repulsion),
+            "potential": str(config.short_range_repulsion_potential),
             "strength": float(config.short_range_repulsion_strength),
             "beta": float(config.short_range_repulsion_beta),
             "radius_scale": float(config.short_range_repulsion_radius_scale),
         },
     }
+    if config.atomic_cross_radial_projection_matrix is not None:
+        payload["atomic_cross_radial_projection_matrix"] = [
+            list(row) for row in config.atomic_cross_radial_projection_matrix
+        ]
     if config.scalar_path_ids is not None:
         payload["scalar_path_ids"] = list(config.scalar_path_ids)
     return payload
@@ -464,14 +748,21 @@ def rtece_path_manifest(
         graph_update_backend=graph_update_backend,
     )
     radial_projection = "fixed_two_shell_mean" if config.radial_edge_sketch_channels else "full_radial_mean"
-    moments = [_moment_spec("moment.l0.radial_density", ell=0, radial_projection="identity")]
+    edge_required_ell = _edge_paths_required_ell(config)
+    base_radial_projection = "learnable_identity_initialized_linear_mixing" if config.learnable_radial_mixing else "identity"
+    moments = [_moment_spec("moment.l0.radial_density", ell=0, radial_projection=base_radial_projection)]
     if config.use_element_density:
-        moments.append(_moment_spec("moment.l0.element_density", ell=0, radial_projection="identity", chemistry_basis="atomic_number_first_moment"))
+        moments.append(_moment_spec("moment.l0.element_density", ell=0, radial_projection=base_radial_projection, chemistry_basis="atomic_number_first_moment"))
     if config.species_basis_channels:
-        moments.append(_moment_spec("moment.l0.species_basis_density", ell=0, radial_projection="identity", chemistry_basis=f"fixed_z_power_{int(config.species_basis_channels)}"))
-    if config.use_vector_moments or config.use_atomic_moments or config.num_edge_sketches:
+        chemistry_basis = (
+            f"learnable_embedding_{int(config.species_basis_channels)}"
+            if config.species_basis_mode == "learnable_embedding"
+            else f"fixed_z_power_{int(config.species_basis_channels)}"
+        )
+        moments.append(_moment_spec("moment.l0.species_basis_density", ell=0, radial_projection=base_radial_projection, chemistry_basis=chemistry_basis))
+    if config.use_vector_moments or config.use_atomic_moments or edge_required_ell >= 1:
         moments.append(_moment_spec("moment.l1.vector", ell=1, radial_projection=radial_projection))
-    if config.use_atomic_moments or config.num_edge_sketches:
+    if config.use_atomic_moments or edge_required_ell >= 2:
         moments.append(_moment_spec("moment.l2.quadrupole", ell=2, radial_projection=radial_projection))
 
     scalar_paths = [
@@ -517,6 +808,7 @@ def rtece_path_manifest(
                 cost_group="atomic_scalar_polynomial",
             )
         )
+    selected_atomic_paths = set(config.scalar_path_ids or ())
     if config.use_vector_moments or config.use_atomic_moments:
         scalar_paths.append(
             _scalar_path_spec(
@@ -526,6 +818,17 @@ def rtece_path_manifest(
                 contraction="dot_self",
                 radial_projection="diagonal_radial_channels",
                 cost_group="atomic_low_order_moments",
+            )
+        )
+    if "atomic.vector_cross_radial_dot" in selected_atomic_paths:
+        scalar_paths.append(
+            _scalar_path_spec(
+                "atomic.vector_cross_radial_dot",
+                placement="atomic",
+                inputs=["moment.l1.vector"],
+                contraction="off_diagonal_shell_dot",
+                radial_projection=_atomic_cross_radial_projection_label(config),
+                cost_group="atomic_cross_radial_invariants",
             )
         )
     if config.use_atomic_moments:
@@ -539,6 +842,19 @@ def rtece_path_manifest(
                 cost_group="atomic_low_order_moments",
             )
         )
+    if "atomic.quadrupole_cross_radial_frobenius" in selected_atomic_paths:
+        scalar_paths.append(
+            _scalar_path_spec(
+                "atomic.quadrupole_cross_radial_frobenius",
+                placement="atomic",
+                inputs=["moment.l2.quadrupole"],
+                contraction="off_diagonal_shell_frobenius",
+                radial_projection=_atomic_cross_radial_projection_label(config),
+                cost_group="atomic_cross_radial_invariants",
+            )
+        )
+    selected_edge_paths = _selected_edge_path_ids(config.scalar_path_ids or ())
+    selected_shell_edge_paths = [path_id for path_id in selected_edge_paths if path_id in _EDGE_SHELL_SCALAR_PATH_DIMS]
     if config.num_edge_sketches:
         if config.use_cavity_edge_sketches:
             if config.radial_edge_sketch_channels:
@@ -551,6 +867,8 @@ def rtece_path_manifest(
                             contraction="dot",
                             radial_projection="fixed_two_shell_mean",
                             cavity=True,
+                            cutoff_power=1,
+                            radial_gate="edge_cutoff_envelope",
                             cost_group="edge_cavity_radial_relations",
                         ),
                         _scalar_path_spec(
@@ -560,6 +878,8 @@ def rtece_path_manifest(
                             contraction="cross_radial_dot",
                             radial_projection="fixed_two_shell_mean",
                             cavity=True,
+                            cutoff_power=1,
+                            radial_gate="edge_cutoff_envelope",
                             cost_group="edge_cavity_radial_relations",
                         ),
                         _scalar_path_spec(
@@ -569,6 +889,8 @@ def rtece_path_manifest(
                             contraction="cross_radial_frobenius",
                             radial_projection="fixed_two_shell_mean",
                             cavity=True,
+                            cutoff_power=1,
+                            radial_gate="edge_cutoff_envelope",
                             cost_group="edge_cavity_radial_relations",
                         ),
                     ]
@@ -583,6 +905,8 @@ def rtece_path_manifest(
                             contraction="dot",
                             radial_projection="full_radial_mean",
                             cavity=True,
+                            cutoff_power=1,
+                            radial_gate="edge_cutoff_envelope",
                             cost_group="edge_cavity_relations",
                         ),
                         _scalar_path_spec(
@@ -592,6 +916,8 @@ def rtece_path_manifest(
                             contraction="frobenius",
                             radial_projection="full_radial_mean",
                             cavity=True,
+                            cutoff_power=1,
+                            radial_gate="edge_cutoff_envelope",
                             cost_group="edge_cavity_relations",
                         ),
                     ]
@@ -604,9 +930,66 @@ def rtece_path_manifest(
                     inputs=["moment.l1.vector", "moment.l1.vector"],
                     contraction="dot",
                     radial_projection="full_radial_mean",
+                    cutoff_power=1,
+                    radial_gate="edge_cutoff_envelope",
                     cost_group="edge_full_moment_relations",
                 )
             )
+            if config.num_edge_sketches > 8 or selected_shell_edge_paths:
+                scalar_paths.extend(
+                    [
+                        _scalar_path_spec(
+                            "edge.full_moment.vector_shell_dot",
+                            placement="edge",
+                            inputs=["moment.l1.vector", "moment.l1.vector"],
+                            contraction="same_shell_dot",
+                            radial_projection="two_shell_mean",
+                            cutoff_power=1,
+                            radial_gate="edge_cutoff_envelope",
+                            cost_group="edge_full_moment_radial_shell_relations",
+                        ),
+                        _scalar_path_spec(
+                            "edge.full_moment.vector_cross_shell_dot",
+                            placement="edge",
+                            inputs=["moment.l1.vector", "moment.l1.vector"],
+                            contraction="cross_shell_dot",
+                            radial_projection="two_shell_mean",
+                            cutoff_power=1,
+                            radial_gate="edge_cutoff_envelope",
+                            cost_group="edge_full_moment_radial_shell_relations",
+                        ),
+                        _scalar_path_spec(
+                            "edge.full_moment.quadrupole_shell_frobenius",
+                            placement="edge",
+                            inputs=["moment.l2.quadrupole", "moment.l2.quadrupole"],
+                            contraction="same_shell_frobenius",
+                            radial_projection="two_shell_mean",
+                            cutoff_power=1,
+                            radial_gate="edge_cutoff_envelope",
+                            cost_group="edge_full_moment_radial_shell_relations",
+                        ),
+                        _scalar_path_spec(
+                            "edge.full_moment.quadrupole_cross_shell_frobenius",
+                            placement="edge",
+                            inputs=["moment.l2.quadrupole", "moment.l2.quadrupole"],
+                            contraction="cross_shell_frobenius",
+                            radial_projection="two_shell_mean",
+                            cutoff_power=1,
+                            radial_gate="edge_cutoff_envelope",
+                            cost_group="edge_full_moment_radial_shell_relations",
+                        ),
+                        _scalar_path_spec(
+                            "edge.full_moment.vector_shell_contrast_projection",
+                            placement="edge",
+                            inputs=["moment.l1.vector"],
+                            contraction="edge_frame_shell_contrast",
+                            radial_projection="two_shell_mean",
+                            cutoff_power=1,
+                            radial_gate="edge_cutoff_envelope",
+                            cost_group="edge_full_moment_radial_shell_relations",
+                        ),
+                    ]
+                )
         scalar_paths.append(
             _scalar_path_spec(
                 "edge.direct.radial",
@@ -614,6 +997,8 @@ def rtece_path_manifest(
                 inputs=["moment.l0.radial_density"],
                 contraction="direct_edge_radial",
                 radial_projection="selected_direct_channels",
+                cutoff_power=1,
+                radial_gate="edge_cutoff_envelope",
                 cost_group="direct_pair_radial",
             )
         )
@@ -625,12 +1010,23 @@ def rtece_path_manifest(
             raise ValueError(f"scalar path ids are not available for this config: {missing_paths}")
         scalar_paths = [scalar_paths_by_id[path_id] for path_id in config.scalar_path_ids]
 
+    output_contract = {
+        "implemented": list(route["implemented_outputs"]),
+        "ase_implemented": list(route["ase_implemented_outputs"]),
+        "missing": {
+            "virial": "requires validated edge-gradient virial backend",
+        },
+        "force_realization": route["force_realization"],
+        "stress_realization": route["stress_realization"],
+        "virial_realization": route["virial_realization"],
+    }
     manifest_core: dict[str, Any] = {
         "schema_version": "rtece_path_manifest.v1",
         "config": _config_manifest_payload(config),
         "route": route,
         "moments": moments,
         "scalar_paths": scalar_paths,
+        "output_contract": output_contract,
         "retained_tece_groups": route["retained_tece_groups"],
         "deleted_tece_groups": route["deleted_tece_groups"],
         "compiler_status": "explicit_manifest_not_full_compiler",
@@ -769,13 +1165,50 @@ def _covalent_radii_for_z(z: torch.Tensor, *, dtype: torch.dtype, device: torch.
     return torch.where(radii > 0.0, radii, radii.new_full(radii.shape, 0.5))
 
 
+def _zbl_short_range_energy(graph: RTECEGraph, num_graphs: int) -> torch.Tensor:
+    src, dst = graph.edge_index
+    _, distances, _unit = compute_pair_geometry(graph)
+    x = distances[:, None]
+    z = graph.z.to(device=graph.pos.device, dtype=graph.pos.dtype)
+    z_src = z[src, None]
+    z_dst = z[dst, None]
+    c = graph.pos.new_tensor([0.1818, 0.5099, 0.2802, 0.02817])
+    a_exp = graph.pos.new_tensor(0.300)
+    a_prefactor = graph.pos.new_tensor(0.4543)
+    a = a_prefactor * graph.pos.new_tensor(0.529) / (z_src.pow(a_exp) + z_dst.pow(a_exp))
+    r_over_a = x / a
+    phi = (
+        c[0] * torch.exp(-3.2 * r_over_a)
+        + c[1] * torch.exp(-0.9423 * r_over_a)
+        + c[2] * torch.exp(-0.4028 * r_over_a)
+        + c[3] * torch.exp(-0.2016 * r_over_a)
+    )
+    v_edges = (graph.pos.new_tensor(14.3996) * z_src * z_dst) / x * phi
+    radii = _covalent_radii_for_z(graph.z, dtype=graph.pos.dtype, device=graph.pos.device)
+    r_max = (radii[src] + radii[dst])[:, None]
+    p = graph.pos.new_tensor(5.0)
+    y = x / r_max
+    envelope = (
+        1.0
+        - ((p + 1.0) * (p + 2.0) / 2.0) * y.pow(p)
+        + p * (p + 2.0) * y.pow(p + 1.0)
+        - (p * (p + 1.0) / 2.0) * y.pow(p + 2.0)
+    )
+    envelope = envelope * (x < r_max)
+    node_zbl = scatter_sum(0.5 * v_edges * envelope, dst, graph.z.shape[0]).squeeze(-1)
+    return scatter_sum(node_zbl[:, None], graph.batch, num_graphs).squeeze(-1)
+
+
 def short_range_repulsive_energy(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
     num_graphs = int(graph.batch.max().item()) + 1 if graph.batch.numel() else 1
-    if (
-        not config.use_short_range_repulsion
-        or float(config.short_range_repulsion_strength) == 0.0
-        or graph.edge_index.numel() == 0
-    ):
+    if not config.use_short_range_repulsion or graph.edge_index.numel() == 0:
+        return graph.pos.new_zeros(num_graphs)
+    potential = str(config.short_range_repulsion_potential)
+    if potential == "zbl":
+        return _zbl_short_range_energy(graph, num_graphs)
+    if potential != "softplus_overlap":
+        raise ValueError(f"unknown short_range_repulsion_potential {potential!r}")
+    if float(config.short_range_repulsion_strength) == 0.0:
         return graph.pos.new_zeros(num_graphs)
     if float(config.short_range_repulsion_beta) <= 0.0:
         raise ValueError("short_range_repulsion_beta must be positive")
@@ -822,9 +1255,19 @@ def cutoff_envelope(distances: torch.Tensor, cutoff: float) -> torch.Tensor:
     return torch.where(distances < cutoff, envelope, torch.zeros_like(envelope))
 
 
+def _apply_radial_mixing(
+    radial: torch.Tensor,
+    radial_mixing: torch.nn.Linear | None = None,
+) -> torch.Tensor:
+    if radial_mixing is None:
+        return radial
+    return radial_mixing(radial)
+
+
 def radial_features_and_derivatives(
     distances: torch.Tensor,
     config: RTECEScalarConfig,
+    radial_mixing: torch.nn.Linear | None = None,
 ) -> tuple[torch.Tensor, torch.Tensor]:
     centers = torch.linspace(
         0.0,
@@ -847,10 +1290,17 @@ def radial_features_and_derivatives(
     )
     features = gaussian * envelope[:, None]
     derivatives = gaussian_derivative * envelope[:, None] + gaussian * envelope_derivative[:, None]
+    if radial_mixing is not None:
+        features = _apply_radial_mixing(features, radial_mixing)
+        derivatives = derivatives.matmul(radial_mixing.weight.t())
     return features, derivatives
 
 
-def compute_radial_features_only(distances: torch.Tensor, config: RTECEScalarConfig) -> torch.Tensor:
+def compute_radial_features_only(
+    distances: torch.Tensor,
+    config: RTECEScalarConfig,
+    radial_mixing: torch.nn.Linear | None = None,
+) -> torch.Tensor:
     centers = torch.linspace(
         0.0,
         config.cutoff,
@@ -862,11 +1312,15 @@ def compute_radial_features_only(distances: torch.Tensor, config: RTECEScalarCon
     delta = distances[:, None] - centers[None, :]
     gaussian = torch.exp(-0.5 * (delta / width) ** 2)
     envelope = cutoff_envelope(distances, config.cutoff)
-    return gaussian * envelope[:, None]
+    return _apply_radial_mixing(gaussian * envelope[:, None], radial_mixing)
 
 
-def compute_radial_features(distances: torch.Tensor, config: RTECEScalarConfig) -> torch.Tensor:
-    return compute_radial_features_only(distances, config)
+def compute_radial_features(
+    distances: torch.Tensor,
+    config: RTECEScalarConfig,
+    radial_mixing: torch.nn.Linear | None = None,
+) -> torch.Tensor:
+    return compute_radial_features_only(distances, config, radial_mixing)
 
 
 def scatter_sum(values: torch.Tensor, index: torch.Tensor, dim_size: int) -> torch.Tensor:
@@ -875,27 +1329,48 @@ def scatter_sum(values: torch.Tensor, index: torch.Tensor, dim_size: int) -> tor
     return out
 
 
-def compute_atomic_moments(graph: RTECEGraph, config: RTECEScalarConfig) -> dict[str, torch.Tensor]:
+def compute_atomic_moments(
+    graph: RTECEGraph,
+    config: RTECEScalarConfig,
+    radial_mixing: torch.nn.Linear | None = None,
+    max_ell: int | None = None,
+    species_basis_embedding: torch.Tensor | None = None,
+) -> dict[str, torch.Tensor | None]:
     _, distances, unit = compute_pair_geometry(graph)
-    radial = compute_radial_features(distances, config)
+    radial = compute_radial_features(distances, config, radial_mixing)
     src, dst = graph.edge_index
     num_nodes = graph.z.shape[0]
     density = scatter_sum(radial, dst, num_nodes)
     neighbor_z = graph.z[src].to(dtype=graph.pos.dtype, device=graph.pos.device) / float(config.max_atomic_number)
     element_density = scatter_sum(radial * neighbor_z[:, None], dst, num_nodes)
-    vector = scatter_sum(radial[:, :, None] * unit[:, None, :], dst, num_nodes)
-    eye = torch.eye(3, device=graph.pos.device, dtype=graph.pos.dtype)
-    quad_unit = unit[:, :, None] * unit[:, None, :] - eye[None, :, :] / 3.0
-    quadrupole = scatter_sum(radial[:, :, None, None] * quad_unit[:, None, :, :], dst, num_nodes)
+    if max_ell is None or int(max_ell) >= 1:
+        vector = scatter_sum(radial[:, :, None] * unit[:, None, :], dst, num_nodes)
+    else:
+        vector = None
+    if max_ell is None or int(max_ell) >= 2:
+        eye = torch.eye(3, device=graph.pos.device, dtype=graph.pos.dtype)
+        quad_unit = unit[:, :, None] * unit[:, None, :] - eye[None, :, :] / 3.0
+        quadrupole = scatter_sum(radial[:, :, None, None] * quad_unit[:, None, :, :], dst, num_nodes)
+    else:
+        quadrupole = None
     species_density = None
     if config.species_basis_channels:
-        powers = torch.arange(
-            1,
-            int(config.species_basis_channels) + 1,
-            device=graph.pos.device,
-            dtype=graph.pos.dtype,
-        )
-        species_basis = neighbor_z[:, None].pow(powers[None, :])
+        if config.species_basis_mode == "learnable_embedding":
+            if species_basis_embedding is None:
+                raise ValueError("learnable species basis requires species_basis_embedding")
+            embedding = species_basis_embedding.to(device=graph.pos.device, dtype=graph.pos.dtype)
+            species_index = graph.z[src].to(device=graph.pos.device, dtype=torch.long)
+            if species_index.numel() and int(species_index.max().item()) >= embedding.shape[0]:
+                raise ValueError("atomic number exceeds learnable species basis embedding table")
+            species_basis = embedding[species_index]
+        else:
+            powers = torch.arange(
+                1,
+                int(config.species_basis_channels) + 1,
+                device=graph.pos.device,
+                dtype=graph.pos.dtype,
+            )
+            species_basis = neighbor_z[:, None].pow(powers[None, :])
         species_density = scatter_sum(radial[:, :, None] * species_basis[:, None, :], dst, num_nodes)
         species_density = species_density.reshape(num_nodes, config.num_radial * int(config.species_basis_channels))
     return {
@@ -915,6 +1390,8 @@ def _atomic_scalar_path_descriptors(
     species_density: torch.Tensor | None = None,
     vector_norm: torch.Tensor | None = None,
     quadrupole_norm: torch.Tensor | None = None,
+    vector_cross_radial_dot: torch.Tensor | None = None,
+    quadrupole_cross_radial_frobenius: torch.Tensor | None = None,
 ) -> torch.Tensor:
     parts = []
     for path_id in path_ids:
@@ -934,10 +1411,20 @@ def _atomic_scalar_path_descriptors(
             if vector_norm is None:
                 raise ValueError("vector_norm is required for atomic.vector_norm")
             parts.append(vector_norm)
+        elif path_id == "atomic.vector_cross_radial_dot":
+            if vector_cross_radial_dot is None:
+                raise ValueError("vector_cross_radial_dot is required for atomic.vector_cross_radial_dot")
+            parts.append(vector_cross_radial_dot)
         elif path_id == "atomic.quadrupole_norm":
             if quadrupole_norm is None:
                 raise ValueError("quadrupole_norm is required for atomic.quadrupole_norm")
             parts.append(quadrupole_norm)
+        elif path_id == "atomic.quadrupole_cross_radial_frobenius":
+            if quadrupole_cross_radial_frobenius is None:
+                raise ValueError(
+                    "quadrupole_cross_radial_frobenius is required for atomic.quadrupole_cross_radial_frobenius"
+                )
+            parts.append(quadrupole_cross_radial_frobenius)
         else:
             raise ValueError(f"unsupported atomic scalar path id {path_id!r}")
     if not parts:
@@ -1038,10 +1525,14 @@ def _cell_list_directed_edges_nopbc(graph: RTECEGraph, cutoff: float) -> tuple[t
     return torch.cat(src_parts), torch.cat(dst_parts)
 
 
-def packed_element_density_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
+def packed_element_density_descriptors(
+    graph: RTECEGraph,
+    config: RTECEScalarConfig,
+    radial_mixing: torch.nn.Linear | None = None,
+) -> torch.Tensor:
     _validate_packed_element_density_config(config, "packed_element_density_descriptors")
     _, distances, _ = compute_pair_geometry(graph)
-    radial = compute_radial_features(distances, config)
+    radial = compute_radial_features(distances, config, radial_mixing)
     src, dst = graph.edge_index
     neighbor_z = graph.z[src].to(dtype=graph.pos.dtype, device=graph.pos.device) / float(config.max_atomic_number)
     edge_descriptors = torch.cat([radial, radial * neighbor_z[:, None]], dim=-1)
@@ -1051,6 +1542,7 @@ def packed_element_density_descriptors(graph: RTECEGraph, config: RTECEScalarCon
 def cell_list_packed_element_density_descriptors(
     graph: RTECEGraph,
     config: RTECEScalarConfig,
+    radial_mixing: torch.nn.Linear | None = None,
 ) -> torch.Tensor:
     _validate_packed_element_density_config(config, "cell_list_packed_element_density_descriptors")
     num_nodes = graph.z.shape[0]
@@ -1060,20 +1552,38 @@ def cell_list_packed_element_density_descriptors(
         return descriptors
 
     distances = (graph.pos[dst] - graph.pos[src]).norm(dim=-1).clamp_min(1e-12)
-    radial = compute_radial_features(distances, config)
+    radial = compute_radial_features(distances, config, radial_mixing)
     neighbor_z = graph.z[src].to(dtype=graph.pos.dtype, device=graph.pos.device) / float(config.max_atomic_number)
     edge_descriptors = torch.cat([radial, radial * neighbor_z[:, None]], dim=-1)
     descriptors.index_add_(0, dst, edge_descriptors)
     return descriptors
 
 
-def atomic_scalar_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
-    moments = compute_atomic_moments(graph, config)
+def atomic_scalar_descriptors(
+    graph: RTECEGraph,
+    config: RTECEScalarConfig,
+    radial_mixing: torch.nn.Linear | None = None,
+    atomic_cross_radial_projection: torch.Tensor | None = None,
+    species_basis_embedding: torch.Tensor | None = None,
+) -> torch.Tensor:
+    moments = compute_atomic_moments(graph, config, radial_mixing, species_basis_embedding=species_basis_embedding)
     density = moments["density"]
-    vector_norm = (moments["vector"] ** 2).sum(dim=-1)
-    quadrupole_norm = (moments["quadrupole"] ** 2).sum(dim=(-1, -2))
+    vector = moments["vector"]
+    quadrupole = moments["quadrupole"]
+    vector_norm = (vector ** 2).sum(dim=-1) if vector is not None else None
+    quadrupole_norm = (quadrupole ** 2).sum(dim=(-1, -2)) if quadrupole is not None else None
+    atomic_path_ids = _selected_atomic_path_ids(config.scalar_path_ids or ())
+    vector_cross_radial_dot = None
+    if "atomic.vector_cross_radial_dot" in atomic_path_ids and vector is not None:
+        sketch_channels = _cross_radial_sketch_channels(config)
+        vector_shells = _project_radial_edge_channels(vector, sketch_channels, atomic_cross_radial_projection)
+        vector_cross_radial_dot = _off_diagonal_shell_inner_products(vector_shells)
+    quadrupole_cross_radial_frobenius = None
+    if "atomic.quadrupole_cross_radial_frobenius" in atomic_path_ids and quadrupole is not None:
+        sketch_channels = _cross_radial_sketch_channels(config)
+        quadrupole_shells = _project_radial_edge_channels(quadrupole, sketch_channels, atomic_cross_radial_projection)
+        quadrupole_cross_radial_frobenius = _off_diagonal_shell_inner_products(quadrupole_shells)
     if config.scalar_path_ids is not None:
-        atomic_path_ids = _selected_atomic_path_ids(config.scalar_path_ids)
         return _atomic_scalar_path_descriptors(
             atomic_path_ids,
             density=density,
@@ -1081,6 +1591,8 @@ def atomic_scalar_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> t
             species_density=moments["species_density"],
             vector_norm=vector_norm,
             quadrupole_norm=quadrupole_norm,
+            vector_cross_radial_dot=vector_cross_radial_dot,
+            quadrupole_cross_radial_frobenius=quadrupole_cross_radial_frobenius,
         )
 
     density_desc = density_scalar_descriptors(
@@ -1095,7 +1607,29 @@ def atomic_scalar_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> t
 
 
 
-def _project_radial_edge_channels(channels: torch.Tensor, num_sketches: int) -> torch.Tensor:
+def _fixed_radial_shell_projection_matrix(
+    *,
+    num_radial: int,
+    num_sketches: int,
+    dtype: torch.dtype,
+    device: torch.device,
+) -> torch.Tensor:
+    if int(num_sketches) <= 0:
+        raise ValueError("num_sketches must be positive for an explicit shell projection matrix")
+    if int(num_sketches) > int(num_radial):
+        raise ValueError("radial edge sketch channels cannot exceed num_radial")
+    projection = torch.zeros((int(num_sketches), int(num_radial)), dtype=dtype, device=device)
+    radial_indices = torch.arange(int(num_radial), device=device)
+    for shell_index, chunk in enumerate(torch.tensor_split(radial_indices, int(num_sketches))):
+        projection[shell_index, chunk] = 1.0 / float(chunk.numel())
+    return projection
+
+
+def _project_radial_edge_channels(
+    channels: torch.Tensor,
+    num_sketches: int,
+    projection: torch.Tensor | None = None,
+) -> torch.Tensor:
     if num_sketches <= 0:
         return channels.mean(dim=1)
     if channels.ndim < 2:
@@ -1103,8 +1637,40 @@ def _project_radial_edge_channels(channels: torch.Tensor, num_sketches: int) -> 
     num_radial = int(channels.shape[1])
     if num_sketches > num_radial:
         raise ValueError("radial edge sketch channels cannot exceed num_radial")
-    chunks = torch.tensor_split(channels, int(num_sketches), dim=1)
-    return torch.stack([chunk.mean(dim=1) for chunk in chunks], dim=1)
+    if projection is not None:
+        if projection.ndim != 2:
+            raise ValueError("radial projection must be a rank-2 matrix")
+        expected_shape = (int(num_sketches), num_radial)
+        if tuple(projection.shape) != expected_shape:
+            raise ValueError(f"radial projection must have shape {expected_shape}, got {tuple(projection.shape)}")
+        projection = projection.to(device=channels.device, dtype=channels.dtype)
+        return torch.einsum("kr,nr...->nk...", projection, channels)
+    projection = _fixed_radial_shell_projection_matrix(
+        num_radial=num_radial,
+        num_sketches=int(num_sketches),
+        dtype=channels.dtype,
+        device=channels.device,
+    )
+    return torch.einsum("kr,nr...->nk...", projection, channels)
+
+
+def _cross_radial_sketch_channels(config: RTECEScalarConfig) -> int:
+    channels = int(config.atomic_cross_radial_sketch_channels)
+    if channels < 2:
+        raise ValueError("atomic_cross_radial_sketch_channels must be at least 2")
+    if channels > int(config.num_radial):
+        raise ValueError("atomic_cross_radial_sketch_channels cannot exceed num_radial")
+    return channels
+
+
+def _off_diagonal_shell_inner_products(shells: torch.Tensor) -> torch.Tensor:
+    if shells.ndim < 3:
+        raise ValueError("cross-radial shell contractions require batch, shell, and feature dimensions")
+    num_shells = int(shells.shape[1])
+    _num_off_diagonal_shell_pairs(num_shells)
+    flat = shells.reshape(shells.shape[0], num_shells, -1)
+    values = [(flat[:, i] * flat[:, j]).sum(dim=-1) for i in range(num_shells) for j in range(i + 1, num_shells)]
+    return torch.stack(values, dim=-1)
 
 
 def _radial_edge_relational_base(
@@ -1128,35 +1694,95 @@ def _radial_edge_relational_base(
     return torch.stack(terms, dim=-1)
 
 
-def edge_relational_sketches(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
+def _full_moment_shell_edge_path_values(
+    vector_channels_i: torch.Tensor,
+    vector_channels_j: torch.Tensor,
+    quadrupole_channels_i: torch.Tensor,
+    quadrupole_channels_j: torch.Tensor,
+    unit: torch.Tensor,
+) -> dict[str, torch.Tensor]:
+    vi_shell = _project_radial_edge_channels(vector_channels_i, 2)
+    vj_shell = _project_radial_edge_channels(vector_channels_j, 2)
+    qi_shell = _project_radial_edge_channels(quadrupole_channels_i, 2)
+    qj_shell = _project_radial_edge_channels(quadrupole_channels_j, 2)
+    shell_vector_dot_low = (vi_shell[:, 0] * vj_shell[:, 0]).sum(dim=-1)
+    shell_vector_dot_high = (vi_shell[:, 1] * vj_shell[:, 1]).sum(dim=-1)
+    shell_vector_dot_cross = 0.5 * (
+        (vi_shell[:, 0] * vj_shell[:, 1]).sum(dim=-1)
+        + (vi_shell[:, 1] * vj_shell[:, 0]).sum(dim=-1)
+    )
+    shell_quadrupole_frobenius_low = (qi_shell[:, 0] * qj_shell[:, 0]).sum(dim=(-1, -2))
+    shell_quadrupole_frobenius_high = (qi_shell[:, 1] * qj_shell[:, 1]).sum(dim=(-1, -2))
+    shell_quadrupole_frobenius_cross = 0.5 * (
+        (qi_shell[:, 0] * qj_shell[:, 1]).sum(dim=(-1, -2))
+        + (qi_shell[:, 1] * qj_shell[:, 0]).sum(dim=(-1, -2))
+    )
+    target_vector_shell_contrast = (unit * (vi_shell[:, 0] - vi_shell[:, 1])).sum(dim=-1)
+    source_vector_shell_contrast = (unit * (vj_shell[:, 0] - vj_shell[:, 1])).sum(dim=-1)
+    return {
+        "edge.full_moment.vector_shell_dot": torch.stack(
+            [shell_vector_dot_low, shell_vector_dot_high],
+            dim=-1,
+        ),
+        "edge.full_moment.vector_cross_shell_dot": shell_vector_dot_cross[:, None],
+        "edge.full_moment.quadrupole_shell_frobenius": torch.stack(
+            [shell_quadrupole_frobenius_low, shell_quadrupole_frobenius_high],
+            dim=-1,
+        ),
+        "edge.full_moment.quadrupole_cross_shell_frobenius": shell_quadrupole_frobenius_cross[:, None],
+        "edge.full_moment.vector_shell_contrast_projection": torch.stack(
+            [target_vector_shell_contrast, source_vector_shell_contrast],
+            dim=-1,
+        ),
+    }
+
+
+def edge_relational_sketches(
+    graph: RTECEGraph,
+    config: RTECEScalarConfig,
+    radial_mixing: torch.nn.Linear | None = None,
+) -> torch.Tensor:
     if config.num_edge_sketches <= 0:
         return graph.pos.new_zeros((graph.z.shape[0], 0))
 
     _, distances, unit = compute_pair_geometry(graph)
-    radial = compute_radial_features(distances, config)
-    moments = compute_atomic_moments(graph, config)
+    radial = compute_radial_features(distances, config, radial_mixing)
+    edge_path_ids = _selected_edge_path_ids(config.scalar_path_ids or ())
+    required_ell = _edge_paths_required_ell(config)
+    moments = compute_atomic_moments(graph, config, radial_mixing, max_ell=required_ell)
     src, dst = graph.edge_index
-    vector_channels_i = moments["vector"][dst]
-    vector_channels_j = moments["vector"][src]
-    quadrupole_channels_i = moments["quadrupole"][dst]
-    quadrupole_channels_j = moments["quadrupole"][src]
+    vector_channels = moments["vector"]
+    quadrupole_channels = moments["quadrupole"]
+    vector_channels_i = vector_channels[dst] if vector_channels is not None else None
+    vector_channels_j = vector_channels[src] if vector_channels is not None else None
+    quadrupole_channels_i = quadrupole_channels[dst] if quadrupole_channels is not None else None
+    quadrupole_channels_j = quadrupole_channels[src] if quadrupole_channels is not None else None
     if config.use_cavity_edge_sketches:
         quad_unit = unit[:, :, None] * unit[:, None, :] - torch.eye(
             3,
             device=graph.pos.device,
             dtype=graph.pos.dtype,
         )[None, :, :] / 3.0
-        edge_vector = radial[:, :, None] * unit[:, None, :]
-        edge_quadrupole = radial[:, :, None, None] * quad_unit[:, None, :, :]
-        vector_channels_i = vector_channels_i - edge_vector
-        quadrupole_channels_i = quadrupole_channels_i - edge_quadrupole
+        edge_vector = radial[:, :, None] * unit[:, None, :] if required_ell >= 1 else None
+        edge_quadrupole = radial[:, :, None, None] * quad_unit[:, None, :, :] if required_ell >= 2 else None
         num_nodes = graph.z.shape[0]
         edge_codes = src * num_nodes + dst
         reverse_codes = dst * num_nodes + src
         has_reverse = torch.isin(reverse_codes, edge_codes).to(dtype=graph.pos.dtype, device=graph.pos.device)
-        vector_channels_j = vector_channels_j + has_reverse[:, None, None] * edge_vector
-        quadrupole_channels_j = quadrupole_channels_j - has_reverse[:, None, None, None] * edge_quadrupole
-    edge_path_ids = _selected_edge_path_ids(config.scalar_path_ids or ())
+        if edge_vector is not None:
+            if vector_channels_i is None or vector_channels_j is None:
+                raise RuntimeError("vector cavity edge paths require ell=1 moments")
+            vector_channels_i = vector_channels_i - edge_vector
+            vector_channels_j = vector_channels_j + has_reverse[:, None, None] * edge_vector
+        if edge_quadrupole is not None:
+            if quadrupole_channels_i is None or quadrupole_channels_j is None:
+                raise RuntimeError("quadrupole cavity edge paths require ell=2 moments")
+            quadrupole_channels_i = quadrupole_channels_i - edge_quadrupole
+            quadrupole_channels_j = quadrupole_channels_j - has_reverse[:, None, None, None] * edge_quadrupole
+    if required_ell >= 1 and (vector_channels_i is None or vector_channels_j is None):
+        raise RuntimeError("edge vector paths require ell=1 moments")
+    if required_ell >= 2 and (quadrupole_channels_i is None or quadrupole_channels_j is None):
+        raise RuntimeError("edge quadrupole paths require ell=2 moments")
     if config.radial_edge_sketch_channels:
         if edge_path_ids:
             raise ValueError("selected radial edge path ids are not implemented yet")
@@ -1167,6 +1793,47 @@ def edge_relational_sketches(graph: RTECEGraph, config: RTECEScalarConfig) -> to
         qj = _project_radial_edge_channels(quadrupole_channels_j, k_radial)
         base = _radial_edge_relational_base(vi, vj, qi, qj, unit, radial)
     else:
+        direct_radial = torch.stack([radial[:, 0], radial[:, min(1, radial.shape[1] - 1)]], dim=-1)
+        needs_shell_paths = any(path_id in _EDGE_SHELL_SCALAR_PATH_DIMS for path_id in edge_path_ids)
+        path_values = None
+        if edge_path_ids:
+            path_values = {"edge.direct.radial": direct_radial}
+            if required_ell >= 1:
+                if vector_channels_i is None or vector_channels_j is None:
+                    raise RuntimeError("edge vector paths require ell=1 moments")
+                vi = vector_channels_i.mean(dim=1)
+                vj = vector_channels_j.mean(dim=1)
+                vector_dot = (vi * vj).sum(dim=-1)
+                vector_path = "edge.cavity.vector_dot" if config.use_cavity_edge_sketches else "edge.full_moment.vector_dot"
+                path_values[vector_path] = vector_dot[:, None]
+            if required_ell >= 2:
+                if quadrupole_channels_i is None or quadrupole_channels_j is None:
+                    raise RuntimeError("edge quadrupole paths require ell=2 moments")
+                qi = quadrupole_channels_i.mean(dim=1)
+                qj = quadrupole_channels_j.mean(dim=1)
+                quadrupole_frobenius = (qi * qj).sum(dim=(-1, -2))
+                if config.use_cavity_edge_sketches:
+                    path_values["edge.cavity.quadrupole_frobenius"] = quadrupole_frobenius[:, None]
+            if (not config.use_cavity_edge_sketches) and needs_shell_paths:
+                if radial.shape[1] < 2:
+                    raise ValueError("selected shell edge scalar paths require at least two radial channels")
+                path_values.update(
+                    _full_moment_shell_edge_path_values(
+                        vector_channels_i,
+                        vector_channels_j,
+                        quadrupole_channels_i,
+                        quadrupole_channels_j,
+                        unit,
+                    )
+                )
+            missing_paths = [path_id for path_id in edge_path_ids if path_id not in path_values]
+            if missing_paths:
+                raise ValueError(f"edge scalar path ids are not available for this config: {missing_paths}")
+            edge_values = torch.cat([path_values[path_id] for path_id in edge_path_ids], dim=-1)
+            edge_values = edge_values * cutoff_envelope(distances, config.cutoff)[:, None]
+            return scatter_sum(edge_values, dst, graph.z.shape[0])
+        if vector_channels_i is None or vector_channels_j is None or quadrupole_channels_i is None or quadrupole_channels_j is None:
+            raise RuntimeError("legacy edge sketches require ell=1 and ell=2 moments")
         vi = vector_channels_i.mean(dim=1)
         vj = vector_channels_j.mean(dim=1)
         qi = quadrupole_channels_i.mean(dim=1)
@@ -1177,21 +1844,6 @@ def edge_relational_sketches(graph: RTECEGraph, config: RTECEScalarConfig) -> to
         source_vector_projection = (unit * vj).sum(dim=-1)
         target_quadrupole_projection = torch.einsum("bi,bij,bj->b", unit, qi, unit)
         source_quadrupole_projection = torch.einsum("bi,bij,bj->b", unit, qj, unit)
-        direct_radial = torch.stack([radial[:, 0], radial[:, min(1, radial.shape[1] - 1)]], dim=-1)
-        if edge_path_ids:
-            vector_path = "edge.cavity.vector_dot" if config.use_cavity_edge_sketches else "edge.full_moment.vector_dot"
-            path_values = {
-                vector_path: vector_dot[:, None],
-                "edge.direct.radial": direct_radial,
-            }
-            if config.use_cavity_edge_sketches:
-                path_values["edge.cavity.quadrupole_frobenius"] = quadrupole_frobenius[:, None]
-            missing_paths = [path_id for path_id in edge_path_ids if path_id not in path_values]
-            if missing_paths:
-                raise ValueError(f"edge scalar path ids are not available for this config: {missing_paths}")
-            edge_values = torch.cat([path_values[path_id] for path_id in edge_path_ids], dim=-1)
-            edge_values = edge_values * cutoff_envelope(distances, config.cutoff)[:, None]
-            return scatter_sum(edge_values, dst, graph.z.shape[0])
         base = torch.stack(
             [
                 vector_dot,
@@ -1205,25 +1857,136 @@ def edge_relational_sketches(graph: RTECEGraph, config: RTECEScalarConfig) -> to
             ],
             dim=-1,
         )
+        if config.num_edge_sketches > base.shape[1]:
+            if radial.shape[1] < 2:
+                raise ValueError("non-repeated edge sketches above 8 require at least two radial channels")
+            shell_values = _full_moment_shell_edge_path_values(
+                vector_channels_i,
+                vector_channels_j,
+                quadrupole_channels_i,
+                quadrupole_channels_j,
+                unit,
+            )
+            shell_base = torch.cat(
+                [
+                    shell_values["edge.full_moment.vector_shell_dot"],
+                    shell_values["edge.full_moment.vector_cross_shell_dot"],
+                    shell_values["edge.full_moment.quadrupole_shell_frobenius"],
+                    shell_values["edge.full_moment.quadrupole_cross_shell_frobenius"],
+                    shell_values["edge.full_moment.vector_shell_contrast_projection"],
+                ],
+                dim=-1,
+            )
+            base = torch.cat([base, shell_base], dim=-1)
     if config.num_edge_sketches > base.shape[1]:
-        repeats = math.ceil(config.num_edge_sketches / base.shape[1])
-        base = base.repeat(1, repeats)
+        raise ValueError(
+            f"requested {config.num_edge_sketches} edge sketches, but only {base.shape[1]} non-repeated scalar paths are implemented"
+        )
     edge_values = base[:, : config.num_edge_sketches] * cutoff_envelope(distances, config.cutoff)[:, None]
     return scatter_sum(edge_values, dst, graph.z.shape[0])
 
 
-def rtece_descriptors(graph: RTECEGraph, config: RTECEScalarConfig) -> torch.Tensor:
-    atomic = atomic_scalar_descriptors(graph, config)
-    sketches = edge_relational_sketches(graph, config)
+def rtece_descriptors(
+    graph: RTECEGraph,
+    config: RTECEScalarConfig,
+    radial_mixing: torch.nn.Linear | None = None,
+    atomic_cross_radial_projection: torch.Tensor | None = None,
+    species_basis_embedding: torch.Tensor | None = None,
+) -> torch.Tensor:
+    atomic = atomic_scalar_descriptors(
+        graph,
+        config,
+        radial_mixing,
+        atomic_cross_radial_projection,
+        species_basis_embedding,
+    )
+    sketches = edge_relational_sketches(graph, config, radial_mixing)
     return torch.cat([atomic, sketches], dim=-1)
 
+
+def _fixed_z_power_species_embedding_table(
+    *,
+    max_atomic_number: int,
+    species_basis_channels: int,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | None = None,
+) -> torch.Tensor:
+    z = torch.arange(int(max_atomic_number) + 1, dtype=dtype, device=device) / float(max_atomic_number)
+    powers = torch.arange(1, int(species_basis_channels) + 1, dtype=dtype, device=device)
+    return z[:, None].pow(powers[None, :])
 
 
 class RTECEScalarModel(torch.nn.Module):
     def __init__(self, config: RTECEScalarConfig):
         super().__init__()
         self.config = config
+        if config.learnable_radial_mixing:
+            self.radial_mixing = torch.nn.Linear(config.num_radial, config.num_radial, bias=False)
+            torch.nn.init.eye_(self.radial_mixing.weight)
+        else:
+            self.radial_mixing = None
+        if config.species_basis_channels and config.species_basis_mode == "learnable_embedding":
+            self.species_basis_embedding = torch.nn.Embedding(
+                int(config.max_atomic_number) + 1,
+                int(config.species_basis_channels),
+                dtype=torch.float64,
+            )
+            with torch.no_grad():
+                self.species_basis_embedding.weight.copy_(
+                    _fixed_z_power_species_embedding_table(
+                        max_atomic_number=int(config.max_atomic_number),
+                        species_basis_channels=int(config.species_basis_channels),
+                        dtype=self.species_basis_embedding.weight.dtype,
+                        device=self.species_basis_embedding.weight.device,
+                    )
+                )
+        else:
+            self.species_basis_embedding = None
+        has_atomic_cross_radial_paths = bool(
+            config.scalar_path_ids and any("cross_radial" in path_id for path_id in config.scalar_path_ids)
+        )
+        if config.atomic_cross_radial_projection == "learnable" and has_atomic_cross_radial_paths:
+            self.atomic_cross_radial_projection = torch.nn.Linear(
+                config.num_radial,
+                config.atomic_cross_radial_sketch_channels,
+                bias=False,
+            )
+            with torch.no_grad():
+                self.atomic_cross_radial_projection.weight.copy_(
+                    _fixed_radial_shell_projection_matrix(
+                        num_radial=int(config.num_radial),
+                        num_sketches=int(config.atomic_cross_radial_sketch_channels),
+                        dtype=self.atomic_cross_radial_projection.weight.dtype,
+                        device=self.atomic_cross_radial_projection.weight.device,
+                    )
+                )
+            self.register_buffer("atomic_cross_radial_projection_buffer", None)
+        elif config.atomic_cross_radial_projection == "pod_fixed" and has_atomic_cross_radial_paths:
+            self.atomic_cross_radial_projection = None
+            if config.atomic_cross_radial_projection_matrix is None:
+                raise ValueError("atomic_cross_radial_projection=pod_fixed requires atomic_cross_radial_projection_matrix")
+            self.register_buffer(
+                "atomic_cross_radial_projection_buffer",
+                torch.tensor(config.atomic_cross_radial_projection_matrix, dtype=torch.get_default_dtype()),
+            )
+        else:
+            self.atomic_cross_radial_projection = None
+            self.register_buffer("atomic_cross_radial_projection_buffer", None)
         in_dim = descriptor_dim(config)
+        conditioner_name, conditioner_hidden = _normalize_descriptor_conditioner(
+            config.descriptor_conditioner,
+            config.descriptor_conditioner_hidden_channels,
+        )
+        if conditioner_name == "residual_mlp":
+            self.descriptor_conditioner = torch.nn.Sequential(
+                torch.nn.Linear(in_dim, conditioner_hidden),
+                torch.nn.SiLU(),
+                torch.nn.Linear(conditioner_hidden, in_dim),
+            )
+            torch.nn.init.zeros_(self.descriptor_conditioner[-1].weight)
+            torch.nn.init.zeros_(self.descriptor_conditioner[-1].bias)
+        else:
+            self.descriptor_conditioner = None
         layers: list[torch.nn.Module] = []
         prev = in_dim + 1
         for hidden in config.hidden_channels:
@@ -1233,20 +1996,46 @@ class RTECEScalarModel(torch.nn.Module):
         layers.append(torch.nn.Linear(prev, 1))
         self.energy_head = torch.nn.Sequential(*layers)
 
-    def _require_inference_mode(self, backend_name: str) -> None:
+    def _condition_descriptors(self, descriptors: torch.Tensor) -> torch.Tensor:
+        if self.descriptor_conditioner is None:
+            return descriptors
+        return descriptors + self.descriptor_conditioner(descriptors)
+
+    def _require_inference_mode(self, backend_name: str, graph: RTECEGraph | None = None) -> None:
         if self.training:
             raise RuntimeError(
                 f"{backend_name} is an inference-only rTECE force backend; "
                 "use model.eval() for benchmark/inference or model(graph) for force training."
             )
+        if graph is not None and graph.edge_shifts is not None and graph.edge_shifts.numel() > 0:
+            if torch.any(graph.edge_shifts != 0):
+                raise ValueError(
+                    f"{backend_name} does not support periodic image shifts yet; "
+                    "use force_mode='autograd' for PBC inference."
+                )
         if self.config.use_short_range_repulsion:
             raise ValueError(
                 f"{backend_name} does not include short-range radial-core forces yet; "
                 "use force_mode='autograd' for this T4 candidate."
             )
+        if self.config.learnable_radial_mixing:
+            raise ValueError(
+                f"{backend_name} does not include learnable radial-mixing descriptor derivatives yet; "
+                "use force_mode='autograd' for trainable-feature rTECE candidates."
+            )
+        if self.config.species_basis_channels and self.config.species_basis_mode == "learnable_embedding":
+            raise ValueError(
+                f"{backend_name} does not include learnable species-basis descriptor derivatives yet; "
+                "use force_mode='autograd' for trainable-species rTECE candidates."
+            )
+        if self.config.descriptor_conditioner != "none":
+            raise ValueError(
+                f"{backend_name} does not include descriptor conditioner derivatives yet; "
+                "use force_mode='autograd' for scalar-conditioned rTECE candidates."
+            )
 
     def forward_density_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
-        self._require_inference_mode("forward_density_analytic_forces")
+        self._require_inference_mode("forward_density_analytic_forces", graph)
         if self.config.use_atomic_moments or self.config.num_edge_sketches:
             raise ValueError("forward_density_analytic_forces only supports scalar density/moment descriptors")
         pos = graph.pos
@@ -1318,13 +2107,13 @@ class RTECEScalarModel(torch.nn.Module):
         return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
 
     def forward_pair_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
-        self._require_inference_mode("forward_pair_analytic_forces")
+        self._require_inference_mode("forward_pair_analytic_forces", graph)
         if self.config.use_density_quadratic:
             raise ValueError("forward_pair_analytic_forces only supports pure rtece_pair descriptors")
         return self.forward_density_analytic_forces(graph)
 
     def forward_pair_triton_force_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
-        self._require_inference_mode("forward_pair_triton_force_analytic_forces")
+        self._require_inference_mode("forward_pair_triton_force_analytic_forces", graph)
         if self.config.use_element_density or self.config.use_density_quadratic or self.config.use_vector_moments:
             raise ValueError("forward_pair_triton_force_analytic_forces only supports pure rtece_pair descriptors")
         if self.config.use_atomic_moments or self.config.num_edge_sketches:
@@ -1366,7 +2155,7 @@ class RTECEScalarModel(torch.nn.Module):
         return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
 
     def forward_element_density_triton_force_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
-        self._require_inference_mode("forward_element_density_triton_force_analytic_forces")
+        self._require_inference_mode("forward_element_density_triton_force_analytic_forces", graph)
         if not self.config.use_element_density:
             raise ValueError("forward_element_density_triton_force_analytic_forces requires use_element_density=True")
         if self.config.use_density_quadratic or self.config.use_vector_moments:
@@ -1414,7 +2203,7 @@ class RTECEScalarModel(torch.nn.Module):
         return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
 
     def forward_element_density_triton_descriptor_force_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
-        self._require_inference_mode("forward_element_density_triton_descriptor_force_analytic_forces")
+        self._require_inference_mode("forward_element_density_triton_descriptor_force_analytic_forces", graph)
         if not self.config.use_element_density:
             raise ValueError("forward_element_density_triton_descriptor_force_analytic_forces requires use_element_density=True")
         if self.config.use_density_quadratic or self.config.use_vector_moments:
@@ -1463,7 +2252,7 @@ class RTECEScalarModel(torch.nn.Module):
         return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
 
     def forward_element_density_direct_padded_triton_descriptor_force_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
-        self._require_inference_mode("forward_element_density_direct_padded_triton_descriptor_force_analytic_forces")
+        self._require_inference_mode("forward_element_density_direct_padded_triton_descriptor_force_analytic_forces", graph)
         _validate_packed_element_density_config(
             self.config,
             "forward_element_density_direct_padded_triton_descriptor_force_analytic_forces",
@@ -1526,7 +2315,7 @@ class RTECEScalarModel(torch.nn.Module):
 
 
     def forward_element_density_cell_list_packed_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
-        self._require_inference_mode("forward_element_density_cell_list_packed_analytic_forces")
+        self._require_inference_mode("forward_element_density_cell_list_packed_analytic_forces", graph)
         _validate_packed_element_density_config(self.config, "forward_element_density_cell_list_packed_analytic_forces")
         pos = graph.pos
         src, dst = _cell_list_directed_edges_nopbc(graph, float(self.config.cutoff))
@@ -1572,7 +2361,7 @@ class RTECEScalarModel(torch.nn.Module):
         return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
 
     def forward_element_density_packed_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
-        self._require_inference_mode("forward_element_density_packed_analytic_forces")
+        self._require_inference_mode("forward_element_density_packed_analytic_forces", graph)
         if not self.config.use_element_density:
             raise ValueError("forward_element_density_packed_analytic_forces requires use_element_density=True")
         if self.config.use_density_quadratic or self.config.use_vector_moments:
@@ -1617,6 +2406,16 @@ class RTECEScalarModel(torch.nn.Module):
         forces = -grad_pos
         return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
 
+    def _atomic_cross_radial_projection_weight(self) -> torch.Tensor | None:
+        if self.atomic_cross_radial_projection is not None:
+            return self.atomic_cross_radial_projection.weight
+        return self.atomic_cross_radial_projection_buffer
+
+    def _species_basis_embedding_weight(self) -> torch.Tensor | None:
+        if self.species_basis_embedding is None:
+            return None
+        return self.species_basis_embedding.weight
+
     def forward(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
         pos = graph.pos
         if not pos.requires_grad:
@@ -1633,7 +2432,14 @@ class RTECEScalarModel(torch.nn.Module):
 
         z_scaled = graph.z.to(dtype=pos.dtype, device=pos.device).view(-1, 1)
         z_scaled = z_scaled / float(self.config.max_atomic_number)
-        descriptors = rtece_descriptors(graph, self.config)
+        descriptors = rtece_descriptors(
+            graph,
+            self.config,
+            self.radial_mixing,
+            self._atomic_cross_radial_projection_weight(),
+            self._species_basis_embedding_weight(),
+        )
+        descriptors = self._condition_descriptors(descriptors)
         atomic_input = torch.cat([z_scaled, descriptors], dim=-1)
         atomic_energy = self.energy_head(atomic_input).squeeze(-1)
         num_graphs = int(graph.batch.max().item()) + 1 if graph.batch.numel() else 1
@@ -1655,6 +2461,7 @@ __all__ = [
     "RTECEScalarModel",
     "available_rtece_variants",
     "build_rtece_config",
+    "config_with_moment_l_max",
     "build_rtece_config_from_manifest",
     "build_rtece_config_from_path_ids",
     "descriptor_dim",
