@@ -94,6 +94,7 @@ def build_training_config(args: argparse.Namespace) -> RTECEScalarConfig:
         "short_range_repulsion_radius_scale": float(getattr(args, "short_range_repulsion_radius_scale", 0.75)),
         "learnable_radial_mixing": bool(getattr(args, "learnable_radial_mixing", False)),
         "radial_species_adapter_channels": int(getattr(args, "radial_species_adapter_channels", 0)),
+        "radial_species_adapter_scope": str(getattr(args, "radial_species_adapter_scope", "all")),
         "moment_l_max": getattr(args, "moment_l_max", None),
         "species_basis_mode": str(getattr(args, "species_basis_mode", "fixed_z_power")),
         "atomic_cross_radial_sketch_channels": int(getattr(args, "atomic_cross_radial_sketch_channels", 2)),
@@ -290,6 +291,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--descriptor-conditioner-hidden-channels", type=int, default=0)
     parser.add_argument("--descriptor-bottleneck-dim", type=int, default=0)
     parser.add_argument("--radial-species-adapter-channels", type=int, default=0)
+    parser.add_argument("--radial-species-adapter-scope", choices=("all", "atomic", "edge"), default="all")
     parser.add_argument("--learnable-radial-mixing", action="store_true")
     parser.add_argument("--use-short-range-repulsion", action="store_true")
     parser.add_argument("--short-range-repulsion-potential", choices=("softplus_overlap", "zbl"), default="softplus_overlap")
@@ -367,6 +369,7 @@ def main() -> None:
             descriptor_conditioner_hidden_channels=args.descriptor_conditioner_hidden_channels,
             descriptor_bottleneck_dim=args.descriptor_bottleneck_dim,
             radial_species_adapter_channels=args.radial_species_adapter_channels,
+            radial_species_adapter_scope=args.radial_species_adapter_scope,
             learnable_radial_mixing=args.learnable_radial_mixing,
             use_short_range_repulsion=args.use_short_range_repulsion,
             short_range_repulsion_potential=args.short_range_repulsion_potential,
@@ -470,6 +473,7 @@ def main() -> None:
             else None,
             "learnable_radial_mixing": bool(config.learnable_radial_mixing),
             "radial_species_adapter_channels": int(config.radial_species_adapter_channels),
+            "radial_species_adapter_scope": str(config.radial_species_adapter_scope),
             "descriptor_conditioner": str(config.descriptor_conditioner),
             "descriptor_conditioner_hidden_channels": int(config.descriptor_conditioner_hidden_channels),
             "descriptor_bottleneck_dim": int(config.descriptor_bottleneck_dim),

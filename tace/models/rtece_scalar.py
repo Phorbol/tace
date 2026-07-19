@@ -18,6 +18,7 @@ class RTECEScalarConfig:
     moment_l_max: int | None = None
     learnable_radial_mixing: bool = False
     radial_species_adapter_channels: int = 0
+    radial_species_adapter_scope: str = "all"
     max_atomic_number: int = 100
     use_element_density: bool = False
     use_density_quadratic: bool = False
@@ -157,6 +158,19 @@ def _normalize_radial_species_adapter_channels(value: int) -> int:
     return channels
 
 
+def _normalize_radial_species_adapter_scope(value: str) -> str:
+    scope = str(value or "all")
+    if scope not in {"all", "atomic", "edge"}:
+        raise ValueError("radial_species_adapter_scope must be all, atomic, or edge")
+    return scope
+
+
+def _radial_species_adapter_label(config: RTECEScalarConfig) -> str:
+    scope = _normalize_radial_species_adapter_scope(config.radial_species_adapter_scope)
+    base = "learnable_edge_species_radial_adapter"
+    return base if scope == "all" else f"{base}_{scope}"
+
+
 def config_with_moment_l_max(config: RTECEScalarConfig, moment_l_max: int | None) -> RTECEScalarConfig:
     value = _normalize_moment_l_max(moment_l_max)
     if value is None:
@@ -226,6 +240,7 @@ def build_rtece_config_from_path_ids(
     moment_l_max: int | None = None,
     learnable_radial_mixing: bool = False,
     radial_species_adapter_channels: int = 0,
+    radial_species_adapter_scope: str = "all",
     max_atomic_number: int = 100,
     species_basis_channels: int = 0,
     species_basis_mode: str = "fixed_z_power",
@@ -300,6 +315,9 @@ def build_rtece_config_from_path_ids(
     normalized_radial_species_adapter_channels = _normalize_radial_species_adapter_channels(
         radial_species_adapter_channels
     )
+    normalized_radial_species_adapter_scope = _normalize_radial_species_adapter_scope(
+        radial_species_adapter_scope
+    )
 
     return RTECEScalarConfig(
         variant=variant,
@@ -309,6 +327,7 @@ def build_rtece_config_from_path_ids(
         moment_l_max=normalized_l_max,
         learnable_radial_mixing=bool(learnable_radial_mixing),
         radial_species_adapter_channels=normalized_radial_species_adapter_channels,
+        radial_species_adapter_scope=normalized_radial_species_adapter_scope,
         max_atomic_number=int(max_atomic_number),
         use_element_density="atomic.element_density" in paths,
         use_density_quadratic="atomic.density_square" in paths,
@@ -362,6 +381,9 @@ def build_rtece_config_from_manifest(manifest: Mapping[str, Any]) -> RTECEScalar
         learnable_radial_mixing=bool(payload.get("learnable_radial_mixing", False)),
         radial_species_adapter_channels=_normalize_radial_species_adapter_channels(
             int(payload.get("radial_species_adapter_channels", 0))
+        ),
+        radial_species_adapter_scope=_normalize_radial_species_adapter_scope(
+            str(payload.get("radial_species_adapter_scope", "all"))
         ),
         use_element_density=bool(payload.get("use_element_density", False)),
         use_density_quadratic=bool(payload.get("use_density_quadratic", False)),
@@ -549,9 +571,12 @@ def rtece_route_contract(
         semantic_tier = f"{semantic_tier}_learnable_radial_mixing"
         descriptor_family = f"{descriptor_family}_learnable_radial_mixing"
     if config.radial_species_adapter_channels:
+        adapter_label = _radial_species_adapter_label(config)
         retained.append("trainable_edge_species_radial_basis")
-        semantic_tier = f"{semantic_tier}_edge_species_radial_adapter"
-        descriptor_family = f"{descriptor_family}_edge_species_radial_adapter"
+        if config.radial_species_adapter_scope != "all":
+            retained.append(f"path_scoped_radial_species_adapter_{config.radial_species_adapter_scope}")
+        semantic_tier = f"{semantic_tier}_{adapter_label}"
+        descriptor_family = f"{descriptor_family}_{adapter_label}"
     if config.use_short_range_repulsion:
         short_range_group = "short_range_zbl_prior" if config.short_range_repulsion_potential == "zbl" else "short_range_radial_core"
         retained.append(short_range_group)
@@ -639,6 +664,8 @@ def rtece_route_contract(
         pareto_axes.append("trainable_feature_extractor")
     if config.radial_species_adapter_channels:
         pareto_axes.append("trainable_edge_species_radial_basis")
+        if config.radial_species_adapter_scope != "all":
+            pareto_axes.append("path_scoped_radial_species_adapter")
     if config.descriptor_conditioner != "none":
         pareto_axes.append("scalar_descriptor_conditioning")
     if config.descriptor_bottleneck_dim:
@@ -686,7 +713,7 @@ def rtece_route_contract(
         "feature_extractor": (
             "learnable_radial_linear_mixing" if config.learnable_radial_mixing else "fixed_radial_basis"
         )
-        + ("+learnable_edge_species_radial_adapter" if config.radial_species_adapter_channels else "")
+        + (f"+{_radial_species_adapter_label(config)}" if config.radial_species_adapter_channels else "")
         + ("+learnable_species_basis" if config.species_basis_channels and config.species_basis_mode == "learnable_embedding" else "")
         + ("+residual_scalar_descriptor_conditioner" if config.descriptor_conditioner != "none" else "")
         + ("+low_rank_descriptor_mixer" if config.descriptor_bottleneck_dim else ""),
@@ -748,6 +775,7 @@ def _config_manifest_payload(config: RTECEScalarConfig) -> dict[str, object]:
         "moment_l_max": int(config.moment_l_max) if config.moment_l_max is not None else None,
         "learnable_radial_mixing": bool(config.learnable_radial_mixing),
         "radial_species_adapter_channels": int(config.radial_species_adapter_channels),
+        "radial_species_adapter_scope": str(config.radial_species_adapter_scope),
         "max_atomic_number": int(config.max_atomic_number),
         "use_element_density": bool(config.use_element_density),
         "use_density_quadratic": bool(config.use_density_quadratic),
@@ -797,9 +825,11 @@ def rtece_path_manifest(
     radial_projection = "fixed_two_shell_mean" if config.radial_edge_sketch_channels else "full_radial_mean"
     edge_required_ell = _edge_paths_required_ell(config)
     base_radial_projection = "learnable_identity_initialized_linear_mixing" if config.learnable_radial_mixing else "identity"
+    radial_adapter_scope = _normalize_radial_species_adapter_scope(config.radial_species_adapter_scope)
+    atomic_radial_adapter_enabled = bool(config.radial_species_adapter_channels) and radial_adapter_scope in {"all", "atomic"}
     radial_density_chemistry_basis = (
         f"learnable_center_neighbor_pair_embedding_{int(config.radial_species_adapter_channels)}"
-        if config.radial_species_adapter_channels
+        if atomic_radial_adapter_enabled
         else "none"
     )
     moments = [
@@ -1975,20 +2005,27 @@ def rtece_descriptors(
     species_basis_embedding: torch.Tensor | None = None,
     radial_species_adapter: torch.nn.Module | None = None,
 ) -> torch.Tensor:
+    adapter_scope = _normalize_radial_species_adapter_scope(config.radial_species_adapter_scope)
+    atomic_radial_species_adapter = (
+        radial_species_adapter if radial_species_adapter is not None and adapter_scope in {"all", "atomic"} else None
+    )
+    edge_radial_species_adapter = (
+        radial_species_adapter if radial_species_adapter is not None and adapter_scope in {"all", "edge"} else None
+    )
     atomic = atomic_scalar_descriptors(
         graph,
         config,
         radial_mixing,
         atomic_cross_radial_projection,
         species_basis_embedding,
-        radial_species_adapter,
+        atomic_radial_species_adapter,
     )
     sketches = edge_relational_sketches(
         graph,
         config,
         radial_mixing,
         species_basis_embedding=species_basis_embedding,
-        radial_species_adapter=radial_species_adapter,
+        radial_species_adapter=edge_radial_species_adapter,
     )
     return torch.cat([atomic, sketches], dim=-1)
 

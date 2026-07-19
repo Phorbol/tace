@@ -45,6 +45,7 @@ USE_SHORT_RANGE_REPULSION=${USE_SHORT_RANGE_REPULSION:-0}
 SHORT_RANGE_REPULSION_POTENTIAL=${SHORT_RANGE_REPULSION_POTENTIAL:-softplus_overlap}
 LEARNABLE_RADIAL_MIXING=${LEARNABLE_RADIAL_MIXING:-0}
 RADIAL_SPECIES_ADAPTER_CHANNELS=${RADIAL_SPECIES_ADAPTER_CHANNELS:-0}
+RADIAL_SPECIES_ADAPTER_SCOPE=${RADIAL_SPECIES_ADAPTER_SCOPE:-all}
 DESCRIPTOR_CONDITIONER=${DESCRIPTOR_CONDITIONER:-none}
 DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS=${DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS:-0}
 DESCRIPTOR_BOTTLENECK_DIM=${DESCRIPTOR_BOTTLENECK_DIM:-0}
@@ -98,6 +99,7 @@ echo "use_short_range_repulsion=${USE_SHORT_RANGE_REPULSION}"
 echo "short_range_repulsion_potential=${SHORT_RANGE_REPULSION_POTENTIAL}"
 echo "learnable_radial_mixing=${LEARNABLE_RADIAL_MIXING}"
 echo "radial_species_adapter_channels=${RADIAL_SPECIES_ADAPTER_CHANNELS}"
+echo "radial_species_adapter_scope=${RADIAL_SPECIES_ADAPTER_SCOPE}"
 echo "descriptor_conditioner=${DESCRIPTOR_CONDITIONER}"
 echo "descriptor_conditioner_hidden_channels=${DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS}"
 echo "descriptor_bottleneck_dim=${DESCRIPTOR_BOTTLENECK_DIM}"
@@ -169,7 +171,10 @@ if [[ "${LEARNABLE_RADIAL_MIXING}" == "1" ]]; then
 fi
 radial_species_adapter_args=()
 if [[ "${RADIAL_SPECIES_ADAPTER_CHANNELS}" != "0" ]]; then
-  radial_species_adapter_args=(--radial-species-adapter-channels "${RADIAL_SPECIES_ADAPTER_CHANNELS}")
+  radial_species_adapter_args=(
+    --radial-species-adapter-channels "${RADIAL_SPECIES_ADAPTER_CHANNELS}"
+    --radial-species-adapter-scope "${RADIAL_SPECIES_ADAPTER_SCOPE}"
+  )
 fi
 descriptor_conditioner_args=()
 if [[ "${DESCRIPTOR_CONDITIONER}" != "none" ]]; then

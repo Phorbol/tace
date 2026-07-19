@@ -49,6 +49,7 @@ def write_rtece_matrix_wrapper(
     short_range_repulsion_potential: str | None = None,
     learnable_radial_mixing: bool | None = None,
     radial_species_adapter_channels: int | None = None,
+    radial_species_adapter_scope: str | None = None,
     descriptor_conditioner: str | None = None,
     descriptor_conditioner_hidden_channels: int | None = None,
     descriptor_bottleneck_dim: int | None = None,
@@ -111,6 +112,7 @@ def write_rtece_matrix_wrapper(
             1 if learnable_radial_mixing else (0 if learnable_radial_mixing is False else None),
         ),
         _shell_assign("RADIAL_SPECIES_ADAPTER_CHANNELS", radial_species_adapter_channels),
+        _shell_assign("RADIAL_SPECIES_ADAPTER_SCOPE", radial_species_adapter_scope),
         _shell_assign("DESCRIPTOR_CONDITIONER", descriptor_conditioner),
         _shell_assign("DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS", descriptor_conditioner_hidden_channels),
         _shell_assign("DESCRIPTOR_BOTTLENECK_DIM", descriptor_bottleneck_dim),
@@ -190,6 +192,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--short-range-repulsion-potential", choices=("softplus_overlap", "zbl"), default=None)
     parser.add_argument("--learnable-radial-mixing", action="store_true")
     parser.add_argument("--radial-species-adapter-channels", type=int, default=None)
+    parser.add_argument("--radial-species-adapter-scope", choices=("all", "atomic", "edge"), default=None)
     parser.add_argument("--descriptor-conditioner", choices=("none", "residual_mlp"), default=None)
     parser.add_argument("--descriptor-conditioner-hidden-channels", type=int, default=None)
     parser.add_argument("--descriptor-bottleneck-dim", type=int, default=None)
@@ -248,6 +251,7 @@ def main() -> None:
         short_range_repulsion_potential=args.short_range_repulsion_potential,
         learnable_radial_mixing=args.learnable_radial_mixing,
         radial_species_adapter_channels=args.radial_species_adapter_channels,
+        radial_species_adapter_scope=args.radial_species_adapter_scope,
         descriptor_conditioner=args.descriptor_conditioner,
         descriptor_conditioner_hidden_channels=args.descriptor_conditioner_hidden_channels,
         descriptor_bottleneck_dim=args.descriptor_bottleneck_dim,

@@ -24,6 +24,7 @@ def _row(
     moment_l_max: int,
     learnable_radial_mixing: bool,
     radial_species_adapter_channels: int = 0,
+    radial_species_adapter_scope: str = "all",
     short_range_repulsion_potential: str = "softplus_overlap",
     tece_axes: tuple[str, ...] = (),
     hidden_channels: str = "16,16",
@@ -49,6 +50,8 @@ def _row(
         axes.append("trainable_feature_extractor")
     if radial_species_adapter_channels:
         axes.append("trainable_edge_species_radial_basis")
+        if str(radial_species_adapter_scope) != "all":
+            axes.append("path_scoped_radial_species_adapter")
     if species_basis_channels and species_basis_mode == "learnable_embedding":
         axes.append("trainable_species_basis")
     if use_short_range:
@@ -64,6 +67,7 @@ def _row(
         "moment_l_max": int(moment_l_max),
         "learnable_radial_mixing": bool(learnable_radial_mixing),
         "radial_species_adapter_channels": int(radial_species_adapter_channels),
+        "radial_species_adapter_scope": str(radial_species_adapter_scope),
         "short_range_repulsion_potential": short_range_repulsion_potential,
         "use_short_range_repulsion": bool(use_short_range),
         "hidden_channels": hidden_channels,
@@ -99,6 +103,7 @@ def _parameter_estimates(row: dict[str, Any]) -> dict[str, int]:
             moment_l_max=int(row.get("moment_l_max", 2)),
             learnable_radial_mixing=bool(row.get("learnable_radial_mixing", False)),
             radial_species_adapter_channels=int(row.get("radial_species_adapter_channels", 0)),
+            radial_species_adapter_scope=str(row.get("radial_species_adapter_scope", "all")),
             species_basis_channels=int(row.get("species_basis_channels", 0)),
             species_basis_mode=str(row.get("species_basis_mode", "fixed_z_power")),
             atomic_cross_radial_sketch_channels=int(row.get("atomic_cross_radial_sketch_channels", 2)),
@@ -116,6 +121,7 @@ def _parameter_estimates(row: dict[str, Any]) -> dict[str, int]:
             num_radial=int(row.get("num_radial", 8)),
             learnable_radial_mixing=bool(row.get("learnable_radial_mixing", False)),
             radial_species_adapter_channels=int(row.get("radial_species_adapter_channels", 0)),
+            radial_species_adapter_scope=str(row.get("radial_species_adapter_scope", "all")),
             radial_edge_sketch_channels=int(row.get("radial_edge_sketch_channels", 0)),
             descriptor_bottleneck_dim=int(row.get("descriptor_bottleneck_dim", 0)),
             use_short_range_repulsion=bool(row.get("use_short_range_repulsion", False)),
@@ -620,6 +626,61 @@ def stage122_radial_species_adapter_rows() -> list[dict[str, Any]]:
     return _with_parameter_estimates(rows)
 
 
+def stage123_path_scoped_adapter_rows() -> list[dict[str, Any]]:
+    l1_active_paths = (
+        "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,"
+        "atomic.vector_cross_radial_dot"
+    )
+    l2_cavity_paths = (
+        "atomic.radial_density,atomic.species_basis_density,edge.cavity.vector_dot,"
+        "edge.cavity.quadrupole_frobenius,edge.direct.radial"
+    )
+    specs = [
+        ("l1_active_atomic_radial_species8_h64", l1_active_paths, 1, 16, 8, "atomic"),
+        ("l1_active_all_radial_species8_h64", l1_active_paths, 1, 16, 8, "all"),
+        ("l2_cavity_edge_radial_species8_h64", l2_cavity_paths, 2, 16, 8, "edge"),
+    ]
+    rows = []
+    for name, paths, moment_l_max, species_channels, radial_species_channels, adapter_scope in specs:
+        is_cavity = "edge.cavity" in paths
+        has_cross = "cross_radial" in paths
+        row = _row(
+            name,
+            scalar_path_ids=paths,
+            moment_l_max=moment_l_max,
+            learnable_radial_mixing=True,
+            radial_species_adapter_channels=radial_species_channels,
+            radial_species_adapter_scope=adapter_scope,
+            short_range_repulsion_potential="zbl",
+            tece_axes=(
+                "stage123_residual_projected_active_path_scope",
+                "frontloaded_representation_capacity",
+                "trainable_edge_species_radial_basis",
+                "path_scoped_radial_species_adapter",
+                "low_rank_neighbor_species_basis",
+                "trainable_species_basis",
+            )
+            + (("stage114_ef_active_selection", "cross_radial_invariants", "trainable_cross_radial_projection") if has_cross else ())
+            + (("cavity_edge_relational_scalar_sketches", "direct_edge_radial_path") if is_cavity else ()),
+            hidden_channels="64,64",
+            species_basis_channels=species_channels,
+            species_basis_mode="learnable_embedding",
+            atomic_cross_radial_sketch_channels=3,
+            atomic_cross_radial_projection="learnable" if has_cross else "fixed_shell_mean",
+            descriptor_bottleneck_dim=0,
+        )
+        row["stage_basis"] = "stage123_residual_projected_path_scoped_adapter"
+        row["capacity_allocation"] = "residual_projected_path_scoped_front_adapter_not_wider_head"
+        row["stage122_source"] = "runs/oc20neb_tace_mace/rtece-stage122-radial-species-adapter/stage122_interpretation.md"
+        row["stage114_source"] = "runs/oc20neb_tace_mace/rtece-stage114-ef-active-rank/stage114_notes.md"
+        row["review_basis"] = (
+            "TECE_design_space compiler/downfolding view plus rTECE_review fixed-feature and edge-relational critiques; "
+            "compare whether trainable front capacity should be allocated to atomic density paths, edge relational sketches, or both."
+        )
+        rows.append(row)
+    return _with_parameter_estimates(rows)
+
+
 def preflight_extxyz_file(path: str | Path, *, limit_configs: int | None = None) -> dict[str, int | str]:
     source = Path(path)
     if not source.exists():
@@ -746,6 +807,7 @@ def write_pareto_sweep(
             descriptor_conditioner_hidden_channels=int(row.get("descriptor_conditioner_hidden_channels", 0)),
             descriptor_bottleneck_dim=int(row.get("descriptor_bottleneck_dim", 0)),
             radial_species_adapter_channels=int(row.get("radial_species_adapter_channels", 0)),
+            radial_species_adapter_scope=str(row.get("radial_species_adapter_scope", "all")),
             force_mode=force_mode,
             measure_passes=measure_passes,
             default_dtype=default_dtype,
@@ -802,6 +864,7 @@ def parse_args() -> argparse.Namespace:
             "descriptor-bottleneck-stage120",
             "active-frontloaded-stage121",
             "radial-species-adapter-stage122",
+            "path-scoped-adapter-stage123",
         ),
         default="design-space-default",
     )
@@ -837,6 +900,8 @@ def main() -> None:
         rows = stage121_active_frontloaded_rows()
     elif args.row_set == "radial-species-adapter-stage122":
         rows = stage122_radial_species_adapter_rows()
+    elif args.row_set == "path-scoped-adapter-stage123":
+        rows = stage123_path_scoped_adapter_rows()
     else:
         rows = None
     payload = write_pareto_sweep(

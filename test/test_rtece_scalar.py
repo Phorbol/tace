@@ -4,6 +4,7 @@ import json
 import math
 import subprocess
 import sys
+from dataclasses import replace
 
 import pytest
 import torch
@@ -652,6 +653,55 @@ def test_rtece_radial_species_adapter_is_manifested_and_checkpointed(tmp_path):
     assert manifest["config"]["radial_species_adapter_channels"] == 5
     assert manifest["moments"][0]["chemistry_basis"] == "learnable_center_neighbor_pair_embedding_5"
     assert metadata["tece_path_manifest"]["config"]["radial_species_adapter_channels"] == 5
+
+
+def test_rtece_radial_species_adapter_scope_selects_atomic_or_edge_paths():
+    config = build_rtece_config_from_path_ids(
+        "scope_atomic",
+        ("atomic.radial_density", "edge.direct.radial"),
+        num_radial=4,
+        hidden_channels=(8,),
+        moment_l_max=0,
+        radial_species_adapter_channels=3,
+        radial_species_adapter_scope="atomic",
+    )
+    model = RTECEScalarModel(config).double()
+    with torch.no_grad():
+        model.radial_species_adapter.projection.weight.fill_(0.05)
+    graph = RTECEGraph(
+        z=torch.tensor([1, 6, 8], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.8, 0.1, 0.0], [0.2, 0.9, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    scoped = rtece_descriptors(graph, config, radial_species_adapter=model.radial_species_adapter)
+    expected = torch.cat(
+        [
+            atomic_scalar_descriptors(graph, config, radial_species_adapter=model.radial_species_adapter),
+            edge_relational_sketches(graph, config, radial_species_adapter=None),
+        ],
+        dim=-1,
+    )
+    all_scope = rtece_descriptors(
+        graph,
+        replace(config, radial_species_adapter_scope="all"),
+        radial_species_adapter=model.radial_species_adapter,
+    )
+
+    assert torch.allclose(scoped, expected)
+    assert not torch.allclose(scoped, all_scope)
+
+    edge_config = replace(config, variant="scope_edge", radial_species_adapter_scope="edge")
+    edge_scoped = rtece_descriptors(graph, edge_config, radial_species_adapter=model.radial_species_adapter)
+    edge_expected = torch.cat(
+        [
+            atomic_scalar_descriptors(graph, edge_config, radial_species_adapter=None),
+            edge_relational_sketches(graph, edge_config, radial_species_adapter=model.radial_species_adapter),
+        ],
+        dim=-1,
+    )
+    assert torch.allclose(edge_scoped, edge_expected)
 
 
 def test_rtece_zbl_short_range_prior_matches_tace_zbl_basis():
@@ -3621,6 +3671,7 @@ def test_build_config_accepts_radial_species_adapter_channels():
         scalar_path_ids="atomic.radial_density",
         learnable_radial_mixing=False,
         radial_species_adapter_channels=6,
+        radial_species_adapter_scope="atomic",
         moment_l_max=0,
         species_basis_channels=0,
         species_basis_mode="fixed_z_power",
@@ -3645,10 +3696,13 @@ def test_build_config_accepts_radial_species_adapter_channels():
         scalar_path_ids="atomic.radial_density",
         moment_l_max=0,
         radial_species_adapter_channels=6,
+        radial_species_adapter_scope="atomic",
     )
 
     assert benchmark_config.radial_species_adapter_channels == 6
+    assert benchmark_config.radial_species_adapter_scope == "atomic"
     assert lightning_config.radial_species_adapter_channels == 6
+    assert lightning_config.radial_species_adapter_scope == "atomic"
 
 
 def test_descriptor_bottleneck_reduces_head_input_and_is_manifested():
@@ -6558,6 +6612,29 @@ def test_rtece_stage122_radial_species_adapter_rows_keep_head_fixed_and_adapt_fr
     assert all(row["capacity_allocation"] == "front_edge_species_radial_basis_not_wider_head" for row in rows)
     assert by_name["l1_active_radial_species16_h64"]["num_parameters_estimate"] > by_name["l1_active_radial_species8_h64"]["num_parameters_estimate"]
     assert by_name["l1_active_radial_species8_h64"]["representation_parameters_estimate"] > by_name["l0_pair_radial_species8_h64"]["representation_parameters_estimate"]
+
+
+def test_rtece_stage123_path_scoped_adapter_rows_select_front_capacity_by_path_group():
+    from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage123_path_scoped_adapter_rows
+
+    rows = stage123_path_scoped_adapter_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    assert list(by_name) == [
+        "l1_active_atomic_radial_species8_h64",
+        "l1_active_all_radial_species8_h64",
+        "l2_cavity_edge_radial_species8_h64",
+    ]
+    assert {row["hidden_channels"] for row in rows} == {"64,64"}
+    assert all(row["descriptor_bottleneck_dim"] == 0 for row in rows)
+    assert all(row["stage_basis"] == "stage123_residual_projected_path_scoped_adapter" for row in rows)
+    assert all(row["capacity_allocation"] == "residual_projected_path_scoped_front_adapter_not_wider_head" for row in rows)
+    assert by_name["l1_active_atomic_radial_species8_h64"]["radial_species_adapter_scope"] == "atomic"
+    assert by_name["l1_active_all_radial_species8_h64"]["radial_species_adapter_scope"] == "all"
+    assert by_name["l2_cavity_edge_radial_species8_h64"]["radial_species_adapter_scope"] == "edge"
+    assert "edge.cavity.vector_dot" in by_name["l2_cavity_edge_radial_species8_h64"]["scalar_path_ids"]
+    assert all("stage123_residual_projected_active_path_scope" in row["tece_axes"] for row in rows)
+    assert all("stage122_source" in row for row in rows)
 
 
 def test_rtece_stage121_active_frontloaded_rows_keep_active_atomic_paths_and_move_capacity_front():
