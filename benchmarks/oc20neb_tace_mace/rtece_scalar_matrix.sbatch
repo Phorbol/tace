@@ -44,6 +44,7 @@ FORCE_FOCUS_WEIGHT=${FORCE_FOCUS_WEIGHT:-1.0}
 USE_SHORT_RANGE_REPULSION=${USE_SHORT_RANGE_REPULSION:-0}
 SHORT_RANGE_REPULSION_POTENTIAL=${SHORT_RANGE_REPULSION_POTENTIAL:-softplus_overlap}
 LEARNABLE_RADIAL_MIXING=${LEARNABLE_RADIAL_MIXING:-0}
+RADIAL_SPECIES_ADAPTER_CHANNELS=${RADIAL_SPECIES_ADAPTER_CHANNELS:-0}
 DESCRIPTOR_CONDITIONER=${DESCRIPTOR_CONDITIONER:-none}
 DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS=${DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS:-0}
 DESCRIPTOR_BOTTLENECK_DIM=${DESCRIPTOR_BOTTLENECK_DIM:-0}
@@ -96,6 +97,7 @@ echo "force_focus_weight=${FORCE_FOCUS_WEIGHT}"
 echo "use_short_range_repulsion=${USE_SHORT_RANGE_REPULSION}"
 echo "short_range_repulsion_potential=${SHORT_RANGE_REPULSION_POTENTIAL}"
 echo "learnable_radial_mixing=${LEARNABLE_RADIAL_MIXING}"
+echo "radial_species_adapter_channels=${RADIAL_SPECIES_ADAPTER_CHANNELS}"
 echo "descriptor_conditioner=${DESCRIPTOR_CONDITIONER}"
 echo "descriptor_conditioner_hidden_channels=${DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS}"
 echo "descriptor_bottleneck_dim=${DESCRIPTOR_BOTTLENECK_DIM}"
@@ -165,6 +167,10 @@ learnable_radial_args=()
 if [[ "${LEARNABLE_RADIAL_MIXING}" == "1" ]]; then
   learnable_radial_args=(--learnable-radial-mixing)
 fi
+radial_species_adapter_args=()
+if [[ "${RADIAL_SPECIES_ADAPTER_CHANNELS}" != "0" ]]; then
+  radial_species_adapter_args=(--radial-species-adapter-channels "${RADIAL_SPECIES_ADAPTER_CHANNELS}")
+fi
 descriptor_conditioner_args=()
 if [[ "${DESCRIPTOR_CONDITIONER}" != "none" ]]; then
   descriptor_conditioner_args=(
@@ -194,6 +200,7 @@ for variant in "${variant_args[@]}"; do
     --variant "${variant}" \
     "${scalar_path_args[@]}" \
     "${learnable_radial_args[@]}" \
+    "${radial_species_adapter_args[@]}" \
     "${descriptor_conditioner_args[@]}" \
     "${descriptor_bottleneck_args[@]}" \
     "${short_range_args[@]}" \

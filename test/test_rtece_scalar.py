@@ -601,6 +601,59 @@ def test_rtece_learnable_radial_mixing_is_manifested_as_trainable_feature_path()
     assert manifest["moments"][0]["radial_projection"] == "learnable_identity_initialized_linear_mixing"
 
 
+def test_rtece_radial_species_adapter_initializes_as_fixed_feature_extractor():
+    fixed_config = RTECEScalarConfig(variant="fixed", num_radial=4, hidden_channels=(4,))
+    adapted_config = RTECEScalarConfig(
+        variant="radial_species_adapter",
+        num_radial=4,
+        hidden_channels=(4,),
+        radial_species_adapter_channels=3,
+    )
+    fixed = RTECEScalarModel(fixed_config).double()
+    adapted = RTECEScalarModel(adapted_config).double()
+    adapted.energy_head.load_state_dict(fixed.energy_head.state_dict())
+    graph = RTECEGraph(
+        z=torch.tensor([1, 6, 8], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.8, 0.1, 0.0], [0.2, 0.9, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    fixed_out = fixed(graph)
+    adapted_out = adapted(graph)
+
+    assert "radial_species_adapter.projection.weight" in adapted.state_dict()
+    assert torch.count_nonzero(adapted.radial_species_adapter.projection.weight) == 0
+    assert torch.allclose(adapted_out["energy"], fixed_out["energy"], atol=1e-12)
+    assert torch.allclose(adapted_out["forces"], fixed_out["forces"], atol=1e-12)
+
+
+def test_rtece_radial_species_adapter_is_manifested_and_checkpointed(tmp_path):
+    from tace.models.rtece_workflow import load_checkpoint, save_checkpoint
+
+    config = RTECEScalarConfig(
+        variant="radial_species_adapter",
+        num_radial=4,
+        hidden_channels=(8,),
+        radial_species_adapter_channels=5,
+    )
+    model = RTECEScalarModel(config).double()
+    path = tmp_path / "rtece_radial_species_adapter.pt"
+
+    manifest = rtece_path_manifest(config)
+    route = rtece_route_contract(config)
+    save_checkpoint(path, model, config)
+    _loaded_model, loaded_config, metadata = load_checkpoint(path, dtype=torch.float64)
+
+    assert loaded_config == config
+    assert route["feature_extractor"] == "fixed_radial_basis+learnable_edge_species_radial_adapter"
+    assert "trainable_edge_species_radial_basis" in route["retained_tece_groups"]
+    assert "trainable_edge_species_radial_basis" in route["pareto_axes"]
+    assert manifest["config"]["radial_species_adapter_channels"] == 5
+    assert manifest["moments"][0]["chemistry_basis"] == "learnable_center_neighbor_pair_embedding_5"
+    assert metadata["tece_path_manifest"]["config"]["radial_species_adapter_channels"] == 5
+
+
 def test_rtece_zbl_short_range_prior_matches_tace_zbl_basis():
     from tace.models.radial import ZBLBasis
 
@@ -3555,6 +3608,49 @@ def test_descriptor_residual_conditioner_is_identity_initialized_and_manifested(
     assert "scalar_descriptor_conditioning" in route["pareto_axes"]
 
 
+def test_build_config_accepts_radial_species_adapter_channels():
+    import argparse
+
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import build_training_config as benchmark_build
+    from tace.lightning.rtece import build_training_config as lightning_build
+
+    args = argparse.Namespace(
+        variant="radial_species_adapter_train",
+        hidden_channels="8",
+        num_radial=4,
+        scalar_path_ids="atomic.radial_density",
+        learnable_radial_mixing=False,
+        radial_species_adapter_channels=6,
+        moment_l_max=0,
+        species_basis_channels=0,
+        species_basis_mode="fixed_z_power",
+        atomic_cross_radial_sketch_channels=2,
+        atomic_cross_radial_projection="fixed_shell_mean",
+        atomic_cross_radial_projection_matrix=None,
+        descriptor_conditioner="none",
+        descriptor_conditioner_hidden_channels=0,
+        descriptor_bottleneck_dim=0,
+        use_short_range_repulsion=False,
+        short_range_repulsion_potential="softplus_overlap",
+        short_range_repulsion_strength=0.0,
+        short_range_repulsion_beta=10.0,
+        short_range_repulsion_radius_scale=0.75,
+    )
+
+    benchmark_config = benchmark_build(args)
+    lightning_config = lightning_build(
+        variant="radial_species_adapter_train",
+        hidden_channels="8",
+        num_radial=4,
+        scalar_path_ids="atomic.radial_density",
+        moment_l_max=0,
+        radial_species_adapter_channels=6,
+    )
+
+    assert benchmark_config.radial_species_adapter_channels == 6
+    assert lightning_config.radial_species_adapter_channels == 6
+
+
 def test_descriptor_bottleneck_reduces_head_input_and_is_manifested():
     config = build_rtece_config_from_path_ids(
         "l2_bottleneck",
@@ -3595,6 +3691,26 @@ def test_descriptor_bottleneck_reduces_head_input_and_is_manifested():
     assert route["descriptor_readout_dim"] == 5
     assert "trainable_low_rank_descriptor_mixer" in manifest["retained_tece_groups"]
     assert "descriptor_bottleneck" in route["pareto_axes"]
+
+
+def test_radial_species_adapter_rejects_inference_only_analytic_backends():
+    config = build_rtece_config_from_path_ids(
+        "radial_species_adapter_pair",
+        ("atomic.radial_density",),
+        num_radial=4,
+        hidden_channels=(8,),
+        radial_species_adapter_channels=3,
+    )
+    model = RTECEScalarModel(config).double().eval()
+    graph = RTECEGraph(
+        z=torch.tensor([1, 6], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.75, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(2),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+
+    with pytest.raises(ValueError, match="radial species adapter"):
+        model.forward_pair_analytic_forces(graph)
 
 
 def test_descriptor_bottleneck_rejects_inference_only_analytic_backends():
@@ -6058,6 +6174,15 @@ def test_rtece_matrix_sbatch_forwards_species_basis_mode():
     assert '--species-basis-mode "${SPECIES_BASIS_MODE}"' in script
 
 
+def test_rtece_matrix_sbatch_forwards_radial_species_adapter_channels():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
+
+    assert "RADIAL_SPECIES_ADAPTER_CHANNELS=${RADIAL_SPECIES_ADAPTER_CHANNELS:-0}" in script
+    assert "radial_species_adapter_channels=${RADIAL_SPECIES_ADAPTER_CHANNELS}" in script
+    assert "--radial-species-adapter-channels" in script
+
+
 def test_rtece_matrix_sbatch_forwards_descriptor_bottleneck_dim():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
@@ -6411,6 +6536,28 @@ def test_rtece_stage120_descriptor_bottleneck_rows_keep_head_fixed_and_mix_front
     assert all("front_low_rank_path_mixer" in row["tece_axes"] for row in rows)
     assert by_name["l0_species8_bneck16_h64"]["readout_parameters_estimate"] < by_name["l0_species8_bneck32_h64"]["readout_parameters_estimate"]
     assert by_name["l2_species32_cavity_atomic_bneck16_h64"]["representation_parameters_estimate"] > by_name["l0_species8_bneck16_h64"]["representation_parameters_estimate"]
+
+
+def test_rtece_stage122_radial_species_adapter_rows_keep_head_fixed_and_adapt_front_radial_basis():
+    from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage122_radial_species_adapter_rows
+
+    rows = stage122_radial_species_adapter_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    assert list(by_name) == [
+        "l0_pair_radial_species8_h64",
+        "l0_species8_radial_species8_h64",
+        "l1_active_radial_species8_h64",
+        "l1_active_radial_species16_h64",
+    ]
+    assert {row["hidden_channels"] for row in rows} == {"64,64"}
+    assert all(row["descriptor_bottleneck_dim"] == 0 for row in rows)
+    assert all(row["stage_basis"] == "stage122_radial_species_adapter" for row in rows)
+    assert all(row["radial_species_adapter_channels"] in {8, 16} for row in rows)
+    assert all("trainable_edge_species_radial_basis" in row["tece_axes"] for row in rows)
+    assert all(row["capacity_allocation"] == "front_edge_species_radial_basis_not_wider_head" for row in rows)
+    assert by_name["l1_active_radial_species16_h64"]["num_parameters_estimate"] > by_name["l1_active_radial_species8_h64"]["num_parameters_estimate"]
+    assert by_name["l1_active_radial_species8_h64"]["representation_parameters_estimate"] > by_name["l0_pair_radial_species8_h64"]["representation_parameters_estimate"]
 
 
 def test_rtece_stage121_active_frontloaded_rows_keep_active_atomic_paths_and_move_capacity_front():
