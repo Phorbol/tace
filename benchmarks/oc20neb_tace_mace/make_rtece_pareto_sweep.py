@@ -945,6 +945,77 @@ def stage129_current_pareto_rows() -> list[dict[str, Any]]:
 
 
 
+def stage131_residual_edge_current_pareto_rows() -> list[dict[str, Any]]:
+    l1_active_backbone = (
+        "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,"
+        "atomic.vector_cross_radial_dot"
+    )
+    specs = [
+        (
+            "l1_active_species24_cavity_vec_residual_h64",
+            f"{l1_active_backbone},edge.cavity.vector_dot,edge.direct.radial",
+            1,
+        ),
+        (
+            "l2_active_species24_cavity_vecq_residual_h64",
+            f"{l1_active_backbone},edge.cavity.vector_dot,edge.cavity.quadrupole_frobenius,edge.direct.radial",
+            2,
+        ),
+    ]
+    rows = []
+    for name, paths, moment_l_max in specs:
+        row = _row(
+            name,
+            scalar_path_ids=paths,
+            moment_l_max=moment_l_max,
+            learnable_radial_mixing=True,
+            radial_species_adapter_channels=8,
+            radial_species_adapter_scope="all",
+            short_range_repulsion_potential="zbl",
+            tece_axes=(
+                "stage131_residual_edge_current_pareto",
+                "stage130_weighting_negative_control",
+                "stage129_current_pareto_anchor",
+                "stage127_local_cross_species",
+                "stage124_residual_edge_ladder",
+                "stage114_ef_active_selection",
+                "hardware_cost_conditioned_active_set",
+                "rank_neighborhood_downfolding",
+                "radial_rank",
+                "trainable_edge_species_radial_basis",
+                "low_rank_neighbor_species_basis",
+                "trainable_species_basis",
+                "cross_radial_invariants",
+                "trainable_cross_radial_projection",
+                "cavity_edge_relational_scalar_sketches",
+                "direct_edge_radial_path",
+            ),
+            hidden_channels="64,64",
+            num_radial=12,
+            species_basis_channels=24,
+            species_basis_mode="learnable_embedding",
+            atomic_cross_radial_sketch_channels=3,
+            atomic_cross_radial_projection="learnable",
+            descriptor_bottleneck_dim=0,
+        )
+        row["stage_basis"] = "stage131_residual_edge_current_pareto"
+        row["capacity_allocation"] = "current_pareto_atomic_backbone_plus_minimal_edge_relational_residual"
+        row["stage130_source"] = "runs/oc20neb_tace_mace/rtece-stage130-sobolev-weighted-distill/stage130_physical_triage_summary.md"
+        row["stage129_source"] = "runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/stage129_interpretation.md"
+        row["stage127_source"] = "runs/oc20neb_tace_mace/rtece-stage127-local-cross-species/stage127_interpretation.md"
+        row["stage124_source"] = "runs/oc20neb_tace_mace/rtece-stage124-residual-edge-ladder/stage124_interpretation.md"
+        row["review_basis"] = (
+            "Stage130 showed Sobolev/force-tail weighting is not a clean RMSE Pareto improvement. "
+            "Stage124 showed edge-only residual paths are dominated, while all-scope cavity coupling can recover "
+            "accuracy at large throughput cost. Stage131 therefore keeps the stage129 current-Pareto species24 "
+            "L1 active atomic backbone and adds only the minimal cavity/direct edge-relational scalar sketches "
+            "called out by TECE_design_space.md and rTECE_review.md, isolating representation value from "
+            "weighting and from final-head widening."
+        )
+        rows.append(row)
+    return _with_parameter_estimates(rows)
+
+
 def preflight_extxyz_file(path: str | Path, *, limit_configs: int | None = None) -> dict[str, int | str]:
     source = Path(path)
     if not source.exists():
@@ -1134,6 +1205,7 @@ def parse_args() -> argparse.Namespace:
             "rank-neighborhood-stage126",
             "local-cross-species-stage127",
             "stage129-current-pareto",
+            "stage131-residual-edge-current-pareto",
         ),
         default="design-space-default",
     )
@@ -1181,6 +1253,8 @@ def main() -> None:
         rows = stage127_local_cross_species_rows()
     elif args.row_set == "stage129-current-pareto":
         rows = stage129_current_pareto_rows()
+    elif args.row_set == "stage131-residual-edge-current-pareto":
+        rows = stage131_residual_edge_current_pareto_rows()
     else:
         rows = None
     payload = write_pareto_sweep(

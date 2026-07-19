@@ -6917,6 +6917,57 @@ def test_rtece_stage127_local_cross_species_rows_sweep_active_set_neighborhood()
     assert by_name["l1_active_nrad12_species24_radial_species8_cross3_h64"]["stage126_source"].endswith("stage126_interpretation.md")
 
 
+def test_rtece_stage131_residual_edge_current_pareto_rows_add_minimal_cavity_paths_after_weighting_negative():
+    from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage131_residual_edge_current_pareto_rows
+
+    rows = stage131_residual_edge_current_pareto_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    assert list(by_name) == [
+        "l1_active_species24_cavity_vec_residual_h64",
+        "l2_active_species24_cavity_vecq_residual_h64",
+    ]
+    assert {row["hidden_channels"] for row in rows} == {"64,64"}
+    assert all(row["stage_basis"] == "stage131_residual_edge_current_pareto" for row in rows)
+    assert all(row["capacity_allocation"] == "current_pareto_atomic_backbone_plus_minimal_edge_relational_residual" for row in rows)
+    assert all(row["num_radial"] == 12 for row in rows)
+    assert all(row["radial_species_adapter_channels"] == 8 for row in rows)
+    assert all(row["radial_species_adapter_scope"] == "all" for row in rows)
+    assert all(row["species_basis_channels"] == 24 for row in rows)
+    assert all(row["species_basis_mode"] == "learnable_embedding" for row in rows)
+    assert all(row["atomic_cross_radial_sketch_channels"] == 3 for row in rows)
+    assert all(row["atomic_cross_radial_projection"] == "learnable" for row in rows)
+    assert all(row["short_range_repulsion_potential"] == "zbl" for row in rows)
+    assert all(row["descriptor_bottleneck_dim"] == 0 for row in rows)
+    assert all(row["stage130_source"].endswith("stage130_physical_triage_summary.md") for row in rows)
+    assert all(row["stage129_source"].endswith("stage129_interpretation.md") for row in rows)
+    assert all(row["stage124_source"].endswith("stage124_interpretation.md") for row in rows)
+
+    base_paths = (
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+    )
+    for row in rows:
+        paths = tuple(part.strip() for part in row["scalar_path_ids"].split(",") if part.strip())
+        assert paths[:4] == base_paths
+        assert "edge.cavity.vector_dot" in paths
+        assert "edge.direct.radial" in paths
+        assert "stage131_residual_edge_current_pareto" in row["tece_axes"]
+        assert "stage130_weighting_negative_control" in row["tece_axes"]
+        assert "stage129_current_pareto_anchor" in row["tece_axes"]
+        assert "stage127_local_cross_species" in row["tece_axes"]
+        assert "cavity_edge_relational_scalar_sketches" in row["tece_axes"]
+        assert "direct_edge_radial_path" in row["tece_axes"]
+
+    assert by_name["l1_active_species24_cavity_vec_residual_h64"]["moment_l_max"] == 1
+    assert "edge.cavity.quadrupole_frobenius" not in by_name["l1_active_species24_cavity_vec_residual_h64"]["scalar_path_ids"]
+    assert by_name["l2_active_species24_cavity_vecq_residual_h64"]["moment_l_max"] == 2
+    assert "edge.cavity.quadrupole_frobenius" in by_name["l2_active_species24_cavity_vecq_residual_h64"]["scalar_path_ids"]
+    assert by_name["l2_active_species24_cavity_vecq_residual_h64"]["num_parameters_estimate"] >= by_name["l1_active_species24_cavity_vec_residual_h64"]["num_parameters_estimate"]
+
+
 def test_rtece_stage121_active_frontloaded_rows_keep_active_atomic_paths_and_move_capacity_front():
     from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage121_active_frontloaded_rows
 
