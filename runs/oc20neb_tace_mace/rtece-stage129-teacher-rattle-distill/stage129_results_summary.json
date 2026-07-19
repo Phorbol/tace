@@ -1,0 +1,137 @@
+{
+  "schema_version": "rtece_stage129_teacher_rattle_distill_results.v1",
+  "stage": "stage129_teacher_rattle_distill_current_pareto",
+  "source_commit": "61c8167",
+  "design_basis": "Fixed stage128 physical-Pareto rTECE architectures; add teacher-labeled rattles around the stage128 stress window to test whether deployment-distribution distillation coverage improves RMSE and physical robustness without C/N-specialized architecture changes.",
+  "training_data": {
+    "base_train_file": "runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz",
+    "base_train_configs_used": 2048,
+    "teacher_rattle_configs": 128,
+    "teacher_rattle_source": "valid configs 58:66, 16 rattles per config, std=0.05 A",
+    "train_file": "runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/augmented_train_base2048_plus_teacher_rattle128.extxyz",
+    "train_configs": 2176,
+    "valid_file": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+    "valid_configs": 256,
+    "bench_configs": 1024
+  },
+  "jobs": [
+    {
+      "job": "685068",
+      "row": "l1_active_nrad12_species20_radial_species8_cross3_h64",
+      "state": "COMPLETED",
+      "exit_code": "0:0",
+      "elapsed": "00:08:25"
+    },
+    {
+      "job": "685070",
+      "row": "l1_active_nrad12_species24_radial_species8_cross3_h64",
+      "state": "COMPLETED",
+      "exit_code": "0:0",
+      "elapsed": "00:08:43"
+    }
+  ],
+  "rows": [
+    {
+      "variant": "l1_active_nrad12_species20_radial_species8_cross3_h64",
+      "num_parameters": 25449,
+      "train_configs": 2176,
+      "valid_configs": 256,
+      "steps": 20000,
+      "best_step": 18496,
+      "best_valid_loss": 0.11319650709629059,
+      "trainer_backend": "lightning",
+      "batch_size": 8,
+      "valid_batch_size": 16,
+      "lr_scheduler": "plateau",
+      "lr_warmup_steps": 500,
+      "early_stopping_patience": 400,
+      "neighborlist_backend": "matscipy",
+      "dft": {
+        "atoms_per_second": 1294809.3552203304,
+        "e_mae_mev_atom": 218.62302863559563,
+        "e_rmse_mev_atom": 300.09863512727975,
+        "e_max_abs_mev_atom": 681.9880289292281,
+        "f_mae_mev_a": 46.278575773893984,
+        "f_rmse_mev_a": 107.65330217564119,
+        "f_max_abs_mev_a": 2387.489919840393
+      },
+      "teacher": {
+        "atoms_per_second": 1295149.4975219788,
+        "e_mae_mev_atom": 202.80086920062595,
+        "e_rmse_mev_atom": 283.32084939636303,
+        "e_max_abs_mev_atom": 665.6607266130119,
+        "f_mae_mev_a": 47.53034251946079,
+        "f_rmse_mev_a": 105.05950280040575,
+        "f_max_abs_mev_a": 2533.086121802978
+      },
+      "stage128_baseline": {
+        "atoms_per_second": 1288754.3400044146,
+        "dft_e_rmse_mev_atom": 277.925419087746,
+        "dft_f_rmse_mev_a": 104.79276828021005,
+        "dft_f_max_abs_mev_a": 2263.224249064026,
+        "rattle_max_fmax_ev_a": 10.809250600077226,
+        "cn_rattle_final_rmsd_a": 0.106577806224699
+      },
+      "delta_vs_stage128": {
+        "dft_e_rmse_mev_atom": 22.17321603953373,
+        "dft_f_rmse_mev_a": 2.860533895431143,
+        "dft_f_max_abs_mev_a": 124.26567077636683,
+        "atoms_per_second": 6055.015215915861
+      }
+    },
+    {
+      "variant": "l1_active_nrad12_species24_radial_species8_cross3_h64",
+      "num_parameters": 28925,
+      "train_configs": 2176,
+      "valid_configs": 256,
+      "steps": 20000,
+      "best_step": 12240,
+      "best_valid_loss": 0.09706486016511917,
+      "trainer_backend": "lightning",
+      "batch_size": 8,
+      "valid_batch_size": 16,
+      "lr_scheduler": "plateau",
+      "lr_warmup_steps": 500,
+      "early_stopping_patience": 400,
+      "neighborlist_backend": "matscipy",
+      "dft": {
+        "atoms_per_second": 1224417.991969455,
+        "e_mae_mev_atom": 219.22881003979515,
+        "e_rmse_mev_atom": 273.84908615733866,
+        "e_max_abs_mev_atom": 659.5285275505515,
+        "f_mae_mev_a": 42.58129514260457,
+        "f_rmse_mev_a": 101.55723315362863,
+        "f_max_abs_mev_a": 2697.5326525891114
+      },
+      "teacher": {
+        "atoms_per_second": 1222494.0386447296,
+        "e_mae_mev_atom": 207.9221247976718,
+        "e_rmse_mev_atom": 258.8846858704371,
+        "e_max_abs_mev_atom": 618.2886460248161,
+        "f_mae_mev_a": 44.20745847473669,
+        "f_rmse_mev_a": 99.56939612218095,
+        "f_max_abs_mev_a": 2325.186728914795
+      },
+      "stage128_baseline": {
+        "atoms_per_second": 1232241.1201853142,
+        "dft_e_rmse_mev_atom": 307.29868802196296,
+        "dft_f_rmse_mev_a": 99.48009946381525,
+        "dft_f_max_abs_mev_a": 2429.936175524292,
+        "rattle_max_fmax_ev_a": 9.971018169531042,
+        "cn_rattle_final_rmsd_a": 0.11150649148049341
+      },
+      "delta_vs_stage128": {
+        "dft_e_rmse_mev_atom": -33.4496018646243,
+        "dft_f_rmse_mev_a": 2.0771336898133817,
+        "dft_f_max_abs_mev_a": 267.59647706481946,
+        "atoms_per_second": -7823.128215859178
+      }
+    }
+  ],
+  "interpretation": {
+    "current_best_by_dft_f_rmse": "l1_active_nrad12_species24_radial_species8_cross3_h64",
+    "current_best_by_throughput": "l1_active_nrad12_species20_radial_species8_cross3_h64",
+    "result": "Teacher-rattle coverage is not an immediate Pareto improvement on the standard DFT benchmark: species24 improves DFT energy RMSE but both tested rows have slightly worse DFT force RMSE and worse force max error than their stage128 baselines.",
+    "next_required_gate": "Run the same dimer and C/N rattle-relax physical triage on the stage129 checkpoints before deciding whether teacher-rattle coverage improves physical robustness despite the standard force-RMSE tradeoff."
+  }
+}
