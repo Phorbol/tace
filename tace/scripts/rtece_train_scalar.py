@@ -100,6 +100,7 @@ def build_training_config(args: argparse.Namespace) -> RTECEScalarConfig:
         "atomic_cross_radial_projection_matrix": getattr(args, "atomic_cross_radial_projection_matrix", None),
         "descriptor_conditioner": str(getattr(args, "descriptor_conditioner", "none")),
         "descriptor_conditioner_hidden_channels": int(getattr(args, "descriptor_conditioner_hidden_channels", 0)),
+        "descriptor_bottleneck_dim": int(getattr(args, "descriptor_bottleneck_dim", 0)),
     }
     scalar_path_ids = parse_scalar_path_ids(getattr(args, "scalar_path_ids", None))
     if scalar_path_ids is not None:
@@ -286,6 +287,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--atomic-cross-radial-projection-file", type=Path, default=None)
     parser.add_argument("--descriptor-conditioner", choices=("none", "residual_mlp"), default="none")
     parser.add_argument("--descriptor-conditioner-hidden-channels", type=int, default=0)
+    parser.add_argument("--descriptor-bottleneck-dim", type=int, default=0)
     parser.add_argument("--learnable-radial-mixing", action="store_true")
     parser.add_argument("--use-short-range-repulsion", action="store_true")
     parser.add_argument("--short-range-repulsion-potential", choices=("softplus_overlap", "zbl"), default="softplus_overlap")

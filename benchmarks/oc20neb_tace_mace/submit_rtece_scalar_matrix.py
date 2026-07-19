@@ -50,6 +50,7 @@ def write_rtece_matrix_wrapper(
     learnable_radial_mixing: bool | None = None,
     descriptor_conditioner: str | None = None,
     descriptor_conditioner_hidden_channels: int | None = None,
+    descriptor_bottleneck_dim: int | None = None,
     short_range_repulsion_strength: float | None = None,
     short_range_repulsion_beta: float | None = None,
     short_range_repulsion_radius_scale: float | None = None,
@@ -110,6 +111,7 @@ def write_rtece_matrix_wrapper(
         ),
         _shell_assign("DESCRIPTOR_CONDITIONER", descriptor_conditioner),
         _shell_assign("DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS", descriptor_conditioner_hidden_channels),
+        _shell_assign("DESCRIPTOR_BOTTLENECK_DIM", descriptor_bottleneck_dim),
         _shell_assign("SHORT_RANGE_REPULSION_STRENGTH", short_range_repulsion_strength),
         _shell_assign("SHORT_RANGE_REPULSION_BETA", short_range_repulsion_beta),
         _shell_assign("SHORT_RANGE_REPULSION_RADIUS_SCALE", short_range_repulsion_radius_scale),
@@ -187,6 +189,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--learnable-radial-mixing", action="store_true")
     parser.add_argument("--descriptor-conditioner", choices=("none", "residual_mlp"), default=None)
     parser.add_argument("--descriptor-conditioner-hidden-channels", type=int, default=None)
+    parser.add_argument("--descriptor-bottleneck-dim", type=int, default=None)
     parser.add_argument("--short-range-repulsion-strength", type=float, default=None)
     parser.add_argument("--short-range-repulsion-beta", type=float, default=None)
     parser.add_argument("--short-range-repulsion-radius-scale", type=float, default=None)
@@ -243,6 +246,7 @@ def main() -> None:
         learnable_radial_mixing=args.learnable_radial_mixing,
         descriptor_conditioner=args.descriptor_conditioner,
         descriptor_conditioner_hidden_channels=args.descriptor_conditioner_hidden_channels,
+        descriptor_bottleneck_dim=args.descriptor_bottleneck_dim,
         short_range_repulsion_strength=args.short_range_repulsion_strength,
         short_range_repulsion_beta=args.short_range_repulsion_beta,
         short_range_repulsion_radius_scale=args.short_range_repulsion_radius_scale,

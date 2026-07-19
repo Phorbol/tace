@@ -32,6 +32,7 @@ class RTECEScalarConfig:
     atomic_cross_radial_projection_matrix: tuple[tuple[float, ...], ...] | None = None
     descriptor_conditioner: str = "none"
     descriptor_conditioner_hidden_channels: int = 0
+    descriptor_bottleneck_dim: int = 0
     scalar_path_ids: tuple[str, ...] | None = None
     energy_per_atom_shift: float = 0.0
     atomic_energies: Mapping[int, float] | None = None
@@ -141,6 +142,13 @@ def _normalize_descriptor_conditioner(name: str, hidden_channels: int) -> tuple[
     return conditioner, hidden
 
 
+def _normalize_descriptor_bottleneck_dim(value: int) -> int:
+    dim = int(value)
+    if dim < 0:
+        raise ValueError("descriptor_bottleneck_dim must be non-negative")
+    return dim
+
+
 def config_with_moment_l_max(config: RTECEScalarConfig, moment_l_max: int | None) -> RTECEScalarConfig:
     value = _normalize_moment_l_max(moment_l_max)
     if value is None:
@@ -224,6 +232,7 @@ def build_rtece_config_from_path_ids(
     atomic_cross_radial_projection_matrix: object | None = None,
     descriptor_conditioner: str = "none",
     descriptor_conditioner_hidden_channels: int = 0,
+    descriptor_bottleneck_dim: int = 0,
 ) -> RTECEScalarConfig:
     paths = tuple(str(path_id) for path_id in scalar_path_ids)
     if not paths:
@@ -278,6 +287,7 @@ def build_rtece_config_from_path_ids(
         descriptor_conditioner,
         descriptor_conditioner_hidden_channels,
     )
+    normalized_descriptor_bottleneck_dim = _normalize_descriptor_bottleneck_dim(descriptor_bottleneck_dim)
 
     return RTECEScalarConfig(
         variant=variant,
@@ -306,6 +316,7 @@ def build_rtece_config_from_path_ids(
         atomic_cross_radial_projection_matrix=normalized_atomic_cross_projection_matrix,
         descriptor_conditioner=normalized_descriptor_conditioner,
         descriptor_conditioner_hidden_channels=normalized_descriptor_conditioner_hidden,
+        descriptor_bottleneck_dim=normalized_descriptor_bottleneck_dim,
         scalar_path_ids=paths,
         energy_per_atom_shift=float(energy_per_atom_shift),
         atomic_energies=atomic_energies,
@@ -362,6 +373,9 @@ def build_rtece_config_from_manifest(manifest: Mapping[str, Any]) -> RTECEScalar
             str(payload.get("descriptor_conditioner", "none")),
             int(payload.get("descriptor_conditioner_hidden_channels", 0)),
         )[1],
+        descriptor_bottleneck_dim=_normalize_descriptor_bottleneck_dim(
+            int(payload.get("descriptor_bottleneck_dim", 0))
+        ),
         scalar_path_ids=tuple(str(path_id) for path_id in payload["scalar_path_ids"])
         if "scalar_path_ids" in payload
         else None,
@@ -527,6 +541,10 @@ def rtece_route_contract(
         retained.append("trainable_scalar_descriptor_conditioner")
         semantic_tier = f"{semantic_tier}_scalar_conditioned"
         descriptor_family = f"{descriptor_family}_scalar_conditioned"
+    if config.descriptor_bottleneck_dim:
+        retained.append("trainable_low_rank_descriptor_mixer")
+        semantic_tier = f"{semantic_tier}_low_rank_descriptor_mixer"
+        descriptor_family = f"{descriptor_family}_low_rank_descriptor_mixer"
 
     descriptor_realization = "pytorch_edge_scatter"
     force_realization = "autograd_conservative"
@@ -601,6 +619,8 @@ def rtece_route_contract(
         pareto_axes.append("trainable_feature_extractor")
     if config.descriptor_conditioner != "none":
         pareto_axes.append("scalar_descriptor_conditioning")
+    if config.descriptor_bottleneck_dim:
+        pareto_axes.append("descriptor_bottleneck")
     if config.use_short_range_repulsion:
         pareto_axes.append("short_range_physical_prior")
     if graph_construction_backend or graph_update_backend:
@@ -645,7 +665,9 @@ def rtece_route_contract(
             "learnable_radial_linear_mixing" if config.learnable_radial_mixing else "fixed_radial_basis"
         )
         + ("+learnable_species_basis" if config.species_basis_channels and config.species_basis_mode == "learnable_embedding" else "")
-        + ("+residual_scalar_descriptor_conditioner" if config.descriptor_conditioner != "none" else ""),
+        + ("+residual_scalar_descriptor_conditioner" if config.descriptor_conditioner != "none" else "")
+        + ("+low_rank_descriptor_mixer" if config.descriptor_bottleneck_dim else ""),
+        "descriptor_readout_dim": int(config.descriptor_bottleneck_dim) if config.descriptor_bottleneck_dim else descriptor_dim(config),
         "pareto_axes": pareto_axes,
     }
 
@@ -716,6 +738,7 @@ def _config_manifest_payload(config: RTECEScalarConfig) -> dict[str, object]:
         "atomic_cross_radial_projection": str(config.atomic_cross_radial_projection),
         "descriptor_conditioner": str(config.descriptor_conditioner),
         "descriptor_conditioner_hidden_channels": int(config.descriptor_conditioner_hidden_channels),
+        "descriptor_bottleneck_dim": int(config.descriptor_bottleneck_dim),
         "energy_reference": "per_element_atomic_energies" if config.atomic_energies else ("global_per_atom_shift" if config.energy_per_atom_shift else "none"),
         "short_range_repulsion": {
             "enabled": bool(config.use_short_range_repulsion),
@@ -1999,8 +2022,18 @@ class RTECEScalarModel(torch.nn.Module):
             torch.nn.init.zeros_(self.descriptor_conditioner[-1].bias)
         else:
             self.descriptor_conditioner = None
+        bottleneck_dim = _normalize_descriptor_bottleneck_dim(config.descriptor_bottleneck_dim)
+        if bottleneck_dim:
+            self.descriptor_bottleneck = torch.nn.Sequential(
+                torch.nn.Linear(in_dim, bottleneck_dim),
+                torch.nn.SiLU(),
+            )
+            readout_dim = bottleneck_dim
+        else:
+            self.descriptor_bottleneck = None
+            readout_dim = in_dim
         layers: list[torch.nn.Module] = []
-        prev = in_dim + 1
+        prev = readout_dim + 1
         for hidden in config.hidden_channels:
             layers.append(torch.nn.Linear(prev, hidden))
             layers.append(torch.nn.SiLU())
@@ -2012,6 +2045,12 @@ class RTECEScalarModel(torch.nn.Module):
         if self.descriptor_conditioner is None:
             return descriptors
         return descriptors + self.descriptor_conditioner(descriptors)
+
+    def _readout_descriptors(self, descriptors: torch.Tensor) -> torch.Tensor:
+        descriptors = self._condition_descriptors(descriptors)
+        if self.descriptor_bottleneck is None:
+            return descriptors
+        return self.descriptor_bottleneck(descriptors)
 
     def _require_inference_mode(self, backend_name: str, graph: RTECEGraph | None = None) -> None:
         if self.training:
@@ -2044,6 +2083,12 @@ class RTECEScalarModel(torch.nn.Module):
             raise ValueError(
                 f"{backend_name} does not include descriptor conditioner derivatives yet; "
                 "use force_mode='autograd' for scalar-conditioned rTECE candidates."
+            )
+
+        if self.config.descriptor_bottleneck_dim:
+            raise ValueError(
+                f"{backend_name} does not include descriptor bottleneck derivatives yet; "
+                "use force_mode='autograd' for low-rank descriptor-mixer rTECE candidates."
             )
 
     def forward_density_analytic_forces(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
@@ -2451,7 +2496,7 @@ class RTECEScalarModel(torch.nn.Module):
             self._atomic_cross_radial_projection_weight(),
             self._species_basis_embedding_weight(),
         )
-        descriptors = self._condition_descriptors(descriptors)
+        descriptors = self._readout_descriptors(descriptors)
         atomic_input = torch.cat([z_scaled, descriptors], dim=-1)
         atomic_energy = self.energy_head(atomic_input).squeeze(-1)
         num_graphs = int(graph.batch.max().item()) + 1 if graph.batch.numel() else 1

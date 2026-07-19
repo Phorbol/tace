@@ -46,6 +46,7 @@ SHORT_RANGE_REPULSION_POTENTIAL=${SHORT_RANGE_REPULSION_POTENTIAL:-softplus_over
 LEARNABLE_RADIAL_MIXING=${LEARNABLE_RADIAL_MIXING:-0}
 DESCRIPTOR_CONDITIONER=${DESCRIPTOR_CONDITIONER:-none}
 DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS=${DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS:-0}
+DESCRIPTOR_BOTTLENECK_DIM=${DESCRIPTOR_BOTTLENECK_DIM:-0}
 SHORT_RANGE_REPULSION_STRENGTH=${SHORT_RANGE_REPULSION_STRENGTH:-0.0}
 SHORT_RANGE_REPULSION_BETA=${SHORT_RANGE_REPULSION_BETA:-10.0}
 SHORT_RANGE_REPULSION_RADIUS_SCALE=${SHORT_RANGE_REPULSION_RADIUS_SCALE:-0.75}
@@ -97,6 +98,7 @@ echo "short_range_repulsion_potential=${SHORT_RANGE_REPULSION_POTENTIAL}"
 echo "learnable_radial_mixing=${LEARNABLE_RADIAL_MIXING}"
 echo "descriptor_conditioner=${DESCRIPTOR_CONDITIONER}"
 echo "descriptor_conditioner_hidden_channels=${DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS}"
+echo "descriptor_bottleneck_dim=${DESCRIPTOR_BOTTLENECK_DIM}"
 echo "short_range_repulsion_strength=${SHORT_RANGE_REPULSION_STRENGTH}"
 echo "short_range_repulsion_beta=${SHORT_RANGE_REPULSION_BETA}"
 echo "short_range_repulsion_radius_scale=${SHORT_RANGE_REPULSION_RADIUS_SCALE}"
@@ -170,6 +172,10 @@ if [[ "${DESCRIPTOR_CONDITIONER}" != "none" ]]; then
     --descriptor-conditioner-hidden-channels "${DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS}"
   )
 fi
+descriptor_bottleneck_args=()
+if [[ "${DESCRIPTOR_BOTTLENECK_DIM}" != "0" ]]; then
+  descriptor_bottleneck_args=(--descriptor-bottleneck-dim "${DESCRIPTOR_BOTTLENECK_DIM}")
+fi
 short_range_args=()
 if [[ "${USE_SHORT_RANGE_REPULSION}" == "1" ]]; then
   short_range_args=(
@@ -189,6 +195,7 @@ for variant in "${variant_args[@]}"; do
     "${scalar_path_args[@]}" \
     "${learnable_radial_args[@]}" \
     "${descriptor_conditioner_args[@]}" \
+    "${descriptor_bottleneck_args[@]}" \
     "${short_range_args[@]}" \
     --train-file "${TRAIN_FILE}" \
     --valid-file "${TRAIN_VALID_FILE}" \

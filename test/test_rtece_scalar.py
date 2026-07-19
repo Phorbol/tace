@@ -3555,6 +3555,68 @@ def test_descriptor_residual_conditioner_is_identity_initialized_and_manifested(
     assert "scalar_descriptor_conditioning" in route["pareto_axes"]
 
 
+def test_descriptor_bottleneck_reduces_head_input_and_is_manifested():
+    config = build_rtece_config_from_path_ids(
+        "l2_bottleneck",
+        (
+            "atomic.radial_density",
+            "atomic.species_basis_density",
+            "atomic.vector_norm",
+            "atomic.vector_cross_radial_dot",
+            "atomic.quadrupole_norm",
+            "atomic.quadrupole_cross_radial_frobenius",
+        ),
+        num_radial=4,
+        hidden_channels=(8,),
+        moment_l_max=2,
+        species_basis_channels=6,
+        descriptor_bottleneck_dim=5,
+        atomic_cross_radial_sketch_channels=2,
+    )
+    model = RTECEScalarModel(config).double()
+    graph = RTECEGraph(
+        z=torch.tensor([6, 1, 8], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.7, 0.1, 0.0], [0.2, 0.9, 0.1]], dtype=torch.float64),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    output = model(graph)
+    manifest = rtece_path_manifest(config)
+    route = rtece_route_contract(config)
+
+    assert config.descriptor_bottleneck_dim == 5
+    assert model.descriptor_bottleneck is not None
+    assert tuple(model.descriptor_bottleneck[0].weight.shape) == (5, descriptor_dim(config))
+    assert tuple(model.energy_head[0].weight.shape) == (8, 6)
+    assert torch.isfinite(output["energy"]).all()
+    assert torch.isfinite(output["forces"]).all()
+    assert manifest["config"]["descriptor_bottleneck_dim"] == 5
+    assert route["descriptor_readout_dim"] == 5
+    assert "trainable_low_rank_descriptor_mixer" in manifest["retained_tece_groups"]
+    assert "descriptor_bottleneck" in route["pareto_axes"]
+
+
+def test_descriptor_bottleneck_rejects_inference_only_analytic_backends():
+    config = build_rtece_config_from_path_ids(
+        "bottleneck_pair",
+        ("atomic.radial_density",),
+        num_radial=4,
+        hidden_channels=(8,),
+        descriptor_bottleneck_dim=3,
+    )
+    model = RTECEScalarModel(config).double().eval()
+    graph = RTECEGraph(
+        z=torch.tensor([1, 1], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.75, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(2),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+
+    with pytest.raises(ValueError, match="descriptor bottleneck"):
+        model.forward_pair_analytic_forces(graph)
+
+
 def test_descriptor_conditioner_rejects_inference_only_analytic_backends():
     config = build_rtece_config_from_path_ids(
         "conditioned_pair",
@@ -3599,6 +3661,7 @@ def test_train_and_lightning_build_config_accept_descriptor_conditioner():
         learnable_radial_mixing=True,
         descriptor_conditioner="residual_mlp",
         descriptor_conditioner_hidden_channels=6,
+        descriptor_bottleneck_dim=5,
     )
 
     benchmark_config = benchmark_build_training_config(args)
@@ -3611,12 +3674,15 @@ def test_train_and_lightning_build_config_accept_descriptor_conditioner():
         learnable_radial_mixing=True,
         descriptor_conditioner="residual_mlp",
         descriptor_conditioner_hidden_channels=6,
+        descriptor_bottleneck_dim=5,
     )
 
     assert benchmark_config.descriptor_conditioner == "residual_mlp"
     assert benchmark_config.descriptor_conditioner_hidden_channels == 6
+    assert benchmark_config.descriptor_bottleneck_dim == 5
     assert lightning_config.descriptor_conditioner == "residual_mlp"
     assert lightning_config.descriptor_conditioner_hidden_channels == 6
+    assert lightning_config.descriptor_bottleneck_dim == 5
 
 
 def test_train_rtece_scalar_builds_config_with_short_range_repulsive_core():
@@ -5992,6 +6058,16 @@ def test_rtece_matrix_sbatch_forwards_species_basis_mode():
     assert '--species-basis-mode "${SPECIES_BASIS_MODE}"' in script
 
 
+def test_rtece_matrix_sbatch_forwards_descriptor_bottleneck_dim():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
+
+    assert "DESCRIPTOR_BOTTLENECK_DIM=${DESCRIPTOR_BOTTLENECK_DIM:-0}" in script
+    assert "descriptor_bottleneck_dim=${DESCRIPTOR_BOTTLENECK_DIM}" in script
+    assert "--descriptor-bottleneck-dim" in script
+    assert "${DESCRIPTOR_BOTTLENECK_DIM}" in script
+
+
 def test_rtece_matrix_sbatch_forwards_atomic_cross_radial_projection_file_without_sbatch_export():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     script = (root / "benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch").read_text()
@@ -6314,6 +6390,27 @@ def test_rtece_stage119_frontloaded_representation_rows_keep_head_fixed_and_grow
     assert by_name["l2_species32_cavity_atomic_cross_learnembed_h64"]["num_parameters_estimate"] > by_name["l0_species8_learnembed_h64"]["num_parameters_estimate"]
     assert by_name["l2_species32_cavity_atomic_cross_learnembed_h64"]["representation_parameters_estimate"] > by_name["l0_species8_learnembed_h64"]["representation_parameters_estimate"]
     assert all(row["capacity_allocation"] == "frontloaded_representation_not_readout" for row in rows)
+
+
+def test_rtece_stage120_descriptor_bottleneck_rows_keep_head_fixed_and_mix_front_paths():
+    from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage120_descriptor_bottleneck_rows
+
+    rows = stage120_descriptor_bottleneck_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    assert list(by_name) == [
+        "l0_species8_bneck16_h64",
+        "l0_species8_bneck32_h64",
+        "l2_species32_cavity_atomic_bneck16_h64",
+        "l2_species32_cavity_atomic_bneck32_h64",
+    ]
+    assert {row["hidden_channels"] for row in rows} == {"64,64"}
+    assert {row["descriptor_bottleneck_dim"] for row in rows} == {16, 32}
+    assert all(row["stage_basis"] == "stage120_descriptor_bottleneck_ladder" for row in rows)
+    assert all("descriptor_bottleneck" in row["tece_axes"] for row in rows)
+    assert all("front_low_rank_path_mixer" in row["tece_axes"] for row in rows)
+    assert by_name["l0_species8_bneck16_h64"]["readout_parameters_estimate"] < by_name["l0_species8_bneck32_h64"]["readout_parameters_estimate"]
+    assert by_name["l2_species32_cavity_atomic_bneck16_h64"]["representation_parameters_estimate"] > by_name["l0_species8_bneck16_h64"]["representation_parameters_estimate"]
 
 
 def test_rtece_pareto_sweep_preflight_reports_malformed_extxyz(tmp_path):

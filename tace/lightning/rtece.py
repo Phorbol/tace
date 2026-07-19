@@ -88,6 +88,7 @@ def build_training_config(
     atomic_cross_radial_projection_matrix: object | None = None,
     descriptor_conditioner: str = "none",
     descriptor_conditioner_hidden_channels: int = 0,
+    descriptor_bottleneck_dim: int = 0,
     learnable_radial_mixing: bool = False,
     use_short_range_repulsion: bool = False,
     short_range_repulsion_potential: str = "softplus_overlap",
@@ -110,6 +111,7 @@ def build_training_config(
         "atomic_cross_radial_projection_matrix": atomic_cross_radial_projection_matrix,
         "descriptor_conditioner": str(descriptor_conditioner),
         "descriptor_conditioner_hidden_channels": int(descriptor_conditioner_hidden_channels),
+        "descriptor_bottleneck_dim": int(descriptor_bottleneck_dim),
     }
     paths = parse_scalar_path_ids(scalar_path_ids)
     if paths is not None:

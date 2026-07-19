@@ -34,6 +34,7 @@ def _row(
     radial_edge_sketch_channels: int = 0,
     descriptor_conditioner: str = "none",
     descriptor_conditioner_hidden_channels: int = 0,
+    descriptor_bottleneck_dim: int = 0,
     train_variant: str | None = None,
 ) -> dict[str, Any]:
     use_short_range = short_range_repulsion_potential != "softplus_overlap"
@@ -49,6 +50,8 @@ def _row(
         axes.append("trainable_species_basis")
     if use_short_range:
         axes.append("short_range_physical_prior")
+    if descriptor_bottleneck_dim:
+        axes.append("descriptor_bottleneck")
     axes.extend(axis for axis in tece_axes if axis not in axes)
     return {
         "name": name,
@@ -68,6 +71,7 @@ def _row(
         "radial_edge_sketch_channels": int(radial_edge_sketch_channels),
         "descriptor_conditioner": str(descriptor_conditioner),
         "descriptor_conditioner_hidden_channels": int(descriptor_conditioner_hidden_channels),
+        "descriptor_bottleneck_dim": int(descriptor_bottleneck_dim),
         "tece_axes": axes,
     }
 
@@ -96,6 +100,7 @@ def _parameter_estimates(row: dict[str, Any]) -> dict[str, int]:
             atomic_cross_radial_projection=str(row.get("atomic_cross_radial_projection", "fixed_shell_mean")),
             descriptor_conditioner=str(row.get("descriptor_conditioner", "none")),
             descriptor_conditioner_hidden_channels=int(row.get("descriptor_conditioner_hidden_channels", 0)),
+            descriptor_bottleneck_dim=int(row.get("descriptor_bottleneck_dim", 0)),
             use_short_range_repulsion=bool(row.get("use_short_range_repulsion", False)),
             short_range_repulsion_potential=str(row.get("short_range_repulsion_potential", "softplus_overlap")),
         )
@@ -106,6 +111,7 @@ def _parameter_estimates(row: dict[str, Any]) -> dict[str, int]:
             num_radial=int(row.get("num_radial", 8)),
             learnable_radial_mixing=bool(row.get("learnable_radial_mixing", False)),
             radial_edge_sketch_channels=int(row.get("radial_edge_sketch_channels", 0)),
+            descriptor_bottleneck_dim=int(row.get("descriptor_bottleneck_dim", 0)),
             use_short_range_repulsion=bool(row.get("use_short_range_repulsion", False)),
             short_range_repulsion_potential=str(row.get("short_range_repulsion_potential", "softplus_overlap")),
         )
@@ -116,6 +122,7 @@ def _parameter_estimates(row: dict[str, Any]) -> dict[str, int]:
         "atomic_cross_radial_projection",
         "species_basis_embedding",
         "descriptor_conditioner",
+        "descriptor_bottleneck",
     )
     total = sum(parameter.numel() for parameter in model.parameters())
     representation = sum(
@@ -482,6 +489,29 @@ def stage119_frontloaded_representation_rows() -> list[dict[str, Any]]:
     return _with_parameter_estimates(rows)
 
 
+
+def stage120_descriptor_bottleneck_rows() -> list[dict[str, Any]]:
+    stage119 = {row["name"]: row for row in stage119_frontloaded_representation_rows()}
+    specs = [
+        ("l0_species8_bneck16_h64", "l0_species8_learnembed_h64", 16),
+        ("l0_species8_bneck32_h64", "l0_species8_learnembed_h64", 32),
+        ("l2_species32_cavity_atomic_bneck16_h64", "l2_species32_cavity_atomic_cross_learnembed_h64", 16),
+        ("l2_species32_cavity_atomic_bneck32_h64", "l2_species32_cavity_atomic_cross_learnembed_h64", 32),
+    ]
+    rows = []
+    for name, source_name, bottleneck_dim in specs:
+        base = dict(stage119[source_name])
+        base["name"] = name
+        base["variant"] = name
+        base["train_variant"] = name
+        base["descriptor_bottleneck_dim"] = int(bottleneck_dim)
+        base["stage_basis"] = "stage120_descriptor_bottleneck_ladder"
+        base["capacity_allocation"] = "front_bottleneck_path_mixer_not_wider_head"
+        base["stage120_design_source"] = "runs/oc20neb_tace_mace/rtece-stage119-frontloaded-representation-design/stage119_results.md"
+        base["tece_axes"] = list(dict.fromkeys([*base.get("tece_axes", []), "descriptor_bottleneck", "front_low_rank_path_mixer"]))
+        rows.append(base)
+    return _with_parameter_estimates(rows)
+
 def preflight_extxyz_file(path: str | Path, *, limit_configs: int | None = None) -> dict[str, int | str]:
     source = Path(path)
     if not source.exists():
@@ -606,6 +636,7 @@ def write_pareto_sweep(
             learnable_radial_mixing=bool(row.get("learnable_radial_mixing", False)),
             descriptor_conditioner=str(row.get("descriptor_conditioner", "none")),
             descriptor_conditioner_hidden_channels=int(row.get("descriptor_conditioner_hidden_channels", 0)),
+            descriptor_bottleneck_dim=int(row.get("descriptor_bottleneck_dim", 0)),
             force_mode=force_mode,
             measure_passes=measure_passes,
             default_dtype=default_dtype,
@@ -659,6 +690,7 @@ def parse_args() -> argparse.Namespace:
             "capacity-ladder-stage116",
             "representation-ladder-stage118",
             "frontloaded-representation-stage119",
+            "descriptor-bottleneck-stage120",
         ),
         default="design-space-default",
     )
@@ -688,6 +720,8 @@ def main() -> None:
         rows = stage118_representation_ladder_rows()
     elif args.row_set == "frontloaded-representation-stage119":
         rows = stage119_frontloaded_representation_rows()
+    elif args.row_set == "descriptor-bottleneck-stage120":
+        rows = stage120_descriptor_bottleneck_rows()
     else:
         rows = None
     payload = write_pareto_sweep(
