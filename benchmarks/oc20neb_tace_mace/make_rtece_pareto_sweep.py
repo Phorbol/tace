@@ -757,6 +757,61 @@ def stage124_residual_edge_ladder_rows() -> list[dict[str, Any]]:
     return _with_parameter_estimates(rows)
 
 
+def stage125_front_capacity_ladder_rows() -> list[dict[str, Any]]:
+    l1_active_backbone = (
+        "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,"
+        "atomic.vector_cross_radial_dot"
+    )
+    specs = [
+        ("l1_active_species24_radial_species12_cross4_h64", 12, 24, 12, 4, 0),
+        ("l1_active_species32_radial_species16_cross4_h64", 12, 32, 16, 4, 0),
+        ("l1_active_species32_radial_species16_cross4_bneck32_h64", 12, 32, 16, 4, 32),
+        ("l1_active_species48_radial_species24_cross5_bneck48_h64", 16, 48, 24, 5, 48),
+    ]
+    rows = []
+    for name, num_radial, species_channels, radial_species_channels, cross_channels, bottleneck_dim in specs:
+        row = _row(
+            name,
+            scalar_path_ids=l1_active_backbone,
+            moment_l_max=1,
+            learnable_radial_mixing=True,
+            radial_species_adapter_channels=radial_species_channels,
+            radial_species_adapter_scope="all",
+            short_range_repulsion_potential="zbl",
+            tece_axes=(
+                "stage125_front_capacity_ladder",
+                "stage114_ef_active_selection",
+                "stage124_edge_residual_negative_control",
+                "frontloaded_representation_capacity",
+                "radial_rank",
+                "trainable_edge_species_radial_basis",
+                "low_rank_neighbor_species_basis",
+                "trainable_species_basis",
+                "cross_radial_invariants",
+                "trainable_cross_radial_projection",
+            ) + (("descriptor_bottleneck", "front_low_rank_path_mixer") if bottleneck_dim else ()),
+            hidden_channels="64,64",
+            num_radial=num_radial,
+            species_basis_channels=species_channels,
+            species_basis_mode="learnable_embedding",
+            atomic_cross_radial_sketch_channels=cross_channels,
+            atomic_cross_radial_projection="learnable",
+            descriptor_bottleneck_dim=bottleneck_dim,
+        )
+        row["stage_basis"] = "stage125_front_capacity_ladder"
+        row["capacity_allocation"] = "frontloaded_l1_atomic_representation_ladder_not_wider_head"
+        row["stage124_source"] = "runs/oc20neb_tace_mace/rtece-stage124-residual-edge-ladder/stage124_interpretation.md"
+        row["stage123_source"] = "runs/oc20neb_tace_mace/rtece-stage123-path-scoped-adapter/stage123_interpretation.md"
+        row["review_basis"] = (
+            "Stage124 showed edge-only residual capacity is not a clean Pareto improvement. "
+            "Stage125 therefore keeps the stage114/stage123 L1 active atomic path set and increases trainable "
+            "radial/species/cross-radial representation rank, with bottleneck rows that move capacity into a "
+            "low-rank front path mixer instead of widening the final scalar head."
+        )
+        rows.append(row)
+    return _with_parameter_estimates(rows)
+
+
 def preflight_extxyz_file(path: str | Path, *, limit_configs: int | None = None) -> dict[str, int | str]:
     source = Path(path)
     if not source.exists():
@@ -942,6 +997,7 @@ def parse_args() -> argparse.Namespace:
             "radial-species-adapter-stage122",
             "path-scoped-adapter-stage123",
             "residual-edge-ladder-stage124",
+            "front-capacity-ladder-stage125",
         ),
         default="design-space-default",
     )
@@ -981,6 +1037,8 @@ def main() -> None:
         rows = stage123_path_scoped_adapter_rows()
     elif args.row_set == "residual-edge-ladder-stage124":
         rows = stage124_residual_edge_ladder_rows()
+    elif args.row_set == "front-capacity-ladder-stage125":
+        rows = stage125_front_capacity_ladder_rows()
     else:
         rows = None
     payload = write_pareto_sweep(

@@ -6678,6 +6678,44 @@ def test_rtece_stage124_residual_edge_ladder_rows_keep_l1_active_backbone():
     assert by_name["l1_active_edge_direct_radial_species8_h64"]["num_parameters_estimate"] >= by_name["l1_active_edge_cavity_vec_radial_species8_h64"]["num_parameters_estimate"] - 500
 
 
+def test_rtece_stage125_front_capacity_ladder_rows_expand_representation_not_head():
+    from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage125_front_capacity_ladder_rows
+
+    rows = stage125_front_capacity_ladder_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    assert list(by_name) == [
+        "l1_active_species24_radial_species12_cross4_h64",
+        "l1_active_species32_radial_species16_cross4_h64",
+        "l1_active_species32_radial_species16_cross4_bneck32_h64",
+        "l1_active_species48_radial_species24_cross5_bneck48_h64",
+    ]
+    assert {row["hidden_channels"] for row in rows} == {"64,64"}
+    assert all(row["stage_basis"] == "stage125_front_capacity_ladder" for row in rows)
+    assert all(row["capacity_allocation"] == "frontloaded_l1_atomic_representation_ladder_not_wider_head" for row in rows)
+    assert all(row["moment_l_max"] == 1 for row in rows)
+    assert all(row["radial_species_adapter_scope"] == "all" for row in rows)
+    assert all(row["species_basis_mode"] == "learnable_embedding" for row in rows)
+    assert all(row["atomic_cross_radial_projection"] == "learnable" for row in rows)
+    assert all("stage125_front_capacity_ladder" in row["tece_axes"] for row in rows)
+    assert all("stage124_source" in row for row in rows)
+
+    base_paths = (
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+    )
+    for row in rows:
+        paths = tuple(part.strip() for part in row["scalar_path_ids"].split(",") if part.strip())
+        assert paths == base_paths
+        assert not any(path.startswith("edge.") for path in paths)
+
+    assert by_name["l1_active_species32_radial_species16_cross4_h64"]["num_parameters_estimate"] > by_name["l1_active_species24_radial_species12_cross4_h64"]["num_parameters_estimate"]
+    assert by_name["l1_active_species48_radial_species24_cross5_bneck48_h64"]["representation_parameters_estimate"] > by_name["l1_active_species32_radial_species16_cross4_h64"]["representation_parameters_estimate"]
+    assert by_name["l1_active_species48_radial_species24_cross5_bneck48_h64"]["num_parameters_estimate"] >= 30_000
+
+
 def test_rtece_stage121_active_frontloaded_rows_keep_active_atomic_paths_and_move_capacity_front():
     from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage121_active_frontloaded_rows
 
