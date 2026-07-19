@@ -12,6 +12,7 @@
   },
   "checks": {
     "augmented_limit_configs": true,
+    "base_subset_before_rattles": true,
     "distillation_semantics": true,
     "no_forbidden_sbatch_flags": true,
     "schema_version": true,

@@ -6,6 +6,7 @@
 | check | pass |
 |---|---:|
 | augmented_limit_configs | True |
+| base_subset_before_rattles | True |
 | distillation_semantics | True |
 | no_forbidden_sbatch_flags | True |
 | schema_version | True |

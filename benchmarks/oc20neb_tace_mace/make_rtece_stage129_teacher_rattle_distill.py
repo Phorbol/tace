@@ -133,6 +133,8 @@ def make_stage129_manifest(
                 "--source-label", "base_mixed_train_tw0p75",
                 "--input", artifacts["teacher_labeled_rattles"],
                 "--source-label", "teacher_labeled_stage128_rattles",
+                "--input-limit", int(base_limit_configs),
+                "--input-limit", -1,
                 "--output", artifacts["augmented_train"],
                 "--summary", artifacts["augmented_train_summary"],
             ]),
@@ -210,6 +212,7 @@ def audit_stage129_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         "augmented_limit_configs": int(payload.get("augmented_limit_configs", 0)) == int(payload.get("base_limit_configs", 0)) + int(payload.get("source_limit_configs", 0)) * int(payload.get("copies_per_config", 0)),
         "uses_teacher_fake_labels": "distill_tace_labels.py" in commands and "--reference-prefix source_" in commands,
         "uses_current_pareto_row_set": "--row-set stage129-current-pareto" in commands,
+        "base_subset_before_rattles": f"--input-limit {int(payload.get('base_limit_configs', 0))} --input-limit -1" in commands,
         "training_contract": "--max-steps 20000" in commands and "--lr-warmup-steps 500" in commands and "--early-stopping-patience 400" in commands,
         "no_forbidden_sbatch_flags": all(flag not in commands for flag in ("--export", "--mem", "--cpus-per-task")),
     }

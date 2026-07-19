@@ -9,10 +9,17 @@ from pathlib import Path
 from typing import Sequence
 
 
-def _read_atoms(path: Path):
+def _read_atoms(path: Path, limit: int | None = None):
     import ase.io
 
-    atoms_list = ase.io.read(str(path), index=":")
+    if limit is None:
+        index = ":"
+    else:
+        limit_i = int(limit)
+        if limit_i < 1:
+            raise ValueError("input limits must be positive or None")
+        index = f":{limit_i}"
+    atoms_list = ase.io.read(str(path), index=index)
     if not isinstance(atoms_list, list):
         atoms_list = [atoms_list]
     return atoms_list
@@ -24,6 +31,7 @@ def concat_extxyz_datasets(
     output: str | Path,
     summary_path: str | Path | None = None,
     source_labels: Sequence[str] | None = None,
+    input_limits: Sequence[int | None] | None = None,
 ) -> dict:
     import ase.io
 
@@ -33,11 +41,14 @@ def concat_extxyz_datasets(
     labels = list(source_labels or [path.stem for path in input_paths])
     if len(labels) != len(input_paths):
         raise ValueError("source_labels length must match inputs length")
+    limits = list(input_limits) if input_limits is not None else [None] * len(input_paths)
+    if len(limits) != len(input_paths):
+        raise ValueError("input_limits length must match inputs length")
 
     merged = []
     sources = []
-    for path, label in zip(input_paths, labels, strict=True):
-        atoms_list = _read_atoms(path)
+    for path, label, limit in zip(input_paths, labels, limits, strict=True):
+        atoms_list = _read_atoms(path, limit)
         if not atoms_list:
             raise ValueError(f"input dataset is empty: {path}")
         source_start = len(merged)
@@ -55,6 +66,7 @@ def concat_extxyz_datasets(
                 "atoms": int(sum(len(atoms) for atoms in atoms_list)),
                 "output_start_index": int(source_start),
                 "output_stop_index": int(len(merged)),
+                "input_limit": None if limit is None else int(limit),
             }
         )
 
@@ -79,6 +91,13 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", type=Path, action="append", required=True)
     parser.add_argument("--source-label", action="append", default=[])
+    parser.add_argument(
+        "--input-limit",
+        action="append",
+        type=int,
+        default=[],
+        help="Per-input config limit; use -1 for no limit. Must be repeated once per --input when provided.",
+    )
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--summary", type=Path)
     return parser.parse_args()
@@ -87,11 +106,17 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     labels = args.source_label if args.source_label else None
+    input_limits = None
+    if args.input_limit:
+        if len(args.input_limit) != len(args.input):
+            raise ValueError("--input-limit must be repeated once per --input")
+        input_limits = [None if int(value) < 0 else int(value) for value in args.input_limit]
     summary = concat_extxyz_datasets(
         inputs=args.input,
         output=args.output,
         summary_path=args.summary,
         source_labels=labels,
+        input_limits=input_limits,
     )
     print(json.dumps(summary, indent=2, sort_keys=True))
 

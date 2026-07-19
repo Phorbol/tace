@@ -151,7 +151,7 @@
       "id": "teacher_label_stage128_window_rattles"
     },
     {
-      "command": "${TACE_PYTHON:-python} benchmarks/oc20neb_tace_mace/concat_extxyz_datasets.py --input runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz --source-label base_mixed_train_tw0p75 --input runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/teacher_labeled_stage128_window_rattles.extxyz --source-label teacher_labeled_stage128_rattles --output runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/augmented_train_base2048_plus_teacher_rattle128.extxyz --summary runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/augmented_train_base2048_plus_teacher_rattle128_summary.json",
+      "command": "${TACE_PYTHON:-python} benchmarks/oc20neb_tace_mace/concat_extxyz_datasets.py --input runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz --source-label base_mixed_train_tw0p75 --input runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/teacher_labeled_stage128_window_rattles.extxyz --source-label teacher_labeled_stage128_rattles --input-limit 2048 --input-limit -1 --output runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/augmented_train_base2048_plus_teacher_rattle128.extxyz --summary runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/augmented_train_base2048_plus_teacher_rattle128_summary.json",
       "id": "concat_base_and_teacher_rattles"
     },
     {

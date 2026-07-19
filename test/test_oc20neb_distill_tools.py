@@ -173,6 +173,38 @@ def test_concat_extxyz_datasets_preserves_order_and_records_source(tmp_path):
     assert summary_path.exists()
 
 
+def test_concat_extxyz_datasets_supports_per_input_limits(tmp_path):
+    import ase.io
+    from ase import Atoms
+
+    concat = load_module("concat_extxyz_datasets", "concat_extxyz_datasets.py")
+    base_frames = []
+    for idx in range(3):
+        atom = Atoms("H", positions=[[float(idx), 0.0, 0.0]])
+        atom.info["energy"] = float(idx)
+        base_frames.append(atom)
+    rattle = Atoms("He", positions=[[9.0, 0.0, 0.0]])
+    rattle.info["energy"] = 9.0
+    base_path = tmp_path / "base.extxyz"
+    rattle_path = tmp_path / "rattle.extxyz"
+    output = tmp_path / "merged.extxyz"
+    ase.io.write(base_path, base_frames, format="extxyz")
+    ase.io.write(rattle_path, [rattle], format="extxyz")
+
+    summary = concat.concat_extxyz_datasets(
+        inputs=[base_path, rattle_path],
+        output=output,
+        source_labels=["base", "rattle"],
+        input_limits=[2, None],
+    )
+
+    merged = ase.io.read(output, index=":")
+    assert len(merged) == 3
+    assert [atoms.info["rtece_concat_source"] for atoms in merged] == ["base", "base", "rattle"]
+    assert summary["sources"][0]["configs"] == 2
+    assert summary["sources"][1]["output_start_index"] == 2
+
+
 def test_stage117_rattle_distill_manifest_defines_teacher_fake_label_pipeline(tmp_path):
     stage117 = load_module("make_rtece_stage117_rattle_distill_plan", "make_rtece_stage117_rattle_distill_plan.py")
 
@@ -323,6 +355,7 @@ def test_stage129_manifest_targets_stage128_pareto_rows_and_teacher_rattle_windo
     assert "--start-config 58" in commands
     assert "distill_tace_labels.py" in commands
     assert "concat_extxyz_datasets.py" in commands
+    assert "--input-limit 2048 --input-limit -1" in commands
     assert "make_rtece_pareto_sweep.py" in commands
     assert "--max-steps 20000" in commands
     assert "--lr-warmup-steps 500" in commands
