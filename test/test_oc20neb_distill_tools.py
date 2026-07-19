@@ -205,6 +205,31 @@ def test_concat_extxyz_datasets_supports_per_input_limits(tmp_path):
     assert summary["sources"][1]["output_start_index"] == 2
 
 
+def test_concat_extxyz_datasets_materializes_calculator_labels_and_truncates_existing_output(tmp_path):
+    import ase.io
+    import numpy as np
+    from ase import Atoms
+    from ase.calculators.singlepoint import SinglePointCalculator
+
+    concat = load_module("concat_extxyz_datasets", "concat_extxyz_datasets.py")
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]])
+    forces = np.array([[0.1, 0.0, 0.0], [-0.1, 0.0, 0.0]])
+    atoms.calc = SinglePointCalculator(atoms, energy=-1.5, forces=forces)
+    source = tmp_path / "source.extxyz"
+    output = tmp_path / "merged.extxyz"
+    ase.io.write(source, [atoms], format="extxyz")
+    output.write_bytes(b"9\n" + b"x" * 4096)
+
+    concat.concat_extxyz_datasets(inputs=[source], output=output, source_labels=["calc_source"])
+
+    payload = output.read_bytes()
+    assert b"x" * 128 not in payload
+    merged = ase.io.read(output, index=":")
+    assert len(merged) == 1
+    assert merged[0].get_potential_energy() == pytest.approx(-1.5)
+    assert merged[0].get_forces() == pytest.approx(forces)
+
+
 def test_stage117_rattle_distill_manifest_defines_teacher_fake_label_pipeline(tmp_path):
     stage117 = load_module("make_rtece_stage117_rattle_distill_plan", "make_rtece_stage117_rattle_distill_plan.py")
 

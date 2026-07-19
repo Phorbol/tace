@@ -25,6 +25,20 @@ def _read_atoms(path: Path, limit: int | None = None):
     return atoms_list
 
 
+def _materialize_standard_targets(source, copied) -> None:
+    if "energy" in source.info:
+        copied.info["energy"] = float(source.info["energy"])
+    elif source.calc is not None and "energy" in getattr(source.calc, "results", {}):
+        copied.info["energy"] = float(source.calc.results["energy"])
+
+    if "forces" in source.arrays:
+        copied.arrays["forces"] = source.arrays["forces"].copy()
+    elif source.calc is not None and "forces" in getattr(source.calc, "results", {}):
+        import numpy as np
+
+        copied.arrays["forces"] = np.asarray(source.calc.results["forces"], dtype=float).copy()
+
+
 def concat_extxyz_datasets(
     *,
     inputs: Sequence[str | Path],
@@ -54,6 +68,7 @@ def concat_extxyz_datasets(
         source_start = len(merged)
         for source_index, atoms in enumerate(atoms_list):
             copied = atoms.copy()
+            _materialize_standard_targets(atoms, copied)
             copied.info["rtece_concat_source"] = str(label)
             copied.info["rtece_concat_source_file"] = str(path)
             copied.info["rtece_concat_source_index"] = int(source_index)
@@ -72,6 +87,8 @@ def concat_extxyz_datasets(
 
     output_path = Path(output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+    if output_path.exists():
+        output_path.unlink()
     ase.io.write(str(output_path), merged, format="extxyz")
     summary = {
         "schema_version": "rtece_concat_extxyz.v1",
