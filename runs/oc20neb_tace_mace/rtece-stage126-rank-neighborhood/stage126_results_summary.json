@@ -1,0 +1,315 @@
+{
+  "commit": "759f875",
+  "jobs": {
+    "l1_active_nrad10_species16_radial_species8_cross3_h64": 685037,
+    "l1_active_nrad12_species16_radial_species12_cross3_h64": 685041,
+    "l1_active_nrad12_species16_radial_species8_cross3_h64": 685038,
+    "l1_active_nrad12_species24_radial_species12_cross3_h64": 685039,
+    "l1_active_nrad12_species24_radial_species8_cross3_h64": 685040
+  },
+  "records": [
+    {
+      "atomic_cross_radial_sketch_channels": 3,
+      "dft": {
+        "atoms_per_second": 1506841.3381031358,
+        "bias_e_mev_atom": 32.29168286747305,
+        "mae_e_mev_atom": 243.17771876656087,
+        "mae_f_mev_a": 48.316728504951,
+        "max_abs_e_mev_atom": 711.0386091222429,
+        "max_abs_f_mev_a": 1899.6490289559938,
+        "rmse_e_mev_atom": 301.9887909065508,
+        "rmse_f_mev_a": 118.22693162087356,
+        "seconds_per_pass": 0.03928283522836864
+      },
+      "files": {
+        "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/l1_active_nrad10_species16_radial_species8_cross3_h64/l1_active_nrad10_species16_radial_species8_cross3_h64/l1_active_nrad10_species16_radial_species8_cross3_h64_dft_benchmark.json",
+        "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/l1_active_nrad10_species16_radial_species8_cross3_h64/l1_active_nrad10_species16_radial_species8_cross3_h64/l1_active_nrad10_species16_radial_species8_cross3_h64_teacher_benchmark.json",
+        "train_summary": "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/l1_active_nrad10_species16_radial_species8_cross3_h64/l1_active_nrad10_species16_radial_species8_cross3_h64/train_summary.json"
+      },
+      "job": 685037,
+      "name": "l1_active_nrad10_species16_radial_species8_cross3_h64",
+      "num_parameters": 19587,
+      "num_radial": 10,
+      "radial_species_adapter_channels": 8,
+      "readout_parameters_estimate": 16065,
+      "representation_parameters_estimate": 3522,
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot"
+      ],
+      "species_basis_channels": 16,
+      "teacher": {
+        "atoms_per_second": 1508154.2986226175,
+        "bias_e_mev_atom": 28.315619232580914,
+        "mae_e_mev_atom": 229.56743557035924,
+        "mae_f_mev_a": 49.63395920266445,
+        "max_abs_e_mev_atom": 669.7994456571691,
+        "max_abs_f_mev_a": 2066.3467352706907,
+        "rmse_e_mev_atom": 285.46759761188196,
+        "rmse_f_mev_a": 115.9853717734985,
+        "seconds_per_pass": 0.03924863659776747
+      },
+      "train": {
+        "batch_size": 8,
+        "best_step": 15104,
+        "best_valid_loss": 0.11229122430086136,
+        "early_stopping_patience": 400,
+        "lr_scheduler": "plateau",
+        "lr_warmup_steps": 500,
+        "max_steps": 20000,
+        "steps": 20000,
+        "train_configs": 2048,
+        "valid_batch_size": 16,
+        "valid_configs": 256
+      }
+    },
+    {
+      "atomic_cross_radial_sketch_channels": 3,
+      "dft": {
+        "atoms_per_second": 1365038.0951099715,
+        "bias_e_mev_atom": -23.584887726792203,
+        "mae_e_mev_atom": 222.39873736701782,
+        "mae_f_mev_a": 43.464526220689635,
+        "max_abs_e_mev_atom": 667.403857858456,
+        "max_abs_f_mev_a": 2023.9226268942261,
+        "rmse_e_mev_atom": 293.286040945004,
+        "rmse_f_mev_a": 106.52447802390476,
+        "seconds_per_pass": 0.04336362495087087
+      },
+      "files": {
+        "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/l1_active_nrad12_species16_radial_species8_cross3_h64/l1_active_nrad12_species16_radial_species8_cross3_h64/l1_active_nrad12_species16_radial_species8_cross3_h64_dft_benchmark.json",
+        "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/l1_active_nrad12_species16_radial_species8_cross3_h64/l1_active_nrad12_species16_radial_species8_cross3_h64/l1_active_nrad12_species16_radial_species8_cross3_h64_teacher_benchmark.json",
+        "train_summary": "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/l1_active_nrad12_species16_radial_species8_cross3_h64/l1_active_nrad12_species16_radial_species8_cross3_h64/train_summary.json"
+      },
+      "job": 685038,
+      "name": "l1_active_nrad12_species16_radial_species8_cross3_h64",
+      "num_parameters": 21973,
+      "num_radial": 12,
+      "radial_species_adapter_channels": 8,
+      "readout_parameters_estimate": 18369,
+      "representation_parameters_estimate": 3604,
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot"
+      ],
+      "species_basis_channels": 16,
+      "teacher": {
+        "atoms_per_second": 1363521.152591784,
+        "bias_e_mev_atom": -27.56091427087616,
+        "mae_e_mev_atom": 211.78069066053638,
+        "mae_f_mev_a": 44.90807654350553,
+        "max_abs_e_mev_atom": 641.8710905930092,
+        "max_abs_f_mev_a": 1925.4578316384886,
+        "rmse_e_mev_atom": 277.160415358402,
+        "rmse_f_mev_a": 104.3172240168057,
+        "seconds_per_pass": 0.043411867786198856
+      },
+      "train": {
+        "batch_size": 8,
+        "best_step": 19968,
+        "best_valid_loss": 0.10979039967060089,
+        "early_stopping_patience": 400,
+        "lr_scheduler": "plateau",
+        "lr_warmup_steps": 500,
+        "max_steps": 20000,
+        "steps": 20000,
+        "train_configs": 2048,
+        "valid_batch_size": 16,
+        "valid_configs": 256
+      }
+    },
+    {
+      "atomic_cross_radial_sketch_channels": 3,
+      "dft": {
+        "atoms_per_second": 1232755.256264193,
+        "bias_e_mev_atom": -32.523193059782216,
+        "mae_e_mev_atom": 242.11781315562453,
+        "mae_f_mev_a": 42.84198759073757,
+        "max_abs_e_mev_atom": 671.2507260142781,
+        "max_abs_f_mev_a": 2429.936711966095,
+        "rmse_e_mev_atom": 307.2986543294238,
+        "rmse_f_mev_a": 99.48011451135842,
+        "seconds_per_pass": 0.04801683034747839
+      },
+      "files": {
+        "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/l1_active_nrad12_species24_radial_species8_cross3_h64/l1_active_nrad12_species24_radial_species8_cross3_h64/l1_active_nrad12_species24_radial_species8_cross3_h64_dft_benchmark.json",
+        "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/l1_active_nrad12_species24_radial_species8_cross3_h64/l1_active_nrad12_species24_radial_species8_cross3_h64/l1_active_nrad12_species24_radial_species8_cross3_h64_teacher_benchmark.json",
+        "train_summary": "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/l1_active_nrad12_species24_radial_species8_cross3_h64/l1_active_nrad12_species24_radial_species8_cross3_h64/train_summary.json"
+      },
+      "job": 685040,
+      "name": "l1_active_nrad12_species24_radial_species8_cross3_h64",
+      "num_parameters": 28925,
+      "num_radial": 12,
+      "radial_species_adapter_channels": 8,
+      "readout_parameters_estimate": 24513,
+      "representation_parameters_estimate": 4412,
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot"
+      ],
+      "species_basis_channels": 24,
+      "teacher": {
+        "atoms_per_second": 1232327.67954194,
+        "bias_e_mev_atom": -36.499248700178434,
+        "mae_e_mev_atom": 226.75545389914703,
+        "mae_f_mev_a": 44.195669803877166,
+        "max_abs_e_mev_atom": 661.4491692904768,
+        "max_abs_f_mev_a": 2472.0646743382263,
+        "rmse_e_mev_atom": 289.6989456815829,
+        "rmse_f_mev_a": 97.0572762471144,
+        "seconds_per_pass": 0.04803349059075117
+      },
+      "train": {
+        "batch_size": 8,
+        "best_step": 19456,
+        "best_valid_loss": 0.09436654299497604,
+        "early_stopping_patience": 400,
+        "lr_scheduler": "plateau",
+        "lr_warmup_steps": 500,
+        "max_steps": 20000,
+        "steps": 20000,
+        "train_configs": 2048,
+        "valid_batch_size": 16,
+        "valid_configs": 256
+      }
+    },
+    {
+      "atomic_cross_radial_sketch_channels": 3,
+      "dft": {
+        "atoms_per_second": 1352510.9487362343,
+        "bias_e_mev_atom": -63.36063059982604,
+        "mae_e_mev_atom": 252.26644640724777,
+        "mae_f_mev_a": 44.938416078359275,
+        "max_abs_e_mev_atom": 647.7569263442888,
+        "max_abs_f_mev_a": 2403.8383948529054,
+        "rmse_e_mev_atom": 316.103981671853,
+        "rmse_f_mev_a": 103.6632313479581,
+        "seconds_per_pass": 0.04376526493579149
+      },
+      "files": {
+        "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/l1_active_nrad12_species16_radial_species12_cross3_h64/l1_active_nrad12_species16_radial_species12_cross3_h64/l1_active_nrad12_species16_radial_species12_cross3_h64_dft_benchmark.json",
+        "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/l1_active_nrad12_species16_radial_species12_cross3_h64/l1_active_nrad12_species16_radial_species12_cross3_h64/l1_active_nrad12_species16_radial_species12_cross3_h64_teacher_benchmark.json",
+        "train_summary": "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/l1_active_nrad12_species16_radial_species12_cross3_h64/l1_active_nrad12_species16_radial_species12_cross3_h64/train_summary.json"
+      },
+      "job": 685041,
+      "name": "l1_active_nrad12_species16_radial_species12_cross3_h64",
+      "num_parameters": 22877,
+      "num_radial": 12,
+      "radial_species_adapter_channels": 12,
+      "readout_parameters_estimate": 18369,
+      "representation_parameters_estimate": 4508,
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot"
+      ],
+      "species_basis_channels": 16,
+      "teacher": {
+        "atoms_per_second": 1351756.4965437965,
+        "bias_e_mev_atom": -67.33668697221395,
+        "mae_e_mev_atom": 239.97313725478847,
+        "mae_f_mev_a": 46.63082101084112,
+        "max_abs_e_mev_atom": 637.5398307011045,
+        "max_abs_f_mev_a": 2064.376355544434,
+        "rmse_e_mev_atom": 300.77515884531186,
+        "rmse_f_mev_a": 102.16912551106294,
+        "seconds_per_pass": 0.04378969152458012
+      },
+      "train": {
+        "batch_size": 8,
+        "best_step": 12800,
+        "best_valid_loss": 0.10839913040399551,
+        "early_stopping_patience": 400,
+        "lr_scheduler": "plateau",
+        "lr_warmup_steps": 500,
+        "max_steps": 20000,
+        "steps": 20000,
+        "train_configs": 2048,
+        "valid_batch_size": 16,
+        "valid_configs": 256
+      }
+    },
+    {
+      "atomic_cross_radial_sketch_channels": 3,
+      "dft": {
+        "atoms_per_second": 1214485.2033237752,
+        "bias_e_mev_atom": -23.35548353357194,
+        "mae_e_mev_atom": 244.943502877564,
+        "mae_f_mev_a": 44.367876604837214,
+        "max_abs_e_mev_atom": 739.7276989230875,
+        "max_abs_f_mev_a": 1935.395659500122,
+        "rmse_e_mev_atom": 315.3482859250666,
+        "rmse_f_mev_a": 104.99287159292668,
+        "seconds_per_pass": 0.048739169351756574
+      },
+      "files": {
+        "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/l1_active_nrad12_species24_radial_species12_cross3_h64/l1_active_nrad12_species24_radial_species12_cross3_h64/l1_active_nrad12_species24_radial_species12_cross3_h64_dft_benchmark.json",
+        "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/l1_active_nrad12_species24_radial_species12_cross3_h64/l1_active_nrad12_species24_radial_species12_cross3_h64/l1_active_nrad12_species24_radial_species12_cross3_h64_teacher_benchmark.json",
+        "train_summary": "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/l1_active_nrad12_species24_radial_species12_cross3_h64/l1_active_nrad12_species24_radial_species12_cross3_h64/train_summary.json"
+      },
+      "job": 685039,
+      "name": "l1_active_nrad12_species24_radial_species12_cross3_h64",
+      "num_parameters": 29829,
+      "num_radial": 12,
+      "radial_species_adapter_channels": 12,
+      "readout_parameters_estimate": 24513,
+      "representation_parameters_estimate": 5316,
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot"
+      ],
+      "species_basis_channels": 24,
+      "teacher": {
+        "atoms_per_second": 1216012.8278320532,
+        "bias_e_mev_atom": -27.33149427850265,
+        "mae_e_mev_atom": 231.69815158160338,
+        "mae_f_mev_a": 45.707813109835996,
+        "max_abs_e_mev_atom": 729.510866362473,
+        "max_abs_f_mev_a": 2018.0407153939818,
+        "rmse_e_mev_atom": 299.9049467447851,
+        "rmse_f_mev_a": 102.66095609431937,
+        "seconds_per_pass": 0.04867794043384492
+      },
+      "train": {
+        "batch_size": 8,
+        "best_step": 19968,
+        "best_valid_loss": 0.10404245555400848,
+        "early_stopping_patience": 400,
+        "lr_scheduler": "plateau",
+        "lr_warmup_steps": 500,
+        "max_steps": 20000,
+        "steps": 20000,
+        "train_configs": 2048,
+        "valid_batch_size": 16,
+        "valid_configs": 256
+      }
+    }
+  ],
+  "schema_version": "rtece_stage126_results.v1",
+  "stage123_l1_active_anchor": {
+    "atoms_per_second": 1669000.0,
+    "max_abs_f_mev_a": 1996.322,
+    "rmse_e_mev_atom": 335.816,
+    "rmse_f_mev_a": 112.838,
+    "source": "stage124_interpretation.md reference"
+  },
+  "stage125_anchor": {
+    "atoms_per_second": 1206744.735,
+    "max_abs_e_mev_atom": 717.002,
+    "max_abs_f_mev_a": 2394.173,
+    "name": "l1_active_species24_radial_species12_cross4_h64",
+    "num_parameters": 30033,
+    "rmse_e_mev_atom": 302.809,
+    "rmse_f_mev_a": 107.444,
+    "source": "runs/oc20neb_tace_mace/rtece-stage125-front-capacity-ladder/stage125_interpretation.md"
+  }
+}
