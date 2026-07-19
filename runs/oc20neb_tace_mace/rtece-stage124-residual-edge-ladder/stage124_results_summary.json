@@ -1,0 +1,180 @@
+{
+  "commit": "f0b1c64fc00064ed4010ea2b15e48be711d33a99",
+  "jobs": {
+    "l1_active_all_cavity_vecq_radial_species8_h64": 685016,
+    "l1_active_edge_cavity_vec_radial_species8_h64": 685017,
+    "l1_active_edge_cavity_vecq_radial_species8_h64": 685015,
+    "l1_active_edge_direct_radial_species8_h64": 685018
+  },
+  "records": [
+    {
+      "dft": {
+        "atoms_per_second": 1054341.264320967,
+        "bias_e_mev_atom": -85.51330260716789,
+        "mae_e_mev_atom": 240.8836286339709,
+        "mae_f_mev_a": 50.80318013726447,
+        "max_abs_e_mev_atom": 798.8503469329203,
+        "max_abs_f_mev_a": 2857.474087449341,
+        "rmse_e_mev_atom": 333.82706600371347,
+        "rmse_f_mev_a": 117.97206594972887,
+        "seconds_per_pass": 0.05614216383546591
+      },
+      "files": {
+        "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage124-residual-edge-ladder/l1_active_edge_direct_radial_species8_h64/l1_active_edge_direct_radial_species8_h64/l1_active_edge_direct_radial_species8_h64_dft_benchmark.json",
+        "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage124-residual-edge-ladder/l1_active_edge_direct_radial_species8_h64/l1_active_edge_direct_radial_species8_h64/l1_active_edge_direct_radial_species8_h64_teacher_benchmark.json",
+        "train_summary": "runs/oc20neb_tace_mace/rtece-stage124-residual-edge-ladder/l1_active_edge_direct_radial_species8_h64/l1_active_edge_direct_radial_species8_h64/train_summary.json"
+      },
+      "name": "l1_active_edge_direct_radial_species8_h64",
+      "num_parameters": 17337,
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "edge.direct.radial"
+      ],
+      "scope": "edge",
+      "teacher": {
+        "atoms_per_second": 1053995.817848657,
+        "bias_e_mev_atom": -89.48936148617213,
+        "mae_e_mev_atom": 230.19004476410473,
+        "mae_f_mev_a": 51.67146077525096,
+        "max_abs_e_mev_atom": 791.8591992608433,
+        "max_abs_f_mev_a": 2485.129832705078,
+        "rmse_e_mev_atom": 318.0420121330695,
+        "rmse_f_mev_a": 115.28383297309055,
+        "seconds_per_pass": 0.056160564394667746
+      }
+    },
+    {
+      "dft": {
+        "atoms_per_second": 773901.6698472173,
+        "bias_e_mev_atom": -8.358407423381976,
+        "mae_e_mev_atom": 252.30174126934213,
+        "mae_f_mev_a": 51.608309149163254,
+        "max_abs_e_mev_atom": 788.5579249540442,
+        "max_abs_f_mev_a": 2243.2165164523312,
+        "rmse_e_mev_atom": 335.69514448317653,
+        "rmse_f_mev_a": 118.98350182976421,
+        "seconds_per_pass": 0.07648646114394068
+      },
+      "files": {
+        "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage124-residual-edge-ladder/l1_active_edge_cavity_vec_radial_species8_h64/l1_active_edge_cavity_vec_radial_species8_h64/l1_active_edge_cavity_vec_radial_species8_h64_dft_benchmark.json",
+        "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage124-residual-edge-ladder/l1_active_edge_cavity_vec_radial_species8_h64/l1_active_edge_cavity_vec_radial_species8_h64/l1_active_edge_cavity_vec_radial_species8_h64_teacher_benchmark.json",
+        "train_summary": "runs/oc20neb_tace_mace/rtece-stage124-residual-edge-ladder/l1_active_edge_cavity_vec_radial_species8_h64/l1_active_edge_cavity_vec_radial_species8_h64/train_summary.json"
+      },
+      "name": "l1_active_edge_cavity_vec_radial_species8_h64",
+      "num_parameters": 17401,
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "edge.cavity.vector_dot",
+        "edge.direct.radial"
+      ],
+      "scope": "edge",
+      "teacher": {
+        "atoms_per_second": 773628.4921324141,
+        "bias_e_mev_atom": -12.334450346714954,
+        "mae_e_mev_atom": 236.18380209249395,
+        "mae_f_mev_a": 52.83067217021897,
+        "max_abs_e_mev_atom": 747.3173253676471,
+        "max_abs_f_mev_a": 1924.466072498779,
+        "rmse_e_mev_atom": 318.5134087574213,
+        "rmse_f_mev_a": 117.2290160684006,
+        "seconds_per_pass": 0.07651346945203841
+      }
+    },
+    {
+      "dft": {
+        "atoms_per_second": 558262.2723079482,
+        "bias_e_mev_atom": -79.64408609217625,
+        "mae_e_mev_atom": 240.57829714040304,
+        "mae_f_mev_a": 53.55829653806071,
+        "max_abs_e_mev_atom": 816.8378284119073,
+        "max_abs_f_mev_a": 2294.0111148083497,
+        "rmse_e_mev_atom": 333.9988008071543,
+        "rmse_f_mev_a": 121.11287398897971,
+        "seconds_per_pass": 0.10603080834262073
+      },
+      "files": {
+        "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage124-residual-edge-ladder/l1_active_edge_cavity_vecq_radial_species8_h64/l1_active_edge_cavity_vecq_radial_species8_h64/l1_active_edge_cavity_vecq_radial_species8_h64_dft_benchmark.json",
+        "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage124-residual-edge-ladder/l1_active_edge_cavity_vecq_radial_species8_h64/l1_active_edge_cavity_vecq_radial_species8_h64/l1_active_edge_cavity_vecq_radial_species8_h64_teacher_benchmark.json",
+        "train_summary": "runs/oc20neb_tace_mace/rtece-stage124-residual-edge-ladder/l1_active_edge_cavity_vecq_radial_species8_h64/l1_active_edge_cavity_vecq_radial_species8_h64/train_summary.json"
+      },
+      "name": "l1_active_edge_cavity_vecq_radial_species8_h64",
+      "num_parameters": 17465,
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "edge.cavity.vector_dot",
+        "edge.cavity.quadrupole_frobenius",
+        "edge.direct.radial"
+      ],
+      "scope": "edge",
+      "teacher": {
+        "atoms_per_second": 557134.0993435933,
+        "bias_e_mev_atom": -83.62013959001531,
+        "mae_e_mev_atom": 230.3066170321601,
+        "mae_f_mev_a": 54.419650265031756,
+        "max_abs_e_mev_atom": 809.8466807398303,
+        "max_abs_f_mev_a": 1921.6642374597166,
+        "rmse_e_mev_atom": 318.59943479728884,
+        "rmse_f_mev_a": 118.5306384330793,
+        "seconds_per_pass": 0.10624551624059678
+      }
+    },
+    {
+      "dft": {
+        "atoms_per_second": 535106.6301481157,
+        "bias_e_mev_atom": -15.369854460489705,
+        "mae_e_mev_atom": 251.4537080790547,
+        "mae_f_mev_a": 44.34398974820472,
+        "max_abs_e_mev_atom": 692.0696006204046,
+        "max_abs_f_mev_a": 2251.5935885632325,
+        "rmse_e_mev_atom": 310.070981576082,
+        "rmse_f_mev_a": 110.80491612059697,
+        "seconds_per_pass": 0.11061907415278256
+      },
+      "files": {
+        "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage124-residual-edge-ladder/l1_active_all_cavity_vecq_radial_species8_h64/l1_active_all_cavity_vecq_radial_species8_h64/l1_active_all_cavity_vecq_radial_species8_h64_dft_benchmark.json",
+        "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage124-residual-edge-ladder/l1_active_all_cavity_vecq_radial_species8_h64/l1_active_all_cavity_vecq_radial_species8_h64/l1_active_all_cavity_vecq_radial_species8_h64_teacher_benchmark.json",
+        "train_summary": "runs/oc20neb_tace_mace/rtece-stage124-residual-edge-ladder/l1_active_all_cavity_vecq_radial_species8_h64/l1_active_all_cavity_vecq_radial_species8_h64/train_summary.json"
+      },
+      "name": "l1_active_all_cavity_vecq_radial_species8_h64",
+      "num_parameters": 17465,
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "edge.cavity.vector_dot",
+        "edge.cavity.quadrupole_frobenius",
+        "edge.direct.radial"
+      ],
+      "scope": "all",
+      "teacher": {
+        "atoms_per_second": 535294.9993800329,
+        "bias_e_mev_atom": -19.345907764510144,
+        "mae_e_mev_atom": 236.09134375816933,
+        "mae_f_mev_a": 46.06142388764639,
+        "max_abs_e_mev_atom": 650.8293600643382,
+        "max_abs_f_mev_a": 2073.506236513977,
+        "rmse_e_mev_atom": 292.59026037776675,
+        "rmse_f_mev_a": 107.85140388891747,
+        "seconds_per_pass": 0.11058014752343297
+      }
+    }
+  ],
+  "schema_version": "rtece_stage124_results.v1",
+  "stage123_l1_active_anchor": {
+    "dft_atoms_per_second": 1668735.1968991163,
+    "dft_max_abs_f_mev_a": 1996.3218619218446,
+    "dft_rmse_e_mev_atom": 335.81606864682726,
+    "dft_rmse_f_mev_a": 112.838238236148,
+    "name": "l1_active_all_radial_species8_h64"
+  }
+}
