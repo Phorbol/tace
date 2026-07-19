@@ -6637,6 +6637,47 @@ def test_rtece_stage123_path_scoped_adapter_rows_select_front_capacity_by_path_g
     assert all("stage122_source" in row for row in rows)
 
 
+def test_rtece_stage124_residual_edge_ladder_rows_keep_l1_active_backbone():
+    from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage124_residual_edge_ladder_rows
+
+    rows = stage124_residual_edge_ladder_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    assert list(by_name) == [
+        "l1_active_edge_direct_radial_species8_h64",
+        "l1_active_edge_cavity_vec_radial_species8_h64",
+        "l1_active_edge_cavity_vecq_radial_species8_h64",
+        "l1_active_all_cavity_vecq_radial_species8_h64",
+    ]
+    assert {row["hidden_channels"] for row in rows} == {"64,64"}
+    assert all(row["descriptor_bottleneck_dim"] == 0 for row in rows)
+    assert all(row["stage_basis"] == "stage124_residual_edge_ladder" for row in rows)
+    assert all(row["capacity_allocation"] == "l1_active_atomic_backbone_plus_edge_residual_paths" for row in rows)
+    assert all(row["radial_species_adapter_channels"] == 8 for row in rows)
+    assert all(row["species_basis_channels"] == 16 for row in rows)
+    assert all(row["species_basis_mode"] == "learnable_embedding" for row in rows)
+    assert all(row["atomic_cross_radial_projection"] == "learnable" for row in rows)
+    assert all("stage124_residual_edge_ladder" in row["tece_axes"] for row in rows)
+    assert all("stage123_source" in row for row in rows)
+
+    base_paths = (
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+    )
+    for row in rows:
+        paths = tuple(part.strip() for part in row["scalar_path_ids"].split(",") if part.strip())
+        assert paths[:4] == base_paths
+
+    assert by_name["l1_active_edge_direct_radial_species8_h64"]["radial_species_adapter_scope"] == "edge"
+    assert "edge.direct.radial" in by_name["l1_active_edge_direct_radial_species8_h64"]["scalar_path_ids"]
+    assert "edge.cavity.vector_dot" in by_name["l1_active_edge_cavity_vec_radial_species8_h64"]["scalar_path_ids"]
+    assert "edge.cavity.quadrupole_frobenius" in by_name["l1_active_edge_cavity_vecq_radial_species8_h64"]["scalar_path_ids"]
+    assert by_name["l1_active_all_cavity_vecq_radial_species8_h64"]["radial_species_adapter_scope"] == "all"
+    assert by_name["l1_active_edge_direct_radial_species8_h64"]["num_parameters_estimate"] >= by_name["l1_active_edge_cavity_vec_radial_species8_h64"]["num_parameters_estimate"] - 500
+
+
 def test_rtece_stage121_active_frontloaded_rows_keep_active_atomic_paths_and_move_capacity_front():
     from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage121_active_frontloaded_rows
 

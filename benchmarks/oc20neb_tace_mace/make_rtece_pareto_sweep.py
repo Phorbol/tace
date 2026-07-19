@@ -681,6 +681,82 @@ def stage123_path_scoped_adapter_rows() -> list[dict[str, Any]]:
     return _with_parameter_estimates(rows)
 
 
+def stage124_residual_edge_ladder_rows() -> list[dict[str, Any]]:
+    l1_active_backbone = (
+        "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,"
+        "atomic.vector_cross_radial_dot"
+    )
+    specs = [
+        (
+            "l1_active_edge_direct_radial_species8_h64",
+            f"{l1_active_backbone},edge.direct.radial",
+            1,
+            "edge",
+        ),
+        (
+            "l1_active_edge_cavity_vec_radial_species8_h64",
+            f"{l1_active_backbone},edge.cavity.vector_dot,edge.direct.radial",
+            1,
+            "edge",
+        ),
+        (
+            "l1_active_edge_cavity_vecq_radial_species8_h64",
+            f"{l1_active_backbone},edge.cavity.vector_dot,edge.cavity.quadrupole_frobenius,edge.direct.radial",
+            2,
+            "edge",
+        ),
+        (
+            "l1_active_all_cavity_vecq_radial_species8_h64",
+            f"{l1_active_backbone},edge.cavity.vector_dot,edge.cavity.quadrupole_frobenius,edge.direct.radial",
+            2,
+            "all",
+        ),
+    ]
+    rows = []
+    for name, paths, moment_l_max, adapter_scope in specs:
+        has_cavity = "edge.cavity" in paths
+        has_direct_edge = "edge.direct.radial" in paths
+        row = _row(
+            name,
+            scalar_path_ids=paths,
+            moment_l_max=moment_l_max,
+            learnable_radial_mixing=True,
+            radial_species_adapter_channels=8,
+            radial_species_adapter_scope=adapter_scope,
+            short_range_repulsion_potential="zbl",
+            tece_axes=(
+                "stage124_residual_edge_ladder",
+                "stage114_ef_active_selection",
+                "cross_radial_invariants",
+                "trainable_cross_radial_projection",
+                "frontloaded_representation_capacity",
+                "trainable_edge_species_radial_basis",
+                "path_scoped_radial_species_adapter",
+                "low_rank_neighbor_species_basis",
+                "trainable_species_basis",
+            )
+            + (("direct_edge_radial_path",) if has_direct_edge else ())
+            + (("cavity_edge_relational_scalar_sketches",) if has_cavity else ()),
+            hidden_channels="64,64",
+            species_basis_channels=16,
+            species_basis_mode="learnable_embedding",
+            atomic_cross_radial_sketch_channels=3,
+            atomic_cross_radial_projection="learnable",
+            descriptor_bottleneck_dim=0,
+        )
+        row["stage_basis"] = "stage124_residual_edge_ladder"
+        row["capacity_allocation"] = "l1_active_atomic_backbone_plus_edge_residual_paths"
+        row["stage123_source"] = "runs/oc20neb_tace_mace/rtece-stage123-path-scoped-adapter/stage123_interpretation.md"
+        row["stage122_source"] = "runs/oc20neb_tace_mace/rtece-stage122-radial-species-adapter/stage122_interpretation.md"
+        row["review_basis"] = (
+            "Stage123 showed that replacing the L1 active atomic backbone with edge/cavity paths is dominated. "
+            "Stage124 keeps the active atomic backbone and adds edge-relational scalar sketches as residual TECE paths, "
+            "testing marginal accuracy per throughput cost."
+        )
+        rows.append(row)
+    return _with_parameter_estimates(rows)
+
+
 def preflight_extxyz_file(path: str | Path, *, limit_configs: int | None = None) -> dict[str, int | str]:
     source = Path(path)
     if not source.exists():
@@ -865,6 +941,7 @@ def parse_args() -> argparse.Namespace:
             "active-frontloaded-stage121",
             "radial-species-adapter-stage122",
             "path-scoped-adapter-stage123",
+            "residual-edge-ladder-stage124",
         ),
         default="design-space-default",
     )
@@ -902,6 +979,8 @@ def main() -> None:
         rows = stage122_radial_species_adapter_rows()
     elif args.row_set == "path-scoped-adapter-stage123":
         rows = stage123_path_scoped_adapter_rows()
+    elif args.row_set == "residual-edge-ladder-stage124":
+        rows = stage124_residual_edge_ladder_rows()
     else:
         rows = None
     payload = write_pareto_sweep(
