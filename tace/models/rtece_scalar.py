@@ -1741,6 +1741,7 @@ def edge_relational_sketches(
     graph: RTECEGraph,
     config: RTECEScalarConfig,
     radial_mixing: torch.nn.Linear | None = None,
+    species_basis_embedding: torch.Tensor | None = None,
 ) -> torch.Tensor:
     if config.num_edge_sketches <= 0:
         return graph.pos.new_zeros((graph.z.shape[0], 0))
@@ -1749,7 +1750,13 @@ def edge_relational_sketches(
     radial = compute_radial_features(distances, config, radial_mixing)
     edge_path_ids = _selected_edge_path_ids(config.scalar_path_ids or ())
     required_ell = _edge_paths_required_ell(config)
-    moments = compute_atomic_moments(graph, config, radial_mixing, max_ell=required_ell)
+    moments = compute_atomic_moments(
+        graph,
+        config,
+        radial_mixing,
+        max_ell=required_ell,
+        species_basis_embedding=species_basis_embedding,
+    )
     src, dst = graph.edge_index
     vector_channels = moments["vector"]
     quadrupole_channels = moments["quadrupole"]
@@ -1900,7 +1907,12 @@ def rtece_descriptors(
         atomic_cross_radial_projection,
         species_basis_embedding,
     )
-    sketches = edge_relational_sketches(graph, config, radial_mixing)
+    sketches = edge_relational_sketches(
+        graph,
+        config,
+        radial_mixing,
+        species_basis_embedding=species_basis_embedding,
+    )
     return torch.cat([atomic, sketches], dim=-1)
 
 

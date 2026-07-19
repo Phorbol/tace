@@ -2694,6 +2694,42 @@ def test_learnable_species_basis_initializes_as_fixed_z_power_and_is_trainable()
     assert manifest["moments"][1]["chemistry_basis"] == "learnable_embedding_4"
 
 
+def test_learnable_species_basis_forwards_to_cavity_edge_moments():
+    config = build_rtece_config_from_path_ids(
+        "learnable_species_cavity",
+        ("atomic.radial_density", "atomic.species_basis_density", "edge.cavity.vector_dot"),
+        num_radial=3,
+        species_basis_channels=4,
+        species_basis_mode="learnable_embedding",
+        moment_l_max=1,
+    )
+    graph = RTECEGraph(
+        z=torch.tensor([6, 8, 1, 7], dtype=torch.long),
+        pos=torch.tensor(
+            [
+                [0.0, 0.0, 0.0],
+                [0.8, 0.1, 0.0],
+                [0.2, 0.9, 0.1],
+                [-0.3, 0.4, 0.7],
+            ],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(4),
+        batch=torch.zeros(4, dtype=torch.long),
+    )
+    model = RTECEScalarModel(config).double()
+
+    descriptors = rtece_descriptors(
+        graph,
+        config,
+        species_basis_embedding=model.species_basis_embedding.weight,
+    )
+    output = model(graph)
+
+    assert descriptors.shape == (4, descriptor_dim(config))
+    assert torch.isfinite(output["energy"]).all()
+
+
 def test_rtece_species_cavity_path_reports_both_retained_groups():
     from benchmarks.oc20neb_tace_mace.rtece_scalar_model import build_rtece_config_from_path_ids
 
