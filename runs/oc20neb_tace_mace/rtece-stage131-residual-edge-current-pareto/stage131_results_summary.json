@@ -1,0 +1,141 @@
+{
+  "baseline_stage129_species24": {
+    "dft": {
+      "atoms_per_second": 1224417.991969455,
+      "e_mae_mev_atom": 219.22881003979515,
+      "e_max_abs_mev_atom": 659.5285275505515,
+      "e_rmse_mev_atom": 273.84908615733866,
+      "f_mae_mev_a": 42.58129514260457,
+      "f_max_abs_mev_a": 2697.5326525891114,
+      "f_rmse_mev_a": 101.55723315362863
+    },
+    "num_parameters": 28925,
+    "variant": "l1_active_nrad12_species24_radial_species8_cross3_h64"
+  },
+  "baseline_stage130_species24_weighted": {
+    "dft": {
+      "atoms_per_second": 1222159.380417995,
+      "e_mae_mev_atom": 246.41832796504937,
+      "e_max_abs_mev_atom": 806.2581202665442,
+      "e_rmse_mev_atom": 305.02623461674074,
+      "f_mae_mev_a": 48.72505331842405,
+      "f_max_abs_mev_a": 2300.4894244396974,
+      "f_rmse_mev_a": 120.17230731083716
+    },
+    "num_parameters": 28925,
+    "variant": "l1_active_nrad12_species24_radial_species8_cross3_h64"
+  },
+  "basis": "TECE_design_space edge-relational scalar sketch and rTECE_review P1 true-rTECE critique; fixed stage129 species24 current-Pareto atomic backbone and non-weighted teacher-rattle data; add only minimal cavity/direct edge residual paths.",
+  "interpretation": {
+    "architecture_result": "L2 quadrupole residual is dominated by L1 in this implementation: slower, higher E/F RMSE, and worse F max than L1. The next edge-sketch work should be projection/cost optimization or cheaper low-rank implementation, not simply adding higher L paths.",
+    "max_error_result": "The L1 cavity-vector residual reduces DFT force max error by about 401 meV/A versus stage129 species24, suggesting edge-relational sketches may carry tail/local-environment information even when average RMSE and throughput are worse.",
+    "next_priority": "Run physical triage for the L1 tail-improved row; if C/N rattle-relax or dimer smoothness does not improve, deprioritize this edge-residual implementation and move to broader teacher trajectory/Jacobian distillation or projection diagnostics.",
+    "rmse_throughput_result": "Not a Pareto improvement versus the stage129 species24 current-Pareto atomic backbone: both edge residual rows worsen DFT F RMSE and substantially reduce throughput."
+  },
+  "jobs": [
+    {
+      "elapsed": "00:14:12",
+      "exit_code": "0:0",
+      "job": "685123",
+      "row": "l1_active_species24_cavity_vec_residual_h64",
+      "state": "COMPLETED"
+    },
+    {
+      "elapsed": "00:14:48",
+      "exit_code": "0:0",
+      "job": "685124",
+      "row": "l2_active_species24_cavity_vecq_residual_h64",
+      "state": "COMPLETED"
+    }
+  ],
+  "rows": [
+    {
+      "delta_vs_stage129_species24": {
+        "atoms_per_second": -657277.6877340077,
+        "dft_e_rmse_mev_atom": 9.034632540929124,
+        "dft_f_max_abs_mev_a": -400.81024169921875,
+        "dft_f_rmse_mev_a": 3.4388804585602912
+      },
+      "delta_vs_stage130_species24_weighted": {
+        "dft_e_rmse_mev_atom": -22.142515918472952,
+        "dft_f_max_abs_mev_a": -3.7670135498046875,
+        "dft_f_rmse_mev_a": -15.176193698648234
+      },
+      "dft": {
+        "atoms_per_second": 567140.3042354473,
+        "e_mae_mev_atom": 213.6940514178527,
+        "e_max_abs_mev_atom": 667.2397809972427,
+        "e_rmse_mev_atom": 282.8837186982678,
+        "f_mae_mev_a": 43.13284005953431,
+        "f_max_abs_mev_a": 2296.7224108898927,
+        "f_rmse_mev_a": 104.99611361218892
+      },
+      "num_parameters": 29117,
+      "teacher": {
+        "atoms_per_second": 568830.657519692,
+        "e_mae_mev_atom": 200.52281053037535,
+        "e_max_abs_mev_atom": 625.9998994715073,
+        "e_rmse_mev_atom": 267.12766455053725,
+        "f_mae_mev_a": 44.6599801713427,
+        "f_max_abs_mev_a": 2109.1036800946044,
+        "f_rmse_mev_a": 101.77401126882842
+      },
+      "train": {
+        "best_step": 18496,
+        "best_valid_loss": 0.10791799426078796,
+        "early_stopping_patience": 400,
+        "lr_scheduler": "plateau",
+        "lr_warmup_steps": 500,
+        "max_steps": 20000
+      },
+      "variant": "l1_active_species24_cavity_vec_residual_h64"
+    },
+    {
+      "delta_vs_stage129_species24": {
+        "atoms_per_second": -811110.4512210342,
+        "dft_e_rmse_mev_atom": 24.872567644898936,
+        "dft_f_max_abs_mev_a": -298.1030879351806,
+        "dft_f_rmse_mev_a": 7.0388940661021735
+      },
+      "delta_vs_stage130_species24_weighted": {
+        "dft_e_rmse_mev_atom": -6.30458081450314,
+        "dft_f_max_abs_mev_a": 98.94014021423345,
+        "dft_f_rmse_mev_a": -11.576180091106352
+      },
+      "dft": {
+        "atoms_per_second": 413307.5407484208,
+        "e_mae_mev_atom": 227.22040773032097,
+        "e_max_abs_mev_atom": 694.3548286764707,
+        "e_rmse_mev_atom": 298.7216538022376,
+        "f_mae_mev_a": 45.904403844491526,
+        "f_max_abs_mev_a": 2399.429564653931,
+        "f_rmse_mev_a": 108.5961272197308
+      },
+      "num_parameters": 29181,
+      "teacher": {
+        "atoms_per_second": 413361.36975486926,
+        "e_mae_mev_atom": 214.83112764166694,
+        "e_max_abs_mev_atom": 653.1149471507352,
+        "e_rmse_mev_atom": 281.82587117522456,
+        "f_mae_mev_a": 47.37939487717617,
+        "f_max_abs_mev_a": 2441.5576462353515,
+        "f_rmse_mev_a": 106.97452766215757
+      },
+      "train": {
+        "best_step": 16864,
+        "best_valid_loss": 0.11457334458827972,
+        "early_stopping_patience": 400,
+        "lr_scheduler": "plateau",
+        "lr_warmup_steps": 500,
+        "max_steps": 20000
+      },
+      "variant": "l2_active_species24_cavity_vecq_residual_h64"
+    }
+  ],
+  "schema_version": "rtece_stage131_residual_edge_results.v1",
+  "source_commits": [
+    "8a70f8f",
+    "cfe537a"
+  ],
+  "stage": "stage131_residual_edge_current_pareto"
+}
