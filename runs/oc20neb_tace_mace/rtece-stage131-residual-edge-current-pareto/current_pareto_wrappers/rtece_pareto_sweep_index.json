@@ -1,0 +1,153 @@
+{
+  "preflight_extxyz": {
+    "dft_valid_file": {
+      "atoms": 59193,
+      "frames": 1024,
+      "path": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz"
+    },
+    "teacher_valid_file": {
+      "atoms": 59193,
+      "frames": 1024,
+      "path": "runs/oc20neb_tace_mace/tece-distill-20260717/teacher_valid.extxyz"
+    },
+    "train_file": {
+      "atoms": 113970,
+      "frames": 2176,
+      "path": "runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/augmented_train_base2048_plus_teacher_rattle128.extxyz"
+    },
+    "train_valid_file": {
+      "atoms": 12770,
+      "frames": 256,
+      "path": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz"
+    }
+  },
+  "review_basis": [
+    "TECE_design_space: angular bandwidth / radial rank / sparse scalar path density",
+    "rTECE_review: cavity relational paths, E0/ZBL physical prior, production training/inference"
+  ],
+  "row_set": "stage131-residual-edge-current-pareto",
+  "rows": [
+    {
+      "atomic_cross_radial_projection": "learnable",
+      "atomic_cross_radial_sketch_channels": 3,
+      "capacity_allocation": "current_pareto_atomic_backbone_plus_minimal_edge_relational_residual",
+      "descriptor_bottleneck_dim": 0,
+      "descriptor_conditioner": "none",
+      "descriptor_conditioner_hidden_channels": 0,
+      "hidden_channels": "64,64",
+      "learnable_radial_mixing": true,
+      "moment_l_max": 1,
+      "name": "l1_active_species24_cavity_vec_residual_h64",
+      "num_parameters_estimate": 29117,
+      "num_radial": 12,
+      "radial_edge_sketch_channels": 0,
+      "radial_species_adapter_channels": 8,
+      "radial_species_adapter_scope": "all",
+      "readout_parameters_estimate": 24705,
+      "representation_parameters_estimate": 4412,
+      "review_basis": "Stage130 showed Sobolev/force-tail weighting is not a clean RMSE Pareto improvement. Stage124 showed edge-only residual paths are dominated, while all-scope cavity coupling can recover accuracy at large throughput cost. Stage131 therefore keeps the stage129 current-Pareto species24 L1 active atomic backbone and adds only the minimal cavity/direct edge-relational scalar sketches called out by TECE_design_space.md and rTECE_review.md, isolating representation value from weighting and from final-head widening.",
+      "sbatch_command": [
+        "sbatch",
+        "runs/oc20neb_tace_mace/rtece-stage131-residual-edge-current-pareto/current_pareto_wrappers/l1_active_species24_cavity_vec_residual_h64/rtece_scalar_matrix_no_export.sbatch"
+      ],
+      "scalar_path_ids": "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot,edge.cavity.vector_dot,edge.direct.radial",
+      "short_range_repulsion_potential": "zbl",
+      "species_basis_channels": 24,
+      "species_basis_mode": "learnable_embedding",
+      "stage124_source": "runs/oc20neb_tace_mace/rtece-stage124-residual-edge-ladder/stage124_interpretation.md",
+      "stage127_source": "runs/oc20neb_tace_mace/rtece-stage127-local-cross-species/stage127_interpretation.md",
+      "stage129_source": "runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/stage129_interpretation.md",
+      "stage130_source": "runs/oc20neb_tace_mace/rtece-stage130-sobolev-weighted-distill/stage130_physical_triage_summary.md",
+      "stage_basis": "stage131_residual_edge_current_pareto",
+      "tece_axes": [
+        "angular_bandwidth_l_max",
+        "scalar_path_density",
+        "radial_rank",
+        "scalar_head_capacity",
+        "trainable_feature_extractor",
+        "trainable_edge_species_radial_basis",
+        "trainable_species_basis",
+        "short_range_physical_prior",
+        "stage131_residual_edge_current_pareto",
+        "stage130_weighting_negative_control",
+        "stage129_current_pareto_anchor",
+        "stage127_local_cross_species",
+        "stage124_residual_edge_ladder",
+        "stage114_ef_active_selection",
+        "hardware_cost_conditioned_active_set",
+        "rank_neighborhood_downfolding",
+        "low_rank_neighbor_species_basis",
+        "cross_radial_invariants",
+        "trainable_cross_radial_projection",
+        "cavity_edge_relational_scalar_sketches",
+        "direct_edge_radial_path"
+      ],
+      "train_variant": "l1_active_species24_cavity_vec_residual_h64",
+      "use_short_range_repulsion": true,
+      "variant": "l1_active_species24_cavity_vec_residual_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage131-residual-edge-current-pareto/current_pareto_wrappers/l1_active_species24_cavity_vec_residual_h64/rtece_scalar_matrix_no_export.sbatch"
+    },
+    {
+      "atomic_cross_radial_projection": "learnable",
+      "atomic_cross_radial_sketch_channels": 3,
+      "capacity_allocation": "current_pareto_atomic_backbone_plus_minimal_edge_relational_residual",
+      "descriptor_bottleneck_dim": 0,
+      "descriptor_conditioner": "none",
+      "descriptor_conditioner_hidden_channels": 0,
+      "hidden_channels": "64,64",
+      "learnable_radial_mixing": true,
+      "moment_l_max": 2,
+      "name": "l2_active_species24_cavity_vecq_residual_h64",
+      "num_parameters_estimate": 29181,
+      "num_radial": 12,
+      "radial_edge_sketch_channels": 0,
+      "radial_species_adapter_channels": 8,
+      "radial_species_adapter_scope": "all",
+      "readout_parameters_estimate": 24769,
+      "representation_parameters_estimate": 4412,
+      "review_basis": "Stage130 showed Sobolev/force-tail weighting is not a clean RMSE Pareto improvement. Stage124 showed edge-only residual paths are dominated, while all-scope cavity coupling can recover accuracy at large throughput cost. Stage131 therefore keeps the stage129 current-Pareto species24 L1 active atomic backbone and adds only the minimal cavity/direct edge-relational scalar sketches called out by TECE_design_space.md and rTECE_review.md, isolating representation value from weighting and from final-head widening.",
+      "sbatch_command": [
+        "sbatch",
+        "runs/oc20neb_tace_mace/rtece-stage131-residual-edge-current-pareto/current_pareto_wrappers/l2_active_species24_cavity_vecq_residual_h64/rtece_scalar_matrix_no_export.sbatch"
+      ],
+      "scalar_path_ids": "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot,edge.cavity.vector_dot,edge.cavity.quadrupole_frobenius,edge.direct.radial",
+      "short_range_repulsion_potential": "zbl",
+      "species_basis_channels": 24,
+      "species_basis_mode": "learnable_embedding",
+      "stage124_source": "runs/oc20neb_tace_mace/rtece-stage124-residual-edge-ladder/stage124_interpretation.md",
+      "stage127_source": "runs/oc20neb_tace_mace/rtece-stage127-local-cross-species/stage127_interpretation.md",
+      "stage129_source": "runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/stage129_interpretation.md",
+      "stage130_source": "runs/oc20neb_tace_mace/rtece-stage130-sobolev-weighted-distill/stage130_physical_triage_summary.md",
+      "stage_basis": "stage131_residual_edge_current_pareto",
+      "tece_axes": [
+        "angular_bandwidth_l_max",
+        "scalar_path_density",
+        "radial_rank",
+        "scalar_head_capacity",
+        "trainable_feature_extractor",
+        "trainable_edge_species_radial_basis",
+        "trainable_species_basis",
+        "short_range_physical_prior",
+        "stage131_residual_edge_current_pareto",
+        "stage130_weighting_negative_control",
+        "stage129_current_pareto_anchor",
+        "stage127_local_cross_species",
+        "stage124_residual_edge_ladder",
+        "stage114_ef_active_selection",
+        "hardware_cost_conditioned_active_set",
+        "rank_neighborhood_downfolding",
+        "low_rank_neighbor_species_basis",
+        "cross_radial_invariants",
+        "trainable_cross_radial_projection",
+        "cavity_edge_relational_scalar_sketches",
+        "direct_edge_radial_path"
+      ],
+      "train_variant": "l2_active_species24_cavity_vecq_residual_h64",
+      "use_short_range_repulsion": true,
+      "variant": "l2_active_species24_cavity_vecq_residual_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage131-residual-edge-current-pareto/current_pareto_wrappers/l2_active_species24_cavity_vecq_residual_h64/rtece_scalar_matrix_no_export.sbatch"
+    }
+  ],
+  "run_root": "runs/oc20neb_tace_mace/rtece-stage131-residual-edge-current-pareto/current_pareto_runs",
+  "schema_version": "rtece_pareto_sweep.v1"
+}
