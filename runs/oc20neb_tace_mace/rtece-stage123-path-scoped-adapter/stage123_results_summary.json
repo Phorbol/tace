@@ -1,0 +1,126 @@
+{
+  "commit": "aedf6985dc628eae9435811cff9ec5c0f08b77b5",
+  "jobs": {
+    "l1_active_all_radial_species8_h64": 684997,
+    "l1_active_atomic_radial_species8_h64": 684995,
+    "l2_cavity_edge_radial_species8_h64": 684996
+  },
+  "records": [
+    {
+      "dft": {
+        "atoms_per_second": 1670311.7419496018,
+        "bias_e_mev_atom": -41.68768492978058,
+        "mae_e_mev_atom": 268.92786822881465,
+        "mae_f_mev_a": 46.31450768734573,
+        "max_abs_e_mev_atom": 731.9233544827587,
+        "max_abs_f_mev_a": 1996.3234116426088,
+        "rmse_e_mev_atom": 335.81577220369405,
+        "rmse_f_mev_a": 112.83824865113908,
+        "seconds_per_pass": 0.03543829484842718
+      },
+      "files": {
+        "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage123-path-scoped-adapter/l1_active_atomic_radial_species8_h64/l1_active_atomic_radial_species8_h64/l1_active_atomic_radial_species8_h64_dft_benchmark.json",
+        "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage123-path-scoped-adapter/l1_active_atomic_radial_species8_h64/l1_active_atomic_radial_species8_h64/l1_active_atomic_radial_species8_h64_teacher_benchmark.json",
+        "train_summary": "runs/oc20neb_tace_mace/rtece-stage123-path-scoped-adapter/l1_active_atomic_radial_species8_h64/l1_active_atomic_radial_species8_h64/train_summary.json"
+      },
+      "name": "l1_active_atomic_radial_species8_h64",
+      "num_parameters": 17209,
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot"
+      ],
+      "scope": "atomic",
+      "teacher": {
+        "atoms_per_second": 1668511.1138900612,
+        "bias_e_mev_atom": -45.663753989371095,
+        "mae_e_mev_atom": 255.36138194815902,
+        "mae_f_mev_a": 47.58724592743004,
+        "max_abs_e_mev_atom": 721.7062588395744,
+        "max_abs_f_mev_a": 2065.1887668527224,
+        "rmse_e_mev_atom": 318.9177104203028,
+        "rmse_f_mev_a": 110.1663385549994,
+        "seconds_per_pass": 0.035476539237424734
+      }
+    },
+    {
+      "dft": {
+        "atoms_per_second": 1668735.1968991163,
+        "bias_e_mev_atom": -41.68814403215846,
+        "mae_e_mev_atom": 268.92812648558163,
+        "mae_f_mev_a": 46.31452387249624,
+        "max_abs_e_mev_atom": 731.9244068130388,
+        "max_abs_f_mev_a": 1996.3218619218446,
+        "rmse_e_mev_atom": 335.81606864682726,
+        "rmse_f_mev_a": 112.838238236148,
+        "seconds_per_pass": 0.03547177533619106
+      },
+      "files": {
+        "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage123-path-scoped-adapter/l1_active_all_radial_species8_h64/l1_active_all_radial_species8_h64/l1_active_all_radial_species8_h64_dft_benchmark.json",
+        "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage123-path-scoped-adapter/l1_active_all_radial_species8_h64/l1_active_all_radial_species8_h64/l1_active_all_radial_species8_h64_teacher_benchmark.json",
+        "train_summary": "runs/oc20neb_tace_mace/rtece-stage123-path-scoped-adapter/l1_active_all_radial_species8_h64/l1_active_all_radial_species8_h64/train_summary.json"
+      },
+      "name": "l1_active_all_radial_species8_h64",
+      "num_parameters": 17209,
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot"
+      ],
+      "scope": "all",
+      "teacher": {
+        "atoms_per_second": 1673082.8897666875,
+        "bias_e_mev_atom": -45.66419959936228,
+        "mae_e_mev_atom": 255.36159218656923,
+        "mae_f_mev_a": 47.587254506351066,
+        "max_abs_e_mev_atom": 721.7073111698545,
+        "max_abs_f_mev_a": 2065.1910914338687,
+        "rmse_e_mev_atom": 318.9179732770416,
+        "rmse_f_mev_a": 110.16633172582323,
+        "seconds_per_pass": 0.03537959796376526
+      }
+    },
+    {
+      "dft": {
+        "atoms_per_second": 580130.3730797238,
+        "bias_e_mev_atom": -88.220828015125,
+        "mae_e_mev_atom": 256.97183726927227,
+        "mae_f_mev_a": 50.71075583566364,
+        "max_abs_e_mev_atom": 837.3379094733299,
+        "max_abs_f_mev_a": 2759.7004162991334,
+        "rmse_e_mev_atom": 357.83403446687544,
+        "rmse_f_mev_a": 118.41273034799912,
+        "seconds_per_pass": 0.10203396123833955
+      },
+      "files": {
+        "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage123-path-scoped-adapter/l2_cavity_edge_radial_species8_h64/l2_cavity_edge_radial_species8_h64/l2_cavity_edge_radial_species8_h64_dft_benchmark.json",
+        "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage123-path-scoped-adapter/l2_cavity_edge_radial_species8_h64/l2_cavity_edge_radial_species8_h64/l2_cavity_edge_radial_species8_h64_teacher_benchmark.json",
+        "train_summary": "runs/oc20neb_tace_mace/rtece-stage123-path-scoped-adapter/l2_cavity_edge_radial_species8_h64/l2_cavity_edge_radial_species8_h64/train_summary.json"
+      },
+      "name": "l2_cavity_edge_radial_species8_h64",
+      "num_parameters": 16737,
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "edge.cavity.vector_dot",
+        "edge.cavity.quadrupole_frobenius",
+        "edge.direct.radial"
+      ],
+      "scope": "edge",
+      "teacher": {
+        "atoms_per_second": 579735.3925047098,
+        "bias_e_mev_atom": -92.196862098822,
+        "mae_e_mev_atom": 246.57306613338628,
+        "mae_f_mev_a": 51.58593573477787,
+        "max_abs_e_mev_atom": 827.1208138301455,
+        "max_abs_f_mev_a": 2387.3550886712646,
+        "rmse_e_mev_atom": 341.70707834376856,
+        "rmse_f_mev_a": 115.36711506181979,
+        "seconds_per_pass": 0.10210347818210722
+      }
+    }
+  ],
+  "schema_version": "rtece_stage123_results.v1"
+}
