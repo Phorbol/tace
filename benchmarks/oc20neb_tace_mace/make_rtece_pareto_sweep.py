@@ -869,6 +869,65 @@ def stage126_rank_neighborhood_rows() -> list[dict[str, Any]]:
     return _with_parameter_estimates(rows)
 
 
+def stage127_local_cross_species_rows() -> list[dict[str, Any]]:
+    l1_active_backbone = (
+        "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,"
+        "atomic.vector_cross_radial_dot"
+    )
+    specs = [
+        ("l1_active_nrad12_species20_radial_species8_cross3_h64", 20, 3),
+        ("l1_active_nrad12_species24_radial_species8_cross2_h64", 24, 2),
+        ("l1_active_nrad12_species24_radial_species8_cross3_h64", 24, 3),
+        ("l1_active_nrad12_species24_radial_species8_cross4_h64", 24, 4),
+    ]
+    rows = []
+    for name, species_channels, cross_channels in specs:
+        row = _row(
+            name,
+            scalar_path_ids=l1_active_backbone,
+            moment_l_max=1,
+            learnable_radial_mixing=True,
+            radial_species_adapter_channels=8,
+            radial_species_adapter_scope="all",
+            short_range_repulsion_potential="zbl",
+            tece_axes=(
+                "stage127_local_cross_species",
+                "stage126_rank_neighborhood_winner",
+                "stage125_front_capacity_anchor",
+                "stage114_ef_active_selection",
+                "hardware_cost_conditioned_active_set",
+                "rank_neighborhood_downfolding",
+                "radial_rank",
+                "trainable_edge_species_radial_basis",
+                "low_rank_neighbor_species_basis",
+                "trainable_species_basis",
+                "cross_radial_invariants",
+                "trainable_cross_radial_projection",
+            ),
+            hidden_channels="64,64",
+            num_radial=12,
+            species_basis_channels=species_channels,
+            species_basis_mode="learnable_embedding",
+            atomic_cross_radial_sketch_channels=cross_channels,
+            atomic_cross_radial_projection="learnable",
+            descriptor_bottleneck_dim=0,
+        )
+        row["stage_basis"] = "stage127_local_cross_species"
+        row["capacity_allocation"] = "local_cross_species_active_set_around_stage126_winner"
+        row["stage126_source"] = "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/stage126_interpretation.md"
+        row["stage125_source"] = "runs/oc20neb_tace_mace/rtece-stage125-front-capacity-ladder/stage125_interpretation.md"
+        row["review_basis"] = (
+            "Stage126 found that nrad12/species24/radial_species8/cross3 is the local RMSE front, "
+            "and that increasing the radial-species adapter rank is not useful. Stage127 therefore keeps "
+            "the L1 active atomic path set, fixed 64,64 scalar head, no edge paths, nrad12, and adapter8, "
+            "then sweeps only the cross-radial invariant rank and one smaller species rank. This is a "
+            "controlled TECE active-set/downfolding test of which front representation coordinates should "
+            "remain on the Pareto frontier rather than an unconstrained MLP capacity increase."
+        )
+        rows.append(row)
+    return _with_parameter_estimates(rows)
+
+
 def preflight_extxyz_file(path: str | Path, *, limit_configs: int | None = None) -> dict[str, int | str]:
     source = Path(path)
     if not source.exists():
@@ -1056,6 +1115,7 @@ def parse_args() -> argparse.Namespace:
             "residual-edge-ladder-stage124",
             "front-capacity-ladder-stage125",
             "rank-neighborhood-stage126",
+            "local-cross-species-stage127",
         ),
         default="design-space-default",
     )
@@ -1099,6 +1159,8 @@ def main() -> None:
         rows = stage125_front_capacity_ladder_rows()
     elif args.row_set == "rank-neighborhood-stage126":
         rows = stage126_rank_neighborhood_rows()
+    elif args.row_set == "local-cross-species-stage127":
+        rows = stage127_local_cross_species_rows()
     else:
         rows = None
     payload = write_pareto_sweep(
