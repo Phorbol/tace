@@ -1,0 +1,10 @@
+{
+  "atoms": 3584,
+  "configs": 128,
+  "input": "runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/rattled_valid_start58_limit8_copies16_std0p05.extxyz",
+  "model": "runs/oc20neb_tace_mace/675969_resume/checkpoints_epoch/TACE-0-100000-0.1329.ckpt",
+  "output": "runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/teacher_labeled_stage128_window_rattles.extxyz",
+  "reference_prefix": "source_",
+  "target_energy_key": "energy",
+  "target_forces_key": "forces"
+}

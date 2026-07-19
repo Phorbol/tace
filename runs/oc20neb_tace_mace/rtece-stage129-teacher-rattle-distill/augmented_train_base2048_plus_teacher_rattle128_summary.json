@@ -1,0 +1,26 @@
+{
+  "atoms": 113970,
+  "configs": 2176,
+  "output": "runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/augmented_train_base2048_plus_teacher_rattle128.extxyz",
+  "schema_version": "rtece_concat_extxyz.v1",
+  "sources": [
+    {
+      "atoms": 110386,
+      "configs": 2048,
+      "input_limit": 2048,
+      "label": "base_mixed_train_tw0p75",
+      "output_start_index": 0,
+      "output_stop_index": 2048,
+      "path": "runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz"
+    },
+    {
+      "atoms": 3584,
+      "configs": 128,
+      "input_limit": null,
+      "label": "teacher_labeled_stage128_rattles",
+      "output_start_index": 2048,
+      "output_stop_index": 2176,
+      "path": "runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/teacher_labeled_stage128_window_rattles.extxyz"
+    }
+  ]
+}
