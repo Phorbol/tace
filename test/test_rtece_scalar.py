@@ -6934,6 +6934,45 @@ def test_rtece_stage128_physical_triage_writes_no_export_wrappers(tmp_path):
         assert "C-N C-O C-H N-H O-H C-C N-N" in text
 
 
+def test_rtece_physical_triage_accepts_custom_stage_cases(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_physical_triage import (
+        parse_case_spec,
+        write_physical_triage_wrappers,
+    )
+
+    case = parse_case_spec(
+        "stage129_variant:/tmp/model.pt:/tmp/dft.json:/tmp/teacher.json"
+    )
+    index = write_physical_triage_wrappers(
+        tmp_path / "wrappers",
+        run_root=str(tmp_path / "stage129-phys"),
+        configs="/tmp/valid.extxyz",
+        cases=[case],
+        stage="stage129_physical_triage",
+        source="runs/oc20neb_tace_mace/rtece-stage129-teacher-rattle-distill/stage129_interpretation.md",
+        design_basis="stage129 teacher-rattle physical robustness triage",
+        job_name="rtece-phys129",
+    )
+
+    assert index["stage"] == "stage129_physical_triage"
+    assert index["source"].endswith("stage129_interpretation.md")
+    assert index["job_name"] == "rtece-phys129"
+    assert index["cases"][0]["checkpoint"] == "/tmp/model.pt"
+
+    wrapper = Path(index["cases"][0]["wrapper"])
+    text = wrapper.read_text(encoding="utf-8")
+    assert "#SBATCH --job-name=rtece-phys129" in text
+    assert "/home/gengjianrui/bin/logs/rtece-phys129-%j.out" in text
+    assert "CHECKPOINT=/tmp/model.pt" in text
+    assert "DFT_BENCHMARK=/tmp/dft.json" in text
+    assert "TEACHER_BENCHMARK=/tmp/teacher.json" in text
+    assert "--export" not in text
+    assert "--mem" not in text
+    assert "--cpus-per-task" not in text
+
+
 def test_rtece_stage121_active_frontloaded_sweep_cli_generates_four_rows(tmp_path):
     import json
     import subprocess

@@ -50,6 +50,7 @@ def _write_wrapper(
     path: Path,
     *,
     variant: str,
+    job_name: str,
     run_root: str,
     checkpoint: str,
     dft_benchmark: str,
@@ -66,15 +67,15 @@ def _write_wrapper(
     pairs = " ".join(str(pair) for pair in dimer_pairs)
     out_dir = f"{run_root}/{variant}"
     text = f"""#!/bin/bash
-#SBATCH --job-name=rtece-phys128
+#SBATCH --job-name={job_name}
 #SBATCH --partition=16V100
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gpus-per-node=1
 #SBATCH --qos=flood-1o2gpu
 #SBATCH --time=03:55:00
-#SBATCH --output=/home/gengjianrui/bin/logs/rtece-phys128-%j.out
-#SBATCH --error=/home/gengjianrui/bin/logs/rtece-phys128-%j.err
+#SBATCH --output=/home/gengjianrui/bin/logs/{job_name}-%j.out
+#SBATCH --error=/home/gengjianrui/bin/logs/{job_name}-%j.err
 
 set -euo pipefail
 set -x
@@ -161,6 +162,13 @@ def write_physical_triage_wrappers(
     run_root: str,
     configs: str,
     cases: Sequence[dict[str, Any]] | None = None,
+    stage: str = "stage128_physical_triage",
+    source: str = DEFAULT_STAGE127_SOURCE,
+    design_basis: str = (
+        "Evaluate stage127 non-dominated active-set candidates under physical external tests: "
+        "dimer smoothness/short-range repulsion and C_or_N rattle-relax stability."
+    ),
+    job_name: str = "rtece-phys128",
     dimer_pairs: Sequence[str] = DEFAULT_DIMER_PAIRS,
     dimer_num_points: int = 24,
     rattle_start_config: int = 58,
@@ -178,6 +186,7 @@ def write_physical_triage_wrappers(
         _write_wrapper(
             wrapper,
             variant=variant,
+            job_name=job_name,
             run_root=str(run_root),
             checkpoint=str(case["checkpoint"]),
             dft_benchmark=str(case["dft_benchmark"]),
@@ -204,12 +213,11 @@ def write_physical_triage_wrappers(
         rows.append(row)
     payload = {
         "schema_version": "rtece_physical_triage.v1",
-        "stage": "stage128_physical_triage",
-        "stage127_source": DEFAULT_STAGE127_SOURCE,
-        "design_basis": (
-            "Evaluate stage127 non-dominated active-set candidates under physical external tests: "
-            "dimer smoothness/short-range repulsion and C_or_N rattle-relax stability."
-        ),
+        "stage": str(stage),
+        "source": str(source),
+        "stage127_source": str(source),
+        "design_basis": str(design_basis),
+        "job_name": str(job_name),
         "run_root": str(run_root),
         "configs": str(configs),
         "dimer_pairs": list(dimer_pairs),
@@ -227,11 +235,48 @@ def write_physical_triage_wrappers(
     return payload
 
 
+def parse_case_spec(spec: str) -> dict[str, Any]:
+    """Parse a custom physical-triage case.
+
+    Format: variant:checkpoint:dft_benchmark:teacher_benchmark.
+    """
+    parts = spec.split(":")
+    if len(parts) != 4:
+        raise ValueError(
+            "--case must use variant:checkpoint:dft_benchmark:teacher_benchmark; "
+            f"got {spec!r}"
+        )
+    variant, checkpoint, dft_benchmark, teacher_benchmark = parts
+    return {
+        "variant": variant,
+        "checkpoint": checkpoint,
+        "dft_benchmark": dft_benchmark,
+        "teacher_benchmark": teacher_benchmark,
+        "selection_basis": "custom physical-triage case",
+    }
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-dir", type=Path, required=True)
     parser.add_argument("--run-root", required=True)
     parser.add_argument("--stage127-root", default=DEFAULT_STAGE127_ROOT)
+    parser.add_argument(
+        "--case",
+        action="append",
+        default=[],
+        help="Custom case as variant:checkpoint:dft_benchmark:teacher_benchmark. Can be repeated.",
+    )
+    parser.add_argument("--stage", default="stage128_physical_triage")
+    parser.add_argument("--source", default=DEFAULT_STAGE127_SOURCE)
+    parser.add_argument(
+        "--design-basis",
+        default=(
+            "Evaluate stage127 non-dominated active-set candidates under physical external tests: "
+            "dimer smoothness/short-range repulsion and C_or_N rattle-relax stability."
+        ),
+    )
+    parser.add_argument("--job-name", default="rtece-phys128")
     parser.add_argument("--configs", required=True)
     parser.add_argument("--dimer-pairs", nargs="+", default=list(DEFAULT_DIMER_PAIRS))
     parser.add_argument("--dimer-num-points", type=int, default=24)
@@ -245,11 +290,20 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args()
+    cases = (
+        [parse_case_spec(spec) for spec in args.case]
+        if args.case
+        else stage128_physical_triage_cases(stage127_root=args.stage127_root)
+    )
     payload = write_physical_triage_wrappers(
         args.output_dir,
         run_root=args.run_root,
         configs=args.configs,
-        cases=stage128_physical_triage_cases(stage127_root=args.stage127_root),
+        cases=cases,
+        stage=args.stage,
+        source=args.source,
+        design_basis=args.design_basis,
+        job_name=args.job_name,
         dimer_pairs=tuple(args.dimer_pairs),
         dimer_num_points=args.dimer_num_points,
         rattle_start_config=args.rattle_start_config,
