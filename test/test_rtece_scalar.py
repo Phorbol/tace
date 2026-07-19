@@ -6716,6 +6716,49 @@ def test_rtece_stage125_front_capacity_ladder_rows_expand_representation_not_hea
     assert by_name["l1_active_species48_radial_species24_cross5_bneck48_h64"]["num_parameters_estimate"] >= 30_000
 
 
+def test_rtece_stage126_rank_neighborhood_rows_downfold_stage125_anchor():
+    from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage126_rank_neighborhood_rows
+
+    rows = stage126_rank_neighborhood_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    assert list(by_name) == [
+        "l1_active_nrad10_species16_radial_species8_cross3_h64",
+        "l1_active_nrad12_species16_radial_species8_cross3_h64",
+        "l1_active_nrad12_species24_radial_species8_cross3_h64",
+        "l1_active_nrad12_species16_radial_species12_cross3_h64",
+        "l1_active_nrad12_species24_radial_species12_cross3_h64",
+    ]
+    assert {row["hidden_channels"] for row in rows} == {"64,64"}
+    assert all(row["stage_basis"] == "stage126_rank_neighborhood" for row in rows)
+    assert all(row["capacity_allocation"] == "rank_neighborhood_downfolding_around_stage125_anchor" for row in rows)
+    assert all(row["moment_l_max"] == 1 for row in rows)
+    assert all(row["radial_species_adapter_scope"] == "all" for row in rows)
+    assert all(row["species_basis_mode"] == "learnable_embedding" for row in rows)
+    assert all(row["atomic_cross_radial_projection"] == "learnable" for row in rows)
+    assert all(row["atomic_cross_radial_sketch_channels"] == 3 for row in rows)
+    assert all(row["descriptor_bottleneck_dim"] == 0 for row in rows)
+    assert all("stage126_rank_neighborhood" in row["tece_axes"] for row in rows)
+    assert all("stage125_source" in row for row in rows)
+
+    base_paths = (
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+    )
+    for row in rows:
+        paths = tuple(part.strip() for part in row["scalar_path_ids"].split(",") if part.strip())
+        assert paths == base_paths
+        assert not any(path.startswith("edge.") for path in paths)
+        assert row["num_parameters_estimate"] < 30_033
+
+    assert by_name["l1_active_nrad12_species16_radial_species8_cross3_h64"]["num_parameters_estimate"] > by_name["l1_active_nrad10_species16_radial_species8_cross3_h64"]["num_parameters_estimate"]
+    assert by_name["l1_active_nrad12_species24_radial_species8_cross3_h64"]["representation_parameters_estimate"] > by_name["l1_active_nrad12_species16_radial_species8_cross3_h64"]["representation_parameters_estimate"]
+    assert by_name["l1_active_nrad12_species16_radial_species12_cross3_h64"]["representation_parameters_estimate"] > by_name["l1_active_nrad12_species16_radial_species8_cross3_h64"]["representation_parameters_estimate"]
+
+
+
 def test_rtece_stage121_active_frontloaded_rows_keep_active_atomic_paths_and_move_capacity_front():
     from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage121_active_frontloaded_rows
 
