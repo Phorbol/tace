@@ -512,6 +512,59 @@ def stage120_descriptor_bottleneck_rows() -> list[dict[str, Any]]:
         rows.append(base)
     return _with_parameter_estimates(rows)
 
+
+
+def stage121_active_frontloaded_rows() -> list[dict[str, Any]]:
+    l1_paths = (
+        "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,"
+        "atomic.vector_cross_radial_dot"
+    )
+    l2_paths = (
+        "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,"
+        "atomic.vector_cross_radial_dot,atomic.quadrupole_norm,"
+        "atomic.quadrupole_cross_radial_frobenius"
+    )
+    specs = [
+        ("l1_active_species16_bneck16_h64", l1_paths, 1, 16),
+        ("l1_active_species16_bneck32_h64", l1_paths, 1, 32),
+        ("l2_active_species16_bneck16_h64", l2_paths, 2, 16),
+        ("l2_active_species16_bneck32_h64", l2_paths, 2, 32),
+    ]
+    rows = []
+    for name, paths, moment_l_max, bottleneck_dim in specs:
+        row = _row(
+            name,
+            scalar_path_ids=paths,
+            moment_l_max=moment_l_max,
+            learnable_radial_mixing=True,
+            short_range_repulsion_potential="zbl",
+            tece_axes=(
+                "stage114_ef_active_selection",
+                "frontloaded_representation_capacity",
+                "low_rank_neighbor_species_basis",
+                "cross_radial_invariants",
+                "trainable_cross_radial_projection",
+                "front_low_rank_path_mixer",
+            ) + (("atomic_l2_scalar_paths",) if moment_l_max >= 2 else ()),
+            hidden_channels="64,64",
+            species_basis_channels=16,
+            species_basis_mode="learnable_embedding",
+            atomic_cross_radial_sketch_channels=3,
+            atomic_cross_radial_projection="learnable",
+            descriptor_bottleneck_dim=bottleneck_dim,
+        )
+        row["stage_basis"] = "stage121_active_frontloaded_representation"
+        row["capacity_allocation"] = "active_set_frontloaded_representation_not_wider_head"
+        row["stage114_source"] = "runs/oc20neb_tace_mace/rtece-stage114-ef-active-rank/stage114_notes.md"
+        row["stage119_source"] = "runs/oc20neb_tace_mace/rtece-stage119-frontloaded-representation-design/stage119_results.md"
+        row["stage120_source"] = "runs/oc20neb_tace_mace/rtece-stage120-descriptor-bottleneck-wrappers/rtece_pareto_sweep_index.json"
+        row["review_basis"] = (
+            "Stage114 E/F active atomic paths plus rTECE_review species-collision and fixed-feature critiques; "
+            "capacity is added in trainable radial/species/cross/bottleneck representation layers, not by widening the final head."
+        )
+        rows.append(row)
+    return _with_parameter_estimates(rows)
+
 def preflight_extxyz_file(path: str | Path, *, limit_configs: int | None = None) -> dict[str, int | str]:
     source = Path(path)
     if not source.exists():
@@ -691,6 +744,7 @@ def parse_args() -> argparse.Namespace:
             "representation-ladder-stage118",
             "frontloaded-representation-stage119",
             "descriptor-bottleneck-stage120",
+            "active-frontloaded-stage121",
         ),
         default="design-space-default",
     )
@@ -722,6 +776,8 @@ def main() -> None:
         rows = stage119_frontloaded_representation_rows()
     elif args.row_set == "descriptor-bottleneck-stage120":
         rows = stage120_descriptor_bottleneck_rows()
+    elif args.row_set == "active-frontloaded-stage121":
+        rows = stage121_active_frontloaded_rows()
     else:
         rows = None
     payload = write_pareto_sweep(

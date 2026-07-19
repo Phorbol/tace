@@ -6413,6 +6413,85 @@ def test_rtece_stage120_descriptor_bottleneck_rows_keep_head_fixed_and_mix_front
     assert by_name["l2_species32_cavity_atomic_bneck16_h64"]["representation_parameters_estimate"] > by_name["l0_species8_bneck16_h64"]["representation_parameters_estimate"]
 
 
+def test_rtece_stage121_active_frontloaded_rows_keep_active_atomic_paths_and_move_capacity_front():
+    from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import stage121_active_frontloaded_rows
+
+    rows = stage121_active_frontloaded_rows()
+    by_name = {row["name"]: row for row in rows}
+
+    assert list(by_name) == [
+        "l1_active_species16_bneck16_h64",
+        "l1_active_species16_bneck32_h64",
+        "l2_active_species16_bneck16_h64",
+        "l2_active_species16_bneck32_h64",
+    ]
+    assert {row["hidden_channels"] for row in rows} == {"64,64"}
+    assert {row["descriptor_bottleneck_dim"] for row in rows} == {16, 32}
+    assert all(row["species_basis_channels"] == 16 for row in rows)
+    assert all(row["species_basis_mode"] == "learnable_embedding" for row in rows)
+    assert all(row["learnable_radial_mixing"] for row in rows)
+    assert all(row["atomic_cross_radial_projection"] == "learnable" for row in rows)
+    assert all("edge." not in row["scalar_path_ids"] for row in rows)
+    assert all(row["stage_basis"] == "stage121_active_frontloaded_representation" for row in rows)
+    assert all("stage114_ef_active_selection" in row["tece_axes"] for row in rows)
+    assert all("front_low_rank_path_mixer" in row["tece_axes"] for row in rows)
+    assert by_name["l1_active_species16_bneck16_h64"]["moment_l_max"] == 1
+    assert by_name["l2_active_species16_bneck16_h64"]["moment_l_max"] == 2
+    assert by_name["l2_active_species16_bneck16_h64"]["representation_parameters_estimate"] > by_name["l1_active_species16_bneck16_h64"]["representation_parameters_estimate"]
+
+
+def test_rtece_stage121_active_frontloaded_sweep_cli_generates_four_rows(tmp_path):
+    import json
+    import subprocess
+    import sys
+
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    train = tmp_path / "train.extxyz"
+    valid = tmp_path / "valid.extxyz"
+    teacher = tmp_path / "teacher.extxyz"
+    dft = tmp_path / "dft.extxyz"
+    for path in (train, valid, teacher, dft):
+        path.write_text("", encoding="utf-8")
+    out = tmp_path / "wrappers"
+    subprocess.run(
+        [
+            sys.executable,
+            str(root / "benchmarks/oc20neb_tace_mace/make_rtece_pareto_sweep.py"),
+            "--output-dir",
+            str(out),
+            "--run-root",
+            str(tmp_path / "runs"),
+            "--train-file",
+            str(train),
+            "--train-valid-file",
+            str(valid),
+            "--dft-valid-file",
+            str(dft),
+            "--teacher-valid-file",
+            str(teacher),
+            "--row-set",
+            "active-frontloaded-stage121",
+        ],
+        check=True,
+        cwd=root,
+    )
+    index = json.loads((out / "rtece_pareto_sweep_index.json").read_text(encoding="utf-8"))
+    assert index["row_set"] == "active-frontloaded-stage121"
+    assert [row["name"] for row in index["rows"]] == [
+        "l1_active_species16_bneck16_h64",
+        "l1_active_species16_bneck32_h64",
+        "l2_active_species16_bneck16_h64",
+        "l2_active_species16_bneck32_h64",
+    ]
+    for row in index["rows"]:
+        text = __import__("pathlib").Path(row["wrapper"]).read_text(encoding="utf-8")
+        assert "DESCRIPTOR_BOTTLENECK_DIM=" in text
+        assert "SPECIES_BASIS_MODE=learnable_embedding" in text
+        assert "--export" not in text
+        assert "--mem" not in text
+        assert "--cpus-per-task" not in text
+
+
 def test_rtece_pareto_sweep_preflight_reports_malformed_extxyz(tmp_path):
     from benchmarks.oc20neb_tace_mace.make_rtece_pareto_sweep import preflight_extxyz_file
 
@@ -7220,6 +7299,7 @@ def test_rtece_lightning_fit_smoke_saves_portable_checkpoint(tmp_path):
         valid_batch_size=1,
         hidden_channels="4",
         num_radial=4,
+        descriptor_bottleneck_dim=3,
         accelerator="cpu",
         devices=1,
         default_dtype="float32",
@@ -7234,6 +7314,7 @@ def test_rtece_lightning_fit_smoke_saves_portable_checkpoint(tmp_path):
     assert summary["best_step"] == 1
     assert summary["batch_size"] == 1
     assert summary["lr_warmup_steps"] == 2
+    assert summary["descriptor_bottleneck_dim"] == 3
     assert summary["best_checkpoint"] == str(output_dir / "rtece_scalar_best.pt")
     assert (output_dir / "rtece_scalar.pt").exists()
     assert (output_dir / "rtece_scalar_best.pt").exists()
@@ -7242,6 +7323,7 @@ def test_rtece_lightning_fit_smoke_saves_portable_checkpoint(tmp_path):
     assert saved_summary["trainer_backend"] == "lightning"
     _model, loaded_config, _metadata = load_checkpoint(output_dir / "rtece_scalar_best.pt", dtype=torch.float32)
     assert loaded_config.variant == "rtece_pair"
+    assert loaded_config.descriptor_bottleneck_dim == 3
 
 
 def test_rtece_lightning_default_logger_setting_survives_multi_epoch_fit(tmp_path, monkeypatch):
