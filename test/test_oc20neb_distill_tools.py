@@ -599,3 +599,70 @@ def test_distill_summary_orders_students_by_throughput_and_keeps_error_axes():
     assert "teacher F MAE" in markdown
     assert "DFT F MAE" in markdown
     assert markdown.index("scalar_fast") < markdown.index("edge_min")
+
+
+def test_apply_extxyz_sample_weights_marks_source_and_force_tail(tmp_path):
+    import ase.io
+    import numpy as np
+    from ase import Atoms
+
+    from benchmarks.oc20neb_tace_mace.apply_extxyz_sample_weights import apply_extxyz_sample_weights
+
+    base = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]])
+    base.info["energy"] = -0.5
+    base.info["rtece_concat_source"] = "base"
+    base.arrays["forces"] = np.ones((2, 3), dtype=float)
+
+    rattle = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.8, 0.0, 0.0]])
+    rattle.info["energy"] = -0.4
+    rattle.info["rtece_concat_source"] = "teacher_rattle"
+    rattle.arrays["forces"] = np.full((2, 3), 3.0, dtype=float)
+
+    inp = tmp_path / "input.extxyz"
+    out = tmp_path / "weighted.extxyz"
+    summary_path = tmp_path / "summary.json"
+    ase.io.write(inp, [base, rattle])
+
+    summary = apply_extxyz_sample_weights(
+        input_path=inp,
+        output_path=out,
+        summary_path=summary_path,
+        source_force_multipliers={"teacher_rattle": 3.0},
+        force_tail_quantile=0.5,
+        force_tail_multiplier=2.0,
+        normalize_force_mean=False,
+    )
+    frames = ase.io.read(out, index=":")
+
+    assert summary["configs"] == 2
+    assert summary["force_tail_threshold_ev_a"] > 0.0
+    assert frames[0].info["energy_weight"] == 1.0
+    assert frames[0].info["forces_weight"] == 1.0
+    assert frames[1].info["energy_weight"] == 1.0
+    assert frames[1].info["forces_weight"] == 6.0
+    assert summary_path.exists()
+
+
+def test_apply_extxyz_sample_weights_preserves_ase_calculator_energy_forces(tmp_path):
+    import ase.io
+    import numpy as np
+    from ase import Atoms
+    from ase.calculators.singlepoint import SinglePointCalculator
+
+    from benchmarks.oc20neb_tace_mace.apply_extxyz_sample_weights import apply_extxyz_sample_weights
+
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]])
+    forces = np.array([[0.1, 0.2, 0.3], [-0.1, -0.2, -0.3]], dtype=float)
+    atoms.calc = SinglePointCalculator(atoms, energy=-1.25, forces=forces)
+    atoms.info["rtece_concat_source"] = "teacher_rattle"
+    inp = tmp_path / "calc_input.extxyz"
+    out = tmp_path / "weighted_calc.extxyz"
+    ase.io.write(inp, [atoms], format="extxyz")
+
+    apply_extxyz_sample_weights(input_path=inp, output_path=out)
+    weighted = ase.io.read(out, index=0, format="extxyz")
+
+    assert weighted.get_potential_energy() == -1.25
+    assert np.allclose(weighted.get_forces(), forces)
+    assert weighted.info["energy_weight"] == 1.0
+    assert weighted.info["forces_weight"] == 1.0

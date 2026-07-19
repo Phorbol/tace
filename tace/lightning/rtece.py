@@ -182,6 +182,34 @@ def atoms_to_graph(
     return graph, energy, forces
 
 
+def _sample_weights(atoms, *, dtype: torch.dtype, device: torch.device | str = "cpu") -> tuple[torch.Tensor, torch.Tensor]:
+    energy_weight = float(atoms.info.get("energy_weight", 1.0))
+    forces_weight = float(atoms.info.get("forces_weight", 1.0))
+    return (
+        torch.tensor([energy_weight], dtype=dtype, device=device),
+        torch.tensor([forces_weight], dtype=dtype, device=device),
+    )
+
+
+def atoms_to_weighted_graph(
+    atoms,
+    *,
+    cutoff: float,
+    device: torch.device | str = "cpu",
+    dtype: torch.dtype = torch.float32,
+    neighborlist_backend: str = "matscipy",
+) -> tuple[RTECEGraph, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    graph, energy, forces = atoms_to_graph(
+        atoms,
+        cutoff=cutoff,
+        device=device,
+        dtype=dtype,
+        neighborlist_backend=neighborlist_backend,
+    )
+    energy_weight, forces_weight = _sample_weights(atoms, dtype=dtype, device=device)
+    return graph, energy, forces, energy_weight, forces_weight
+
+
 def fit_atomic_energies(
     samples: list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]],
     *,
@@ -189,12 +217,13 @@ def fit_atomic_energies(
 ) -> dict[int, float]:
     if not samples:
         raise ValueError("fit_atomic_energies requires at least one sample")
-    elements = sorted({int(z) for graph, _, _ in samples for z in graph.z.detach().cpu().tolist()})
+    elements = sorted({int(z) for sample in samples for z in sample[0].z.detach().cpu().tolist()})
     if not elements:
         raise ValueError("cannot fit atomic energies for zero atoms")
     rows = []
     targets = []
-    for graph, energy, _forces in samples:
+    for sample in samples:
+        graph, energy = sample[:2]
         z_cpu = graph.z.detach().cpu()
         rows.append([float((z_cpu == z).sum().item()) for z in elements])
         targets.append(float(energy.detach().sum().cpu()))
@@ -218,6 +247,7 @@ def load_samples(
     dtype: torch.dtype,
     limit_configs: int | None = None,
     neighborlist_backend: str = "matscipy",
+    include_sample_weights: bool = False,
 ) -> list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]]:
     import ase.io
 
@@ -225,8 +255,9 @@ def load_samples(
     atoms_list = ase.io.read(str(configs), index=index)
     if not isinstance(atoms_list, list):
         atoms_list = [atoms_list]
+    converter = atoms_to_weighted_graph if include_sample_weights else atoms_to_graph
     return [
-        atoms_to_graph(
+        converter(
             atoms,
             cutoff=cutoff,
             device="cpu",
@@ -249,8 +280,17 @@ class RTECEDataset(Dataset):
 
 
 def _collate_rtece_samples(samples):
-    graphs, energies, forces = zip(*samples, strict=True)
-    return collate_graphs(list(graphs)), torch.cat(list(energies), dim=0), torch.cat(list(forces), dim=0)
+    if len(samples[0]) == 3:
+        graphs, energies, forces = zip(*samples, strict=True)
+        return collate_graphs(list(graphs)), torch.cat(list(energies), dim=0), torch.cat(list(forces), dim=0)
+    graphs, energies, forces, energy_weights, force_weights = zip(*samples, strict=True)
+    return (
+        collate_graphs(list(graphs)),
+        torch.cat(list(energies), dim=0),
+        torch.cat(list(forces), dim=0),
+        torch.cat(list(energy_weights), dim=0),
+        torch.cat(list(force_weights), dim=0),
+    )
 
 
 def _graph_to_device(graph: RTECEGraph, device: torch.device) -> RTECEGraph:
@@ -351,10 +391,17 @@ class RTECELightningModule(L.LightningModule):
                 group["lr"] = self.lr * scale
 
     def _shared_step(self, batch, prefix: str):
-        graph, energy, forces = batch
+        if len(batch) == 3:
+            graph, energy, forces = batch
+            energy_sample_weights = None
+            force_sample_weights = None
+        else:
+            graph, energy, forces, energy_sample_weights, force_sample_weights = batch
         graph = _graph_to_device(graph, self.device)
         energy = energy.to(self.device)
         forces = forces.to(self.device)
+        energy_sample_weights = energy_sample_weights.to(self.device) if energy_sample_weights is not None else None
+        force_sample_weights = force_sample_weights.to(self.device) if force_sample_weights is not None else None
         loss = loss_for_batch(
             self.model,
             graph,
@@ -364,6 +411,8 @@ class RTECELightningModule(L.LightningModule):
             force_weight=self.force_weight,
             force_focus_atomic_numbers=self.force_focus_atomic_numbers,
             force_focus_weight=self.force_focus_weight,
+            energy_sample_weights=energy_sample_weights,
+            force_sample_weights=force_sample_weights,
         )
         with torch.enable_grad():
             output = self.model(graph)
@@ -510,6 +559,7 @@ def fit_rtece_lightning(
         dtype=dtype,
         limit_configs=limit_configs,
         neighborlist_backend=neighborlist_backend,
+        include_sample_weights=True,
     )
     if not no_fit_energy_shift:
         config = replace(config, atomic_energies=fit_atomic_energies(train_samples))
@@ -519,6 +569,7 @@ def fit_rtece_lightning(
             dtype=dtype,
             limit_configs=limit_configs,
             neighborlist_backend=neighborlist_backend,
+            include_sample_weights=True,
         )
     valid_samples = load_samples(
         valid_file,
@@ -526,6 +577,7 @@ def fit_rtece_lightning(
         dtype=dtype,
         limit_configs=valid_limit_configs,
         neighborlist_backend=neighborlist_backend,
+        include_sample_weights=True,
     )
     model = RTECEScalarModel(config).to(dtype=dtype)
     datamodule = RTECEDataModule(
@@ -634,6 +686,7 @@ def fit_rtece_lightning(
         "force_weight": float(force_weight),
         "force_focus_atomic_numbers": list(parse_force_focus_elements(force_focus_elements)),
         "force_focus_weight": float(force_focus_weight),
+        "sample_weight_keys": ["energy_weight", "forces_weight"],
         "default_dtype": "float64" if dtype == torch.float64 else "float32",
         "neighborlist_backend": neighborlist_backend,
         "batch_size": int(batch_size),
@@ -659,6 +712,7 @@ __all__ = [
     "RTECEDataset",
     "RTECELightningModule",
     "atoms_to_graph",
+    "atoms_to_weighted_graph",
     "build_training_config",
     "fit_atomic_energies",
     "fit_rtece_lightning",

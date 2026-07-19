@@ -4012,6 +4012,67 @@ def test_loss_for_batch_supports_normalized_force_focus_weighting():
         torch.tensor(0.75, dtype=torch.float64),
     )
 
+def test_loss_for_batch_supports_per_config_sobolev_weights():
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import loss_for_batch
+
+    config = build_rtece_config("rtece_pair")
+    model = RTECEScalarModel(config).double()
+    for param in model.parameters():
+        param.data.zero_()
+    graph = RTECEGraph(
+        z=torch.tensor([1, 1, 1, 1], dtype=torch.long),
+        pos=torch.tensor(
+            [[0.0, 0.0, 0.0], [0.7, 0.0, 0.0], [2.0, 0.0, 0.0], [2.7, 0.0, 0.0]],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(4),
+        batch=torch.tensor([0, 0, 1, 1], dtype=torch.long),
+    )
+    ref_energy = torch.tensor([2.0, 4.0], dtype=torch.float64)
+    ref_forces = torch.tensor(
+        [[1.0, 1.0, 1.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0], [2.0, 2.0, 2.0]],
+        dtype=torch.float64,
+    )
+
+    weighted = loss_for_batch(
+        model,
+        graph,
+        ref_energy,
+        ref_forces,
+        energy_weight=1.0,
+        force_weight=1.0,
+        energy_sample_weights=torch.tensor([1.0, 0.0], dtype=torch.float64),
+        force_sample_weights=torch.tensor([1.0, 0.0], dtype=torch.float64),
+    )
+
+    assert torch.allclose(weighted, torch.tensor(0.625, dtype=torch.float64))
+
+
+def test_lightning_load_samples_reads_extxyz_property_weights(tmp_path):
+    import ase.io
+    from ase import Atoms
+    from tace.lightning.rtece import load_samples
+
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]])
+    atoms.info["energy"] = -0.5
+    atoms.info["energy_weight"] = 2.5
+    atoms.info["forces_weight"] = 3.5
+    atoms.arrays["forces"] = torch.zeros((2, 3), dtype=torch.float64).numpy()
+    path = tmp_path / "weighted.extxyz"
+    ase.io.write(path, [atoms])
+
+    sample = load_samples(
+        path,
+        cutoff=5.0,
+        dtype=torch.float64,
+        include_sample_weights=True,
+    )[0]
+
+    assert len(sample) == 5
+    assert torch.allclose(sample[3], torch.tensor([2.5], dtype=torch.float64))
+    assert torch.allclose(sample[4], torch.tensor([3.5], dtype=torch.float64))
+
+
 def test_rtece_scripts_are_directly_executable():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     for script in (

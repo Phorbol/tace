@@ -119,11 +119,32 @@ def loss_for_batch(
     force_weight: float = 10.0,
     force_focus_atomic_numbers: tuple[int, ...] = (),
     force_focus_weight: float = 1.0,
+    energy_sample_weights: torch.Tensor | None = None,
+    force_sample_weights: torch.Tensor | None = None,
 ) -> torch.Tensor:
     out = model(graph)
     natoms = graph.z.numel()
-    e_loss = ((out["energy"] - ref_energy) / natoms).pow(2).mean()
+    energy_sq = ((out["energy"] - ref_energy) / natoms).pow(2)
+    if energy_sample_weights is not None:
+        weights = energy_sample_weights.to(device=energy_sq.device, dtype=energy_sq.dtype).reshape(-1)
+        if weights.numel() != energy_sq.numel():
+            raise ValueError(
+                "energy_sample_weights must have one value per configuration; "
+                f"got {weights.numel()} weights for {energy_sq.numel()} energies"
+            )
+        energy_sq = energy_sq * weights
+    e_loss = energy_sq.mean()
+
     force_sq = (out["forces"] - ref_forces).pow(2)
+    if force_sample_weights is not None:
+        weights = force_sample_weights.to(device=force_sq.device, dtype=force_sq.dtype).reshape(-1)
+        num_configs = int(ref_energy.numel())
+        if weights.numel() != num_configs:
+            raise ValueError(
+                "force_sample_weights must have one value per configuration; "
+                f"got {weights.numel()} weights for {num_configs} configurations"
+            )
+        force_sq = force_sq * weights[graph.batch.to(device=force_sq.device)].view(-1, 1)
     if force_focus_atomic_numbers and float(force_focus_weight) != 1.0:
         focus_numbers = torch.tensor(tuple(int(z) for z in force_focus_atomic_numbers), dtype=graph.z.dtype, device=graph.z.device)
         focus_mask = (graph.z.view(-1, 1) == focus_numbers.view(1, -1)).any(dim=1)
@@ -149,7 +170,10 @@ def evaluate_loss(
     was_training = model.training
     model.eval()
     losses = []
-    for graph, energy, forces in samples:
+    for sample in samples:
+        graph, energy, forces = sample[:3]
+        energy_sample_weights = sample[3] if len(sample) > 3 else None
+        force_sample_weights = sample[4] if len(sample) > 4 else None
         losses.append(
             float(
                 loss_for_batch(
@@ -161,6 +185,8 @@ def evaluate_loss(
                     force_weight=force_weight,
                     force_focus_atomic_numbers=force_focus_atomic_numbers,
                     force_focus_weight=force_focus_weight,
+                    energy_sample_weights=energy_sample_weights,
+                    force_sample_weights=force_sample_weights,
                 )
                 .detach()
                 .cpu()
@@ -198,7 +224,10 @@ def train_steps(
     best_valid_loss: float | None = None
     best_step: int | None = None
     for step in range(max_steps):
-        graph, energy, forces = samples[step % len(samples)]
+        sample = samples[step % len(samples)]
+        graph, energy, forces = sample[:3]
+        energy_sample_weights = sample[3] if len(sample) > 3 else None
+        force_sample_weights = sample[4] if len(sample) > 4 else None
         opt.zero_grad(set_to_none=True)
         loss = loss_for_batch(
             model,
@@ -209,6 +238,8 @@ def train_steps(
             force_weight=force_weight,
             force_focus_atomic_numbers=force_focus_atomic_numbers,
             force_focus_weight=force_focus_weight,
+            energy_sample_weights=energy_sample_weights,
+            force_sample_weights=force_sample_weights,
         )
         loss.backward()
         opt.step()
