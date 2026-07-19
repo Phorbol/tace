@@ -1,0 +1,14 @@
+{
+  "atoms": 25600,
+  "configs": 512,
+  "copies_per_config": 16,
+  "input": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "max_initial_rmsd_a": 0.1010813568373906,
+  "mean_initial_rmsd_a": 0.08563238034292886,
+  "output": "runs/oc20neb_tace_mace/rtece-stage132-broad-teacher-distill/rattled_valid_start0_limit32_copies16_std0p05.extxyz",
+  "rattle_std_a": 0.05,
+  "schema_version": "rtece_rattle_distill_configs.v1",
+  "seed": 20260720,
+  "source_configs": 32,
+  "start_config": 0
+}
