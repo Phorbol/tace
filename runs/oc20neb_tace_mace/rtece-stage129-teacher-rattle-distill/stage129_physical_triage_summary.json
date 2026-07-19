@@ -1,0 +1,68 @@
+{
+  "schema_version": "rtece_stage129_physical_triage_results.v1",
+  "stage": "stage129_physical_triage",
+  "source_commit": "26b47da",
+  "jobs": [
+    {"job": "685077", "row": "l1_active_nrad12_species20_radial_species8_cross3_h64", "state": "COMPLETED", "exit_code": "0:0", "elapsed": "00:00:07"},
+    {"job": "685078", "row": "l1_active_nrad12_species24_radial_species8_cross3_h64", "state": "COMPLETED", "exit_code": "0:0", "elapsed": "00:00:07"}
+  ],
+  "design_basis": "Run the same stage128 dimer and C/N rattle-relax physical triage on stage129 teacher-rattle-distilled checkpoints.",
+  "rows": [
+    {
+      "variant": "l1_active_nrad12_species20_radial_species8_cross3_h64",
+      "physical_gate_pass": false,
+      "benchmark_gate_pass": true,
+      "dimer_gate_pass": true,
+      "rattle_gate_pass": false,
+      "physical_score": 17.978251684085947,
+      "dft_e_rmse_mev_atom": 300.09863512727975,
+      "dft_f_rmse_mev_a": 107.65330217564119,
+      "dft_f_max_abs_mev_a": 2387.489919840393,
+      "atoms_per_second": 1294809.3552203304,
+      "rattle_max_fmax_ev_a": 14.021965570688206,
+      "cn_rattle_final_rmsd_a": 0.10701215130648933,
+      "dimer_short_repulsive_fraction": 1.0,
+      "dimer_energy_shape_penalty": 0.0,
+      "stage128_baseline": {
+        "physical_score": 14.580175829760378,
+        "rattle_max_fmax_ev_a": 10.809250600077226,
+        "cn_rattle_final_rmsd_a": 0.106577806224699
+      },
+      "delta_vs_stage128": {
+        "physical_score": 3.398075854325569,
+        "rattle_max_fmax_ev_a": 3.21271497061098,
+        "cn_rattle_final_rmsd_a": 0.00043434508179032896
+      }
+    },
+    {
+      "variant": "l1_active_nrad12_species24_radial_species8_cross3_h64",
+      "physical_gate_pass": false,
+      "benchmark_gate_pass": false,
+      "dimer_gate_pass": true,
+      "rattle_gate_pass": false,
+      "physical_score": 14.77780718216924,
+      "dft_e_rmse_mev_atom": 273.84908615733866,
+      "dft_f_rmse_mev_a": 101.55723315362863,
+      "dft_f_max_abs_mev_a": 2697.5326525891114,
+      "atoms_per_second": 1224417.991969455,
+      "rattle_max_fmax_ev_a": 10.836421033762411,
+      "cn_rattle_final_rmsd_a": 0.11689447876796404,
+      "dimer_short_repulsive_fraction": 1.0,
+      "dimer_energy_shape_penalty": 0.0,
+      "stage128_baseline": {
+        "physical_score": 13.89673285035594,
+        "rattle_max_fmax_ev_a": 9.971018169531042,
+        "cn_rattle_final_rmsd_a": 0.11150649148049341
+      },
+      "delta_vs_stage128": {
+        "physical_score": 0.8810743318133005,
+        "rattle_max_fmax_ev_a": 0.8654028642313688,
+        "cn_rattle_final_rmsd_a": 0.005387987287470627
+      }
+    }
+  ],
+  "interpretation": {
+    "result": "The 128-config teacher-rattle augmentation does not repair the physical rattle failure. Dimer behavior remains smooth/repulsive, but C/N rattle force maxima worsen for both fixed architectures.",
+    "algorithmic_implication": "The next route should not spend more time on this tiny local fake-label patch. More plausible TECE-consistent directions are broader teacher trajectory coverage, force/Jacobian-weighted distillation, or front-loaded trainable representation changes that reduce the high-force tail without element-specific overfitting."
+  }
+}
