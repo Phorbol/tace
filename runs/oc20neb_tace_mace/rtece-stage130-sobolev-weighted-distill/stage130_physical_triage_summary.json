@@ -1,0 +1,68 @@
+{
+  "interpretation": {
+    "priority_update": "Do not spend the next iteration on more weighting-only tuning. Use this as evidence to move back toward TECE representation/projection changes or broader teacher trajectory/Jacobian distillation.",
+    "result": "Sobolev weighting does not rescue the physical gate. Both rows fail physical_gate_pass. Species24 remains the better physical candidate, but its C_or_N max fmax is worse than stage129 while RMSD improves."
+  },
+  "jobs": [
+    {
+      "elapsed": "00:00:12",
+      "exit_code": "0:0",
+      "job": "685091",
+      "row": "l1_active_nrad12_species24_radial_species8_cross3_h64",
+      "state": "COMPLETED"
+    },
+    {
+      "elapsed": "00:00:11",
+      "exit_code": "0:0",
+      "job": "685092",
+      "row": "l1_active_nrad12_species20_radial_species8_cross3_h64",
+      "state": "COMPLETED"
+    }
+  ],
+  "rows": [
+    {
+      "atoms_per_second": 1280703.4546763625,
+      "benchmark_gate_pass": true,
+      "cn_max_final_rmsd_a": 0.17518061289755418,
+      "cn_max_fmax_ev_a": 16.39318372907542,
+      "cn_mean_final_rmsd_a": 0.11856523994022787,
+      "delta_vs_stage129": {
+        "cn_max_final_rmsd_a": 0.04582495811276871,
+        "cn_max_fmax_ev_a": 2.371218158387215,
+        "cn_mean_final_rmsd_a": 0.011553088633738537
+      },
+      "dft_e_rmse_mev_atom": 293.6374521451154,
+      "dft_f_max_abs_mev_a": 2396.761422335205,
+      "dft_f_rmse_mev_a": 119.02902503333723,
+      "dimer_gate_pass": true,
+      "dimer_short_repulsive_fraction": 1.0,
+      "physical_gate_pass": false,
+      "physical_score": 20.42006699606925,
+      "rattle_gate_pass": false,
+      "variant": "l1_active_nrad12_species20_radial_species8_cross3_h64"
+    },
+    {
+      "atoms_per_second": 1222159.380417995,
+      "benchmark_gate_pass": false,
+      "cn_max_final_rmsd_a": 0.14412335631246578,
+      "cn_max_fmax_ev_a": 11.958355730719552,
+      "cn_mean_final_rmsd_a": 0.10704548488691698,
+      "delta_vs_stage129": {
+        "cn_max_final_rmsd_a": -0.02632938862929632,
+        "cn_max_fmax_ev_a": 1.1219346969571404,
+        "cn_mean_final_rmsd_a": -0.009848993881047055
+      },
+      "dft_e_rmse_mev_atom": 305.02623461674074,
+      "dft_f_max_abs_mev_a": 2300.4894244396974,
+      "dft_f_rmse_mev_a": 120.17230731083716,
+      "dimer_gate_pass": true,
+      "dimer_short_repulsive_fraction": 1.0,
+      "physical_gate_pass": false,
+      "physical_score": 16.16451242319153,
+      "rattle_gate_pass": false,
+      "variant": "l1_active_nrad12_species24_radial_species8_cross3_h64"
+    }
+  ],
+  "schema_version": "rtece_stage130_physical_triage_summary.v1",
+  "stage": "stage130_physical_triage"
+}
