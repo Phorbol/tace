@@ -6995,6 +6995,71 @@ def test_rtece_stage121_active_frontloaded_rows_keep_active_atomic_paths_and_mov
     assert by_name["l2_active_species16_bneck16_h64"]["representation_parameters_estimate"] > by_name["l1_active_species16_bneck16_h64"]["representation_parameters_estimate"]
 
 
+
+def test_rtece_stage132_broad_teacher_distill_manifest_materializes_no_export_wrappers(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage132_broad_teacher_distill import (
+        audit_stage132_manifest,
+        make_stage132_manifest,
+        materialize_stage132,
+    )
+
+    payload = make_stage132_manifest(
+        output_root=tmp_path / "stage132",
+        base_train="base.extxyz",
+        source_configs="source.extxyz",
+        teacher_model="teacher.ckpt",
+        train_valid_file="train_valid.extxyz",
+        dft_valid_file="dft_valid.extxyz",
+        teacher_valid_file="teacher_valid.extxyz",
+        source_start_config=0,
+        source_limit_configs=32,
+        copies_per_config=16,
+        base_limit_configs=2048,
+        valid_limit_configs=256,
+        bench_limit_configs=1024,
+        max_steps=20000,
+        lr_warmup_steps=500,
+        early_stopping_patience=400,
+    )
+
+    assert payload["schema_version"] == "rtece_stage132_broad_teacher_distill.v1"
+    assert payload["stage"] == "stage132_broad_teacher_distill_projection_check"
+    assert payload["distillation_semantics"] == "broader_teacher_fake_labels_on_deployment_rattle_window"
+    assert payload["source_start_config"] == 0
+    assert payload["source_limit_configs"] == 32
+    assert payload["copies_per_config"] == 16
+    assert payload["augmented_limit_configs"] == 2560
+    assert payload["row_set"] == "stage132-broad-teacher-distill"
+    assert [row["variant"] for row in payload["rows"]] == [
+        "l1_active_nrad12_species24_radial_species8_cross3_h64",
+        "l1_active_species24_cavity_vec_residual_h64",
+    ]
+    assert "projection error" in payload["comparison_question"]
+    assert "distillation error" in payload["comparison_question"]
+
+    audit = audit_stage132_manifest(payload)
+    assert audit["contract_pass"] is True
+    assert audit["failed_checks"] == []
+
+    materialized = materialize_stage132(payload)
+    assert len(materialized["train_wrappers"]) == 2
+    for wrapper in materialized["train_wrappers"]:
+        text = Path(wrapper).read_text()
+        assert "--export" not in text
+        assert "--mem" not in text
+        assert "--cpus-per-task" not in text
+        assert "MAX_STEPS=20000" in text
+        assert "LR_WARMUP_STEPS=500" in text
+        assert "EARLY_STOPPING_PATIENCE=400" in text
+        assert "TRAIN_FILE=" in text
+        assert "augmented_train_base2048_plus_teacher_rattle512.extxyz" in text
+    wrapper_text = "\\n".join(Path(wrapper).read_text() for wrapper in materialized["train_wrappers"])
+    assert "edge.cavity.vector_dot" in wrapper_text
+    assert "edge.cavity.quadrupole_frobenius" not in wrapper_text
+
+
 def test_rtece_stage128_physical_triage_writes_no_export_wrappers(tmp_path):
     from pathlib import Path
 
