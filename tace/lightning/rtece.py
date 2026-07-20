@@ -210,6 +210,15 @@ def atoms_to_weighted_graph(
     return graph, energy, forces, energy_weight, forces_weight
 
 
+def _energy_fit_weight(sample: tuple) -> float:
+    if len(sample) <= 3:
+        return 1.0
+    weight = float(sample[3].detach().reshape(-1)[0].cpu())
+    if not np.isfinite(weight) or weight < 0.0:
+        raise ValueError(f"energy sample weights must be finite and non-negative, got {weight}")
+    return weight
+
+
 def fit_atomic_energies(
     samples: list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]],
     *,
@@ -222,21 +231,28 @@ def fit_atomic_energies(
         raise ValueError("cannot fit atomic energies for zero atoms")
     rows = []
     targets = []
+    weights = []
     for sample in samples:
         graph, energy = sample[:2]
         z_cpu = graph.z.detach().cpu()
         rows.append([float((z_cpu == z).sum().item()) for z in elements])
         targets.append(float(energy.detach().sum().cpu()))
+        weights.append(_energy_fit_weight(sample))
     design = np.asarray(rows, dtype=np.float64)
     target = np.asarray(targets, dtype=np.float64)
-    lhs = design.T @ design
+    sample_weights = np.asarray(weights, dtype=np.float64)
+    if float(sample_weights.sum()) <= 0.0:
+        raise ValueError("cannot fit atomic energies with zero total energy sample weight")
+    weighted_design = design * sample_weights[:, None]
+    lhs = design.T @ weighted_design
     if ridge > 0.0:
         lhs = lhs + float(ridge) * np.eye(lhs.shape[0], dtype=np.float64)
-    rhs = design.T @ target
+    rhs = design.T @ (sample_weights * target)
     try:
         values = np.linalg.solve(lhs, rhs)
     except np.linalg.LinAlgError:
-        values = np.linalg.lstsq(design, target, rcond=None)[0]
+        sqrt_w = np.sqrt(sample_weights)
+        values = np.linalg.lstsq(design * sqrt_w[:, None], target * sqrt_w, rcond=None)[0]
     return {int(z): float(value) for z, value in zip(elements, values, strict=True)}
 
 

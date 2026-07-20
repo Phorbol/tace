@@ -203,6 +203,15 @@ def fit_energy_per_atom_shift(
     return total_energy / float(total_atoms)
 
 
+def _energy_fit_weight(sample: tuple) -> float:
+    if len(sample) <= 3:
+        return 1.0
+    weight = float(sample[3].detach().reshape(-1)[0].cpu())
+    if not np.isfinite(weight) or weight < 0.0:
+        raise ValueError(f"energy sample weights must be finite and non-negative, got {weight}")
+    return weight
+
+
 def fit_atomic_energies(
     samples: list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]],
     *,
@@ -210,26 +219,34 @@ def fit_atomic_energies(
 ) -> dict[int, float]:
     if not samples:
         raise ValueError("fit_atomic_energies requires at least one sample")
-    elements = sorted({int(z) for graph, _, _ in samples for z in graph.z.detach().cpu().tolist()})
+    elements = sorted({int(z) for sample in samples for z in sample[0].z.detach().cpu().tolist()})
     if not elements:
         raise ValueError("cannot fit atomic energies for zero atoms")
     rows = []
     targets = []
-    for graph, energy, _ in samples:
+    weights = []
+    for sample in samples:
+        graph, energy = sample[:2]
         z_cpu = graph.z.detach().cpu()
         rows.append([float((z_cpu == z).sum().item()) for z in elements])
         targets.append(float(energy.detach().sum().cpu()))
+        weights.append(_energy_fit_weight(sample))
     design = np.asarray(rows, dtype=np.float64)
     target = np.asarray(targets, dtype=np.float64)
-    lhs = design.T @ design
+    sample_weights = np.asarray(weights, dtype=np.float64)
+    if float(sample_weights.sum()) <= 0.0:
+        raise ValueError("cannot fit atomic energies with zero total energy sample weight")
+    weighted_design = design * sample_weights[:, None]
+    lhs = design.T @ weighted_design
     if ridge > 0.0:
         lhs = lhs + float(ridge) * np.eye(lhs.shape[0], dtype=np.float64)
-    rhs = design.T @ target
+    rhs = design.T @ (sample_weights * target)
     try:
         values = np.linalg.solve(lhs, rhs)
     except np.linalg.LinAlgError:
-        values = np.linalg.lstsq(design, target, rcond=None)[0]
-    return {int(z): float(v) for z, v in zip(elements, values, strict=True)}
+        sqrt_w = np.sqrt(sample_weights)
+        values = np.linalg.lstsq(design * sqrt_w[:, None], target * sqrt_w, rcond=None)[0]
+    return {int(z): float(value) for z, value in zip(elements, values, strict=True)}
 
 
 

@@ -77,6 +77,43 @@ def test_rtece_triton_kernels_have_formal_tace_models_entrypoint():
     assert core_kernels.direct_radius_counted_edges_triton is benchmark_kernels.direct_radius_counted_edges_triton
 
 
+
+def test_fit_atomic_energies_respects_energy_sample_weights():
+    from tace.lightning.rtece import fit_atomic_energies
+
+    graph_a = RTECEGraph(
+        z=torch.tensor([1], dtype=torch.long),
+        pos=torch.zeros((1, 3), dtype=torch.float64),
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=torch.zeros(1, dtype=torch.long),
+    )
+    graph_b = RTECEGraph(
+        z=torch.tensor([1], dtype=torch.long),
+        pos=torch.zeros((1, 3), dtype=torch.float64),
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=torch.zeros(1, dtype=torch.long),
+    )
+    samples = [
+        (
+            graph_a,
+            torch.tensor([2.0], dtype=torch.float64),
+            torch.zeros((1, 3), dtype=torch.float64),
+            torch.tensor([1.0], dtype=torch.float64),
+            torch.tensor([1.0], dtype=torch.float64),
+        ),
+        (
+            graph_b,
+            torch.tensor([100.0], dtype=torch.float64),
+            torch.zeros((1, 3), dtype=torch.float64),
+            torch.tensor([0.0], dtype=torch.float64),
+            torch.tensor([1.0], dtype=torch.float64),
+        ),
+    ]
+
+    atomic_energies = fit_atomic_energies(samples)
+
+    assert atomic_energies[1] == pytest.approx(2.0)
+
 def test_rtece_route_contract_classifies_semantic_and_runtime_degradation():
     pair = rtece_route_contract(
         RTECEScalarConfig(variant="rtece_pair"),
