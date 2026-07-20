@@ -1,0 +1,72 @@
+{
+  "review_basis": [
+    "TECE_design_space: angular bandwidth / radial rank / sparse scalar path density",
+    "rTECE_review: cavity relational paths, E0/ZBL physical prior, production training/inference"
+  ],
+  "row_set": "stage133-teacher-relax-distill",
+  "rows": [
+    {
+      "atomic_cross_radial_projection": "learnable",
+      "atomic_cross_radial_sketch_channels": 3,
+      "capacity_allocation": "local_cross_species_active_set_around_stage126_winner",
+      "descriptor_bottleneck_dim": 0,
+      "descriptor_conditioner": "none",
+      "descriptor_conditioner_hidden_channels": 0,
+      "distillation_test_role": "fixed stage129/stage132 atomic Pareto backbone; only teacher PES relaxation trajectory coverage changes",
+      "hidden_channels": "64,64",
+      "learnable_radial_mixing": true,
+      "moment_l_max": 1,
+      "name": "l1_active_nrad12_species24_radial_species8_cross3_h64",
+      "num_parameters_estimate": 28925,
+      "num_radial": 12,
+      "radial_edge_sketch_channels": 0,
+      "radial_species_adapter_channels": 8,
+      "radial_species_adapter_scope": "all",
+      "readout_parameters_estimate": 24513,
+      "representation_parameters_estimate": 4412,
+      "review_basis": "Stage126 found that nrad12/species24/radial_species8/cross3 is the local RMSE front, and that increasing the radial-species adapter rank is not useful. Stage127 therefore keeps the L1 active atomic path set, fixed 64,64 scalar head, no edge paths, nrad12, and adapter8, then sweeps only the cross-radial invariant rank and one smaller species rank. This is a controlled TECE active-set/downfolding test of which front representation coordinates should remain on the Pareto frontier rather than an unconstrained MLP capacity increase.",
+      "sbatch_command": [
+        "sbatch",
+        "runs/oc20neb_tace_mace/rtece-stage133-teacher-relax-distill/teacher_relax_wrappers/l1_active_nrad12_species24_radial_species8_cross3_h64/rtece_scalar_matrix_no_export.sbatch"
+      ],
+      "scalar_path_ids": "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot",
+      "short_range_repulsion_potential": "zbl",
+      "species_basis_channels": 24,
+      "species_basis_mode": "learnable_embedding",
+      "stage125_source": "runs/oc20neb_tace_mace/rtece-stage125-front-capacity-ladder/stage125_interpretation.md",
+      "stage126_source": "runs/oc20neb_tace_mace/rtece-stage126-rank-neighborhood/stage126_interpretation.md",
+      "stage128_source": "runs/oc20neb_tace_mace/rtece-stage128-physical-triage/stage128_interpretation.md",
+      "stage133_source_basis": "Stage132 broad single-point teacher-rattle labels reduced some force-tail indicators but worsened RMSE and did not close the rattle-relax physical gate. Stage133 therefore moves from independent fake labels to short teacher LBFGS trajectories on the same broad deployment window, testing distillation-error and deployment-manifold coverage before adding edge/Lmax representation axes.",
+      "stage_basis": "stage133_teacher_relax_trajectory_distill",
+      "tece_axes": [
+        "angular_bandwidth_l_max",
+        "scalar_path_density",
+        "radial_rank",
+        "scalar_head_capacity",
+        "trainable_feature_extractor",
+        "trainable_edge_species_radial_basis",
+        "trainable_species_basis",
+        "short_range_physical_prior",
+        "stage127_local_cross_species",
+        "stage126_rank_neighborhood_winner",
+        "stage125_front_capacity_anchor",
+        "stage114_ef_active_selection",
+        "hardware_cost_conditioned_active_set",
+        "rank_neighborhood_downfolding",
+        "low_rank_neighbor_species_basis",
+        "cross_radial_invariants",
+        "trainable_cross_radial_projection",
+        "stage133_teacher_relax_trajectory_distillation",
+        "teacher_pes_deployment_manifold",
+        "projection_error_vs_distillation_error_check",
+        "fixed_atomic_architecture_distillation_ablation"
+      ],
+      "train_variant": "l1_active_nrad12_species24_radial_species8_cross3_h64",
+      "use_short_range_repulsion": true,
+      "variant": "l1_active_nrad12_species24_radial_species8_cross3_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage133-teacher-relax-distill/teacher_relax_wrappers/l1_active_nrad12_species24_radial_species8_cross3_h64/rtece_scalar_matrix_no_export.sbatch"
+    }
+  ],
+  "run_root": "runs/oc20neb_tace_mace/rtece-stage133-teacher-relax-distill/teacher_relax_runs",
+  "schema_version": "rtece_pareto_sweep.v1"
+}

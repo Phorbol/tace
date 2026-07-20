@@ -1,0 +1,29 @@
+{
+  "checked": {
+    "copies_per_config": 2,
+    "relax_max_steps": 4,
+    "row_set": "stage133-teacher-relax-distill",
+    "source_limit_configs": 32,
+    "source_start_config": 0,
+    "trajectory_frame_count": 320,
+    "variants": [
+      "l1_active_nrad12_species24_radial_species8_cross3_h64"
+    ]
+  },
+  "checks": {
+    "augmented_limit_configs": true,
+    "base_subset_before_trajectory": true,
+    "broad_window": true,
+    "distillation_semantics": true,
+    "no_forbidden_sbatch_flags": true,
+    "schema_version": true,
+    "single_fixed_atomic_row": true,
+    "stage": true,
+    "training_contract": true,
+    "trajectory_count": true,
+    "uses_teacher_relax_generator": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "schema_version": "rtece_stage133_manifest_audit.v1"
+}

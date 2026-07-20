@@ -7060,6 +7060,120 @@ def test_rtece_stage132_broad_teacher_distill_manifest_materializes_no_export_wr
     assert "edge.cavity.quadrupole_frobenius" not in wrapper_text
 
 
+def test_rtece_stage133_teacher_relax_distill_manifest_materializes_single_atomic_no_export_row(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage133_teacher_relax_distill import (
+        audit_stage133_manifest,
+        make_stage133_manifest,
+        materialize_stage133,
+    )
+
+    payload = make_stage133_manifest(
+        output_root=tmp_path / "stage133",
+        base_train="base.extxyz",
+        source_configs="source.extxyz",
+        teacher_model="teacher.ckpt",
+        train_valid_file="train_valid.extxyz",
+        dft_valid_file="dft_valid.extxyz",
+        teacher_valid_file="teacher_valid.extxyz",
+        source_start_config=0,
+        source_limit_configs=32,
+        copies_per_config=2,
+        relax_max_steps=4,
+        base_limit_configs=2048,
+        valid_limit_configs=256,
+        bench_limit_configs=1024,
+        max_steps=20000,
+        lr_warmup_steps=500,
+        early_stopping_patience=400,
+    )
+
+    assert payload["schema_version"] == "rtece_stage133_teacher_relax_distill.v1"
+    assert payload["stage"] == "stage133_teacher_relax_trajectory_distill"
+    assert payload["distillation_semantics"] == "teacher_energy_force_labels_on_teacher_lbfgs_relaxation_trajectory"
+    assert payload["trajectory_frame_count"] == 320
+    assert payload["augmented_limit_configs"] == 2368
+    assert payload["row_set"] == "stage133-teacher-relax-distill"
+    assert [row["variant"] for row in payload["rows"]] == [
+        "l1_active_nrad12_species24_radial_species8_cross3_h64",
+    ]
+    assert "projection error" in payload["comparison_question"]
+    assert "distillation error" in payload["comparison_question"]
+    assert "teacher PES relaxation manifold" in payload["comparison_question"]
+
+    audit = audit_stage133_manifest(payload)
+    assert audit["contract_pass"] is True
+    assert audit["failed_checks"] == []
+
+    materialized = materialize_stage133(payload)
+    assert len(materialized["train_wrappers"]) == 1
+    train_text = Path(materialized["train_wrappers"][0]).read_text()
+    prep_text = Path(materialized["artifacts"]["prep_wrapper"]).read_text()
+    combined = prep_text + "\n" + train_text
+    assert "--export" not in combined
+    assert "--mem" not in combined
+    assert "--cpus-per-task" not in combined
+    assert "make_teacher_relax_distill_configs.py" in prep_text
+    assert "RELAX_MAX_STEPS" in prep_text
+    assert "teacher_relax_valid_start0_limit32_copies2_std0p05_steps4.extxyz" in prep_text
+    assert "MAX_STEPS=20000" in train_text
+    assert "LR_WARMUP_STEPS=500" in train_text
+    assert "EARLY_STOPPING_PATIENCE=400" in train_text
+    assert "augmented_train_base2048_plus_teacher_relax320.extxyz" in train_text
+    assert "edge.cavity.vector_dot" not in train_text
+
+
+def test_teacher_relax_distill_configs_records_fixed_length_trajectory_with_teacher_labels():
+    from ase import Atoms
+    from ase.calculators.calculator import Calculator, all_changes
+    import numpy as np
+
+    from benchmarks.oc20neb_tace_mace.make_teacher_relax_distill_configs import (
+        make_teacher_relax_distill_configs,
+    )
+
+    class HarmonicCalculator(Calculator):
+        implemented_properties = ["energy", "forces", "free_energy"]
+
+        def calculate(self, atoms=None, properties=None, system_changes=all_changes):
+            super().calculate(atoms, properties, system_changes)
+            pos = atoms.get_positions()
+            energy = float(0.5 * np.sum(pos * pos))
+            self.results["energy"] = energy
+            self.results["free_energy"] = energy
+            self.results["forces"] = -pos
+
+    atoms = Atoms("CH", positions=[[0.2, 0.0, 0.0], [0.0, 0.3, 0.0]], cell=[8, 8, 8], pbc=True)
+    atoms.info["energy"] = 123.0
+    atoms.arrays["forces"] = np.ones((2, 3))
+
+    frames, summary = make_teacher_relax_distill_configs(
+        [atoms],
+        calculator=HarmonicCalculator(),
+        source_start_config=7,
+        copies_per_config=2,
+        rattle_std_a=0.01,
+        seed=13,
+        relax_max_steps=3,
+        reference_prefix="source_",
+    )
+
+    assert len(frames) == 8
+    assert summary["configs"] == 8
+    assert summary["atoms"] == 16
+    assert summary["source_configs"] == 1
+    assert summary["copies_per_config"] == 2
+    assert summary["relax_max_steps"] == 3
+    assert {frame.info["teacher_relax_step"] for frame in frames} == {0, 1, 2, 3}
+    assert {frame.info["teacher_relax_source_config_index"] for frame in frames} == {7}
+    assert {frame.info["teacher_relax_copy_index"] for frame in frames} == {0, 1}
+    assert all("energy" in frame.info for frame in frames)
+    assert all("forces" in frame.arrays for frame in frames)
+    assert all("source_energy" in frame.info for frame in frames)
+    assert all("source_forces" in frame.arrays for frame in frames)
+
+
 def test_rtece_stage128_physical_triage_writes_no_export_wrappers(tmp_path):
     from pathlib import Path
 
