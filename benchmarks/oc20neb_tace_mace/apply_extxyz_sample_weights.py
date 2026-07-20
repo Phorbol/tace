@@ -69,16 +69,19 @@ def apply_extxyz_sample_weights(
     output_path: str | Path,
     summary_path: str | Path | None = None,
     source_force_multipliers: Mapping[str, float] | None = None,
+    source_energy_multipliers: Mapping[str, float] | None = None,
     force_tail_quantile: float | None = None,
     force_tail_multiplier: float = 1.0,
     normalize_force_mean: bool = True,
+    normalize_energy_mean: bool = False,
     energy_weight: float = 1.0,
 ) -> dict:
     """Write ``energy_weight`` and ``forces_weight`` info fields to every frame.
 
-    ``rtece_concat_source`` labels can receive source-specific force multipliers.
-    A force-tail multiplier can also be applied to configurations whose maximum
-    atomic force norm is at or above the requested dataset quantile.
+    ``rtece_concat_source`` labels can receive source-specific energy and force
+    multipliers. A force-tail multiplier can also be applied to configurations
+    whose maximum atomic force norm is at or above the requested dataset
+    quantile.
     """
     import ase.io
 
@@ -95,9 +98,13 @@ def apply_extxyz_sample_weights(
         raise ValueError("force_tail_quantile must be in [0, 1]")
 
     source_multipliers = {str(k): float(v) for k, v in dict(source_force_multipliers or {}).items()}
+    source_energy = {str(k): float(v) for k, v in dict(source_energy_multipliers or {}).items()}
     for label, multiplier in source_multipliers.items():
         if multiplier < 0.0:
-            raise ValueError(f"source multiplier for {label!r} must be non-negative")
+            raise ValueError(f"source force multiplier for {label!r} must be non-negative")
+    for label, multiplier in source_energy.items():
+        if multiplier < 0.0:
+            raise ValueError(f"source energy multiplier for {label!r} must be non-negative")
 
     max_force_norms = np.asarray(
         [float(np.linalg.norm(_forces_array(atoms, index=i), axis=1).max()) for i, atoms in enumerate(frames)],
@@ -110,6 +117,7 @@ def apply_extxyz_sample_weights(
         tail_mask = max_force_norms >= tail_threshold
 
     raw_force_weights = np.ones(len(frames), dtype=np.float64)
+    raw_energy_weights = np.full(len(frames), float(energy_weight), dtype=np.float64)
     source_counts: dict[str, int] = {}
     for i, atoms in enumerate(frames):
         source = str(atoms.info.get("rtece_concat_source", ""))
@@ -117,11 +125,13 @@ def apply_extxyz_sample_weights(
             source_counts[source] = source_counts.get(source, 0) + 1
         if source in source_multipliers:
             raw_force_weights[i] *= source_multipliers[source]
+        if source in source_energy:
+            raw_energy_weights[i] *= source_energy[source]
         if tail_mask[i]:
             raw_force_weights[i] *= float(force_tail_multiplier)
 
     force_weights = _normalize_to_mean_one(raw_force_weights) if normalize_force_mean else raw_force_weights
-    energy_weights = np.full(len(frames), float(energy_weight), dtype=np.float64)
+    energy_weights = _normalize_to_mean_one(raw_energy_weights) if normalize_energy_mean else raw_energy_weights
 
     weighted_frames = []
     for index, (atoms, e_weight, f_weight, max_force) in enumerate(
@@ -147,6 +157,12 @@ def apply_extxyz_sample_weights(
         "configs": int(len(weighted_frames)),
         "atoms": int(sum(len(atoms) for atoms in weighted_frames)),
         "energy_weight": float(energy_weight),
+        "normalize_energy_mean": bool(normalize_energy_mean),
+        "source_energy_multipliers": source_energy,
+        "raw_energy_weight_mean": float(np.mean(raw_energy_weights)),
+        "energy_weight_mean": float(np.mean(energy_weights)),
+        "energy_weight_min": float(np.min(energy_weights)),
+        "energy_weight_max": float(np.max(energy_weights)),
         "force_tail_quantile": None if force_tail_quantile is None else float(force_tail_quantile),
         "force_tail_threshold_ev_a": tail_threshold,
         "force_tail_multiplier": float(force_tail_multiplier),
@@ -173,10 +189,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--input", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--summary", type=Path)
-    parser.add_argument("--source-force-multiplier", action="append", default=[], help="Source multiplier as label:value; can be repeated.")
+    parser.add_argument("--source-force-multiplier", action="append", default=[], help="Source force multiplier as label:value; can be repeated.")
+    parser.add_argument("--source-energy-multiplier", action="append", default=[], help="Source energy multiplier as label:value; can be repeated.")
     parser.add_argument("--force-tail-quantile", type=float, default=None)
     parser.add_argument("--force-tail-multiplier", type=float, default=1.0)
     parser.add_argument("--no-normalize-force-mean", action="store_true")
+    parser.add_argument("--normalize-energy-mean", action="store_true")
     parser.add_argument("--energy-weight", type=float, default=1.0)
     return parser.parse_args()
 
@@ -184,14 +202,17 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
     multipliers = dict(_parse_multiplier(value) for value in args.source_force_multiplier)
+    energy_multipliers = dict(_parse_multiplier(value) for value in args.source_energy_multiplier)
     summary = apply_extxyz_sample_weights(
         input_path=args.input,
         output_path=args.output,
         summary_path=args.summary,
         source_force_multipliers=multipliers,
+        source_energy_multipliers=energy_multipliers,
         force_tail_quantile=args.force_tail_quantile,
         force_tail_multiplier=args.force_tail_multiplier,
         normalize_force_mean=not args.no_normalize_force_mean,
+        normalize_energy_mean=bool(args.normalize_energy_mean),
         energy_weight=args.energy_weight,
     )
     print(json.dumps(summary, indent=2, sort_keys=True))

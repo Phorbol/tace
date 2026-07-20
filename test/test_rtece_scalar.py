@@ -4073,6 +4073,48 @@ def test_lightning_load_samples_reads_extxyz_property_weights(tmp_path):
     assert torch.allclose(sample[4], torch.tensor([3.5], dtype=torch.float64))
 
 
+def test_apply_extxyz_sample_weights_supports_source_energy_and_force_multipliers(tmp_path):
+    import ase.io
+    from ase import Atoms
+    import numpy as np
+
+    from benchmarks.oc20neb_tace_mace.apply_extxyz_sample_weights import apply_extxyz_sample_weights
+
+    base = Atoms("H", positions=[[0.0, 0.0, 0.0]])
+    base.info["energy"] = -1.0
+    base.info["rtece_concat_source"] = "base_mixed_train_tw0p75"
+    base.arrays["forces"] = np.zeros((1, 3))
+    teacher = Atoms("H", positions=[[0.1, 0.0, 0.0]])
+    teacher.info["energy"] = -0.8
+    teacher.info["rtece_concat_source"] = "teacher_relax_trajectory320"
+    teacher.arrays["forces"] = np.ones((1, 3))
+    source = tmp_path / "input.extxyz"
+    out = tmp_path / "weighted.extxyz"
+    ase.io.write(source, [base, teacher], format="extxyz")
+
+    summary = apply_extxyz_sample_weights(
+        input_path=source,
+        output_path=out,
+        source_energy_multipliers={"base_mixed_train_tw0p75": 2.0, "teacher_relax_trajectory320": 0.5},
+        source_force_multipliers={"teacher_relax_trajectory320": 3.0},
+        normalize_energy_mean=True,
+        normalize_force_mean=True,
+    )
+    frames = ase.io.read(out, index=":")
+
+    assert summary["schema_version"] == "rtece_extxyz_sample_weights.v1"
+    assert summary["source_energy_multipliers"] == {
+        "base_mixed_train_tw0p75": 2.0,
+        "teacher_relax_trajectory320": 0.5,
+    }
+    assert summary["energy_weight_mean"] == pytest.approx(1.0)
+    assert summary["force_weight_mean"] == pytest.approx(1.0)
+    assert [frame.info["energy_weight"] for frame in frames] == pytest.approx([1.6, 0.4])
+    assert [frame.info["forces_weight"] for frame in frames] == pytest.approx([0.5, 1.5])
+    assert [frame.get_potential_energy() for frame in frames] == pytest.approx([-1.0, -0.8])
+    assert np.allclose(frames[1].get_forces(), np.ones((1, 3)))
+
+
 def test_rtece_scripts_are_directly_executable():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     for script in (
@@ -7172,6 +7214,82 @@ def test_teacher_relax_distill_configs_records_fixed_length_trajectory_with_teac
     assert all("forces" in frame.arrays for frame in frames)
     assert all("source_energy" in frame.info for frame in frames)
     assert all("source_forces" in frame.arrays for frame in frames)
+
+
+def test_rtece_stage134_balanced_teacher_relax_manifest_materializes_weighted_atomic_no_export_row(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage134_balanced_teacher_relax import (
+        audit_stage134_manifest,
+        make_stage134_manifest,
+        materialize_stage134,
+    )
+
+    payload = make_stage134_manifest(
+        output_root=tmp_path / "stage134",
+        base_train="base.extxyz",
+        source_configs="source.extxyz",
+        teacher_model="teacher.ckpt",
+        train_valid_file="train_valid.extxyz",
+        dft_valid_file="dft_valid.extxyz",
+        teacher_valid_file="teacher_valid.extxyz",
+        source_start_config=0,
+        source_limit_configs=32,
+        copies_per_config=2,
+        relax_max_steps=4,
+        base_limit_configs=2048,
+        base_energy_multiplier=1.25,
+        teacher_energy_multiplier=0.25,
+        teacher_force_multiplier=2.0,
+        valid_limit_configs=256,
+        bench_limit_configs=1024,
+        max_steps=20000,
+        lr_warmup_steps=500,
+        early_stopping_patience=400,
+    )
+
+    assert payload["schema_version"] == "rtece_stage134_balanced_teacher_relax_distill.v1"
+    assert payload["stage"] == "stage134_balanced_teacher_relax_distill"
+    assert payload["distillation_semantics"] == "dft_energy_anchor_plus_teacher_relax_force_weighted_distillation"
+    assert payload["trajectory_frame_count"] == 320
+    assert payload["augmented_limit_configs"] == 2368
+    assert payload["row_set"] == "stage134-balanced-teacher-relax-distill"
+    assert payload["weight_policy"]["source_energy_multipliers"] == {
+        "base_mixed_train_tw0p75": 1.25,
+        "teacher_relax_trajectory320": 0.25,
+    }
+    assert payload["weight_policy"]["source_force_multipliers"] == {"teacher_relax_trajectory320": 2.0}
+    assert payload["weight_policy"]["normalize_energy_mean"] is True
+    assert payload["weight_policy"]["normalize_force_mean"] is True
+    assert [row["variant"] for row in payload["rows"]] == [
+        "l1_active_nrad12_species24_radial_species8_cross3_h64",
+    ]
+    assert "energy drift" in payload["comparison_question"]
+    assert "projection error" in payload["comparison_question"]
+
+    audit = audit_stage134_manifest(payload)
+    assert audit["contract_pass"] is True
+    assert audit["failed_checks"] == []
+
+    materialized = materialize_stage134(payload)
+    assert len(materialized["train_wrappers"]) == 1
+    train_text = Path(materialized["train_wrappers"][0]).read_text()
+    prep_text = Path(materialized["artifacts"]["prep_wrapper"]).read_text()
+    combined = prep_text + "\n" + train_text
+    assert "--export" not in combined
+    assert "--mem" not in combined
+    assert "--cpus-per-task" not in combined
+    assert "make_teacher_relax_distill_configs.py" in prep_text
+    assert "apply_extxyz_sample_weights.py" in prep_text
+    assert "--source-energy-multiplier base_mixed_train_tw0p75:1.25" in prep_text
+    assert "--source-energy-multiplier teacher_relax_trajectory320:0.25" in prep_text
+    assert "--source-force-multiplier teacher_relax_trajectory320:2.0" in prep_text
+    assert "--normalize-energy-mean" in prep_text
+    assert "weighted_train_base2048_plus_teacher_relax320_eanchor.extxyz" in train_text
+    assert "MAX_STEPS=20000" in train_text
+    assert "LR_WARMUP_STEPS=500" in train_text
+    assert "EARLY_STOPPING_PATIENCE=400" in train_text
+    assert "edge.cavity.vector_dot" not in train_text
 
 
 def test_rtece_stage128_physical_triage_writes_no_export_wrappers(tmp_path):
