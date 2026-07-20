@@ -7316,6 +7316,7 @@ def test_rtece_stage134_balanced_teacher_relax_manifest_materializes_weighted_at
     assert "--export" not in combined
     assert "--mem" not in combined
     assert "--cpus-per-task" not in combined
+    assert "#SBATCH --time=03:55:00" in prep_text
     assert "make_teacher_relax_distill_configs.py" in prep_text
     assert "apply_extxyz_sample_weights.py" in prep_text
     assert "--source-energy-multiplier base_mixed_train_tw0p75:1.25" in prep_text
@@ -7400,6 +7401,7 @@ def test_rtece_stage142_teacher_relax_coverage_manifest_materializes_force_only_
     assert "--export" not in combined
     assert "--mem" not in combined
     assert "--cpus-per-task" not in combined
+    assert "#SBATCH --time=03:55:00" in prep_text
     assert "make_teacher_relax_distill_configs.py" in prep_text
     assert "apply_extxyz_sample_weights.py" in prep_text
     assert "--source-energy-multiplier base_mixed_train_tw0p75:1.25" in prep_text

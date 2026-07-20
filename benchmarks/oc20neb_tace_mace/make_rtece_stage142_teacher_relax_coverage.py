@@ -337,7 +337,7 @@ def write_prepare_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
         "#SBATCH --ntasks=1",
         "#SBATCH --gpus-per-node=1",
         "#SBATCH --qos=flood-1o2gpu",
-        "#SBATCH --time=05:55:00",
+        "#SBATCH --time=03:55:00",
         "#SBATCH --output=/home/gengjianrui/bin/logs/rtece-prep142-%j.out",
         "#SBATCH --error=/home/gengjianrui/bin/logs/rtece-prep142-%j.err",
         "",
