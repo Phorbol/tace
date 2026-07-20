@@ -35,7 +35,7 @@
       "wrapper": "runs/oc20neb_tace_mace/community-baselines-stage145/wrappers/nep4_mixed_smoke_no_export.sbatch"
     },
     {
-      "descriptor_label": "dpa_like_low_attention",
+      "descriptor_label": "dpa1_zero_attention",
       "engine": "deepmd",
       "module": "deepmd-kit/3.1.2",
       "name": "deepmd_dpa_like_mixed_smoke",

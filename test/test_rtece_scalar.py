@@ -7633,6 +7633,8 @@ def test_community_baselines_stage145_manifest_materializes_no_export_wrappers(t
         assert "--mem" not in text
         assert "--cpus-per-task" not in text
         assert "community-baselines-stage145" in text
+        assert "set -eo pipefail" in text
+        assert "set -euo pipefail" not in text
 
 
 def test_stage145_nep_converter_writes_gpumd_train_xyz(tmp_path):
@@ -7674,6 +7676,68 @@ def test_stage145_nep_converter_writes_gpumd_train_xyz(tmp_path):
     nep_in = (tmp_path / "nep" / "nep.in").read_text()
     assert "type         2 C N" in nep_in
     assert "generation   20000" in nep_in
+
+
+def test_stage145_deepmd_converter_writes_system_and_input(tmp_path):
+    import json
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+
+    from benchmarks.oc20neb_tace_mace.convert_stage145_deepmd import convert_extxyz_to_deepmd
+
+    source = tmp_path / "input.extxyz"
+    atoms = Atoms(
+        "CN",
+        positions=[[0.0, 0.0, 0.0], [1.2, 0.0, 0.0]],
+        cell=[8.0, 8.0, 8.0],
+        pbc=True,
+    )
+    atoms.info["energy"] = -3.0
+    atoms.arrays["forces"] = np.array([[0.1, 0.0, 0.0], [-0.1, 0.0, 0.0]], dtype=float)
+    ase.io.write(source, [atoms], format="extxyz")
+
+    summary = convert_extxyz_to_deepmd(source, tmp_path / "dp", limit_configs=1, stop_batch=20)
+
+    assert summary["engine"] == "deepmd"
+    assert summary["num_configs"] == 1
+    assert summary["type_map"] == ["C", "N"]
+    assert (tmp_path / "dp" / "type_map.raw").read_text().splitlines() == ["C", "N"]
+    assert np.load(tmp_path / "dp" / "mixed" / "set.000" / "coord.npy").shape == (1, 6)
+    assert np.load(tmp_path / "dp" / "mixed" / "set.000" / "force.npy").shape == (1, 6)
+    payload = json.loads((tmp_path / "dp" / "input.json").read_text())
+    assert payload["training"]["numb_steps"] == 20
+    assert payload["model"]["type_map"] == ["C", "N"]
+    assert payload["model"]["descriptor"]["type"] in {"dpa2", "se_atten_v2", "se_atten"}
+    assert payload["model"]["descriptor"]["sel"] == 128
+    assert payload["model"]["descriptor"]["attn_layer"] == 0
+
+
+def test_stage145_deepmd_converter_splits_mixed_atom_orders(tmp_path):
+    import json
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+
+    from benchmarks.oc20neb_tace_mace.convert_stage145_deepmd import convert_extxyz_to_deepmd
+
+    source = tmp_path / "input.extxyz"
+    cn = Atoms("CN", positions=[[0.0, 0.0, 0.0], [1.2, 0.0, 0.0]], cell=[8.0, 8.0, 8.0], pbc=True)
+    h2o = Atoms("H2O", positions=[[0.0, 0.0, 0.0], [0.7, 0.0, 0.0], [0.0, 0.7, 0.0]], cell=[8.0, 8.0, 8.0], pbc=True)
+    for atoms, energy in [(cn, -3.0), (h2o, -1.0)]:
+        atoms.info["energy"] = energy
+        atoms.arrays["forces"] = np.zeros((len(atoms), 3), dtype=float)
+    ase.io.write(source, [cn, h2o], format="extxyz")
+
+    summary = convert_extxyz_to_deepmd(source, tmp_path / "dp", limit_configs=2, stop_batch=20)
+
+    assert summary["split_by_atom_order"] is True
+    assert summary["num_systems"] == 2
+    assert summary["systems"] == ["mixed_000", "mixed_001"]
+    assert np.load(tmp_path / "dp" / "mixed_000" / "set.000" / "coord.npy").shape == (1, 6)
+    assert np.load(tmp_path / "dp" / "mixed_001" / "set.000" / "coord.npy").shape == (1, 9)
+    payload = json.loads((tmp_path / "dp" / "input.json").read_text())
+    assert payload["training"]["training_data"]["systems"] == ["mixed_000", "mixed_001"]
 
 
 def test_rtece_stage136_l2_projection_diagnostic_manifest_materializes_no_export_wrapper(tmp_path):

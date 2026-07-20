@@ -8,7 +8,7 @@
 #SBATCH --output=logs/nep4_mixed_smoke-%j.out
 #SBATCH --error=logs/nep4_mixed_smoke-%j.err
 
-set -euo pipefail
+set -eo pipefail
 export STAGE145_ROOT_LABEL="community-baselines-stage145"
 cd "$(pwd)"
 module load gpumd/4.8-cuda12.4

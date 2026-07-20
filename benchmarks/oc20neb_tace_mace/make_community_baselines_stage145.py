@@ -46,7 +46,7 @@ def make_stage145_manifest(
             "name": "deepmd_dpa_like_mixed_smoke",
             "engine": "deepmd",
             "module": "deepmd-kit/3.1.2",
-            "descriptor_label": "dpa_like_low_attention",
+            "descriptor_label": "dpa1_zero_attention",
             "train_dir": str(root / "deepmd_dpa_like_mixed_smoke"),
             "stop_batch": int(deepmd_stop_batch),
             "wrapper": str(root / "wrappers" / "deepmd_dpa_like_mixed_smoke_no_export.sbatch"),
@@ -157,7 +157,7 @@ dp --pt freeze -o frozen_model.pth
 #SBATCH --output=logs/{row['name']}-%j.out
 #SBATCH --error=logs/{row['name']}-%j.err
 
-set -euo pipefail
+set -eo pipefail
 export STAGE145_ROOT_LABEL="community-baselines-stage145"
 cd "$(pwd)"
 {command}

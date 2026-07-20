@@ -8,7 +8,7 @@
 #SBATCH --output=logs/deepmd_dpa_like_mixed_smoke-%j.out
 #SBATCH --error=logs/deepmd_dpa_like_mixed_smoke-%j.err
 
-set -euo pipefail
+set -eo pipefail
 export STAGE145_ROOT_LABEL="community-baselines-stage145"
 cd "$(pwd)"
 module load deepmd-kit/3.1.2
