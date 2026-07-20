@@ -5770,6 +5770,66 @@ def test_stage_sweep_summary_collects_benchmarks_and_marks_missing_rows(tmp_path
     assert [row["name"] for row in payload["dft_force_rmse_pareto_front"]] == ["fast"]
 
 
+def test_stage_sweep_summary_preserves_relative_neb_energy_metrics(tmp_path):
+    from benchmarks.oc20neb_tace_mace.summarize_rtece_stage_sweep import collect_stage_sweep_results, format_markdown
+
+    index = tmp_path / "rtece_pareto_sweep_index.json"
+    index.write_text(
+        json.dumps(
+            {
+                "schema_version": "rtece_pareto_sweep.v1",
+                "row_set": "unit-stage",
+                "rows": [{"name": "energy_shape", "hidden_channels": "16,16", "moment_l_max": 2}],
+            }
+        ),
+        encoding="utf-8",
+    )
+    result_dir = tmp_path / "results" / "energy_shape"
+    result_dir.mkdir(parents=True)
+    (result_dir / "energy_shape_limit128_benchmark.json").write_text(
+        json.dumps(
+            {
+                "variant": "energy_shape",
+                "rmse_f_mev_a": 109.0,
+                "rmse_e_mev_atom": 296.0,
+                "relative_energy_errors_available": True,
+                "energy_decomposition_metric_schema_version": "rtece_energy_error_decomposition.v1",
+                "relative_image_rmse_mev_atom": 8.4,
+                "relative_image_mae_mev_atom": 6.3,
+                "relative_image_max_abs_mev_atom": 31.0,
+                "barrier_rmse_mev_atom": 18.5,
+                "barrier_mae_mev_atom": 15.0,
+                "barrier_max_abs_mev_atom": 42.0,
+                "group_mean_offset_rmse_mev_atom": 6.6,
+                "first_image_anchor_rmse_mev_atom": 17.2,
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    payload = collect_stage_sweep_results(index, benchmark_roots=[tmp_path / "results"])
+    row = payload["rows"][0]
+    markdown = format_markdown(payload)
+
+    assert row["dft_relative_energy_errors_available"] is True
+    assert row["dft_energy_decomposition_metric_schema_version"] == "rtece_energy_error_decomposition.v1"
+    assert row["dft_relative_image_rmse_mev_atom"] == pytest.approx(8.4)
+    assert row["dft_relative_image_mae_mev_atom"] == pytest.approx(6.3)
+    assert row["dft_relative_image_max_abs_mev_atom"] == pytest.approx(31.0)
+    assert row["dft_barrier_rmse_mev_atom"] == pytest.approx(18.5)
+    assert row["dft_barrier_mae_mev_atom"] == pytest.approx(15.0)
+    assert row["dft_barrier_max_abs_mev_atom"] == pytest.approx(42.0)
+    assert row["dft_group_mean_offset_rmse_mev_atom"] == pytest.approx(6.6)
+    assert row["dft_first_image_anchor_rmse_mev_atom"] == pytest.approx(17.2)
+    assert "relative image/barrier RMSE" in markdown
+    assert "rel image RMSE" in markdown
+    assert "case offset RMSE" in markdown
+    assert "8.400" in markdown
+    assert "18.500" in markdown
+    assert "6.600" in markdown
+    assert "17.200" in markdown
+
+
 def test_stage_sweep_summary_preserves_design_metadata_for_pending_rows(tmp_path):
     from benchmarks.oc20neb_tace_mace.summarize_rtece_stage_sweep import collect_stage_sweep_results, format_markdown
 
