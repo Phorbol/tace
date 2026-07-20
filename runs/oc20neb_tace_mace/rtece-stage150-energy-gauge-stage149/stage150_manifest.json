@@ -1,0 +1,36 @@
+{
+  "calibration_window": {
+    "limit": 128,
+    "split": "valid",
+    "start": 0
+  },
+  "eval_window": {
+    "limit": 896,
+    "split": "valid",
+    "start": 128
+  },
+  "jobs": [
+    {
+      "job_id": 687443,
+      "name": "stage149_l2_anchor_lossfix",
+      "output": "runs/oc20neb_tace_mace/rtece-stage150-energy-gauge-stage149/stage149_l2_anchor_lossfix_valid_calib128_eval896_energy_gauge.json",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage150-energy-gauge-stage149/wrappers/stage149_l2_anchor_lossfix_no_export.sbatch"
+    },
+    {
+      "job_id": 687444,
+      "name": "stage149_t3_cavity_vector_lossfix",
+      "output": "runs/oc20neb_tace_mace/rtece-stage150-energy-gauge-stage149/stage149_t3_cavity_vector_lossfix_valid_calib128_eval896_energy_gauge.json",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage150-energy-gauge-stage149/wrappers/stage149_t3_cavity_vector_lossfix_no_export.sbatch"
+    }
+  ],
+  "purpose": "Diagnose whether Stage149 absolute energy RMSE is transferable residual gauge/baseline or representation/data limitation.",
+  "schema_version": "rtece_stage150_energy_gauge_stage149.v1",
+  "slurm_contract": {
+    "no_cpus_per_task": true,
+    "no_mem": true,
+    "no_sbatch_export": true,
+    "no_set_u": true
+  },
+  "source_stage": "stage149-energy-loss-normalization-rerun",
+  "stage": "stage150-energy-gauge-stage149"
+}
