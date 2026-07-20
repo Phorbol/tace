@@ -1,0 +1,31 @@
+{
+  "checked": {
+    "row_set": "stage137-l2-conditioned-front",
+    "scalar_path_ids": [
+      "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot,atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius",
+      "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot,atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius"
+    ],
+    "train_file": "runs/oc20neb_tace_mace/rtece-stage132-broad-teacher-distill/augmented_train_base2048_plus_teacher_rattle512.extxyz",
+    "variants": [
+      "l2_active_nrad12_species24_radial_species8_cross3_bneck32_h64",
+      "l2_active_nrad12_species24_radial_species8_cross3_cond32_h64"
+    ]
+  },
+  "checks": {
+    "bottleneck_row_contract": true,
+    "conditioner_row_contract": true,
+    "distillation_semantics": true,
+    "fixed_head_contract": true,
+    "moment_l_max_2": true,
+    "no_edge_paths": true,
+    "quadrupole_paths_present": true,
+    "schema_version": true,
+    "stage": true,
+    "stage132_train_reuse": true,
+    "training_contract": true,
+    "two_l2_front_rows": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "schema_version": "rtece_stage137_manifest_audit.v1"
+}

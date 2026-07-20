@@ -7432,6 +7432,84 @@ def test_rtece_stage135_l2_atomic_projection_manifest_materializes_no_export_row
     assert "rattle_relax_rtece.py" in physical_text
 
 
+def test_rtece_stage137_l2_conditioned_front_manifest_materializes_no_export_rows(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage137_l2_conditioned_front import (
+        audit_stage137_manifest,
+        make_stage137_manifest,
+        materialize_stage137,
+    )
+
+    payload = make_stage137_manifest(
+        output_root=tmp_path / "stage137",
+        train_file="stage132_augmented.extxyz",
+        train_valid_file="train_valid.extxyz",
+        dft_valid_file="dft_valid.extxyz",
+        teacher_valid_file="teacher_valid.extxyz",
+        valid_limit_configs=256,
+        bench_limit_configs=1024,
+        max_steps=20000,
+        lr_warmup_steps=500,
+        early_stopping_patience=400,
+    )
+
+    assert payload["schema_version"] == "rtece_stage137_l2_conditioned_front.v1"
+    assert payload["stage"] == "stage137_l2_conditioned_front"
+    assert payload["row_set"] == "stage137-l2-conditioned-front"
+    assert payload["distillation_semantics"] == "stage136_force_projection_guided_l2_low_rank_conditioning"
+    assert "Stage136" in payload["comparison_question"]
+    assert "force projection" in payload["comparison_question"]
+    assert payload["train_file"] == "stage132_augmented.extxyz"
+    assert [row["variant"] for row in payload["rows"]] == [
+        "l2_active_nrad12_species24_radial_species8_cross3_bneck32_h64",
+        "l2_active_nrad12_species24_radial_species8_cross3_cond32_h64",
+    ]
+    for row in payload["rows"]:
+        path_ids = tuple(part.strip() for part in row["scalar_path_ids"].split(",") if part.strip())
+        assert row["moment_l_max"] == 2
+        assert row["hidden_channels"] == "64,64"
+        assert row["num_radial"] == 12
+        assert row["species_basis_channels"] == 24
+        assert row["radial_species_adapter_channels"] == 8
+        assert row["atomic_cross_radial_sketch_channels"] == 3
+        assert row["short_range_repulsion_potential"] == "zbl"
+        assert "atomic.quadrupole_norm" in path_ids
+        assert "atomic.quadrupole_cross_radial_frobenius" in path_ids
+        assert not any(path_id.startswith("edge.") for path_id in path_ids)
+    bneck = payload["rows"][0]
+    cond = payload["rows"][1]
+    assert bneck["descriptor_bottleneck_dim"] == 32
+    assert bneck["descriptor_conditioner"] == "none"
+    assert cond["descriptor_bottleneck_dim"] == 0
+    assert cond["descriptor_conditioner"] == "residual_mlp"
+    assert cond["descriptor_conditioner_hidden_channels"] == 32
+
+    audit = audit_stage137_manifest(payload)
+    assert audit["contract_pass"] is True
+    assert audit["failed_checks"] == []
+
+    materialized = materialize_stage137(payload)
+    assert len(materialized["train_wrappers"]) == 2
+    assert len(materialized["physical_wrappers"]) == 2
+    combined = "\n".join(Path(path).read_text() for path in [*materialized["train_wrappers"], *materialized["physical_wrappers"]])
+    assert "--export" not in combined
+    assert "--mem" not in combined
+    assert "--cpus-per-task" not in combined
+    assert "TRAIN_FILE=stage132_augmented.extxyz" in combined
+    assert "MAX_STEPS=20000" in combined
+    assert "LR_WARMUP_STEPS=500" in combined
+    assert "EARLY_STOPPING_PATIENCE=400" in combined
+    assert "MOMENT_L_MAX=2" in combined
+    assert "DESCRIPTOR_BOTTLENECK_DIM=32" in combined
+    assert "DESCRIPTOR_CONDITIONER=residual_mlp" in combined
+    assert "DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS=32" in combined
+    assert "atomic.quadrupole_norm" in combined
+    assert "atomic.quadrupole_cross_radial_frobenius" in combined
+    assert "edge.cavity.vector_dot" not in combined
+    assert "rattle_relax_rtece.py" in combined
+
+
 def test_rtece_stage128_physical_triage_writes_no_export_wrappers(tmp_path):
     from pathlib import Path
 
