@@ -1,0 +1,22 @@
+{
+  "rows": [
+    {
+      "checkpoint": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/source_balanced_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64/rtece_scalar_best.pt",
+      "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/source_balanced_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64_dft_benchmark.json",
+      "output_dir": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64",
+      "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/source_balanced_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64_teacher_benchmark.json",
+      "variant": "l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/physical_wrappers/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64/rtece_physical_triage_no_export.sbatch"
+    },
+    {
+      "checkpoint": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/source_balanced_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64/rtece_scalar_best.pt",
+      "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/source_balanced_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64_dft_benchmark.json",
+      "output_dir": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64",
+      "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/source_balanced_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64_teacher_benchmark.json",
+      "variant": "l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/physical_wrappers/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64/rtece_physical_triage_no_export.sbatch"
+    }
+  ],
+  "schema_version": "rtece_stage140_physical_wrapper_index.v1",
+  "stage": 140
+}

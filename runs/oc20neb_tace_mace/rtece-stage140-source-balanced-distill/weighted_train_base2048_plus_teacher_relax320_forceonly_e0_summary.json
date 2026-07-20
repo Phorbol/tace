@@ -1,0 +1,35 @@
+{
+  "atoms": 126386,
+  "configs": 2368,
+  "energy_weight": 1.0,
+  "energy_weight_max": 1.15625,
+  "energy_weight_mean": 1.0,
+  "energy_weight_min": 0.0,
+  "force_tail_multiplier": 1.0,
+  "force_tail_quantile": null,
+  "force_tail_threshold_ev_a": null,
+  "force_weight_max": 1.761904761904762,
+  "force_weight_mean": 1.0000000000000002,
+  "force_weight_min": 0.880952380952381,
+  "input": "runs/oc20neb_tace_mace/rtece-stage134-balanced-teacher-relax/augmented_train_base2048_plus_teacher_relax320.extxyz",
+  "max_force_norm_ev_a_max": 74.43260059832025,
+  "max_force_norm_ev_a_min": 0.04426387528783601,
+  "normalize_energy_mean": true,
+  "normalize_force_mean": true,
+  "output": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/weighted_train_base2048_plus_teacher_relax320_forceonly_e0.extxyz",
+  "raw_energy_weight_mean": 1.0810810810810811,
+  "raw_force_weight_mean": 1.135135135135135,
+  "schema_version": "rtece_extxyz_sample_weights.v1",
+  "source_counts": {
+    "base_mixed_train_tw0p75": 2048,
+    "teacher_relax_trajectory320": 320
+  },
+  "source_energy_multipliers": {
+    "base_mixed_train_tw0p75": 1.25,
+    "teacher_relax_trajectory320": 0.0
+  },
+  "source_force_multipliers": {
+    "teacher_relax_trajectory320": 2.0
+  },
+  "tail_config_count": 0
+}

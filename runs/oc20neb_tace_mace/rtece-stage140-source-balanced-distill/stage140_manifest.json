@@ -1,0 +1,45 @@
+{
+  "basis": {
+    "TECE_design_space": "separate projection error from distillation/deployment-measure error under energy-force Sobolev metrics",
+    "rTECE_review": "repair E0s/energy comparability and true distillation closure before more kernel/edge complexity",
+    "stage139_result": "cond32 improved force RMSE/max and C/N RMSD but introduced large energy RMSE/bias",
+    "weighted_e0s_fix_commit": "9eafa37 Fix weighted rTECE atomic energy fit"
+  },
+  "controlled_variables": {
+    "architecture": "Stage139 L=2 conditioned-front cond32, no edge residual, no head widening",
+    "batch_size": 8,
+    "bench_configs": 1024,
+    "early_stopping_patience": 400,
+    "lr": 0.001,
+    "lr_patience": 25,
+    "lr_scheduler": "plateau",
+    "lr_warmup_steps": 500,
+    "max_steps": 20000,
+    "short_range_repulsion_potential": "zbl",
+    "short_range_repulsion_strength": 0.0,
+    "train_configs": 2368,
+    "train_file": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/weighted_train_base2048_plus_teacher_relax320_forceonly_e0.extxyz",
+    "valid_batch_size": 16,
+    "valid_configs": 256
+  },
+  "decision_rule": [
+    "If force-only ew1 keeps Stage139 cond32 force RMSE/max gains while reducing energy RMSE/bias toward Stage137/132, Stage139 failure was mainly distillation-measure/E0 source leakage.",
+    "If ew2 further reduces energy RMSE/max with modest force loss, use energy_weight as a Pareto control knob for the source-balanced student.",
+    "If neither fixes energy while force remains good, next isolate architecture/projection error or per-source energy normalization beyond scalar E0s."
+  ],
+  "rows": [
+    {
+      "energy_weight": 1.0,
+      "hypothesis": "teacher relax contributes only force/Sobolev signal; DFT/base structures anchor energy and weighted E0s",
+      "name": "l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64"
+    },
+    {
+      "energy_weight": 2.0,
+      "hypothesis": "same force-only teacher measure plus stronger global DFT energy anchor to test energy/force tradeoff",
+      "name": "l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64"
+    }
+  ],
+  "schema_version": "rtece_stage140_source_balanced_plan.v1",
+  "stage": 140,
+  "title": "Source-balanced force-only teacher-relax distillation for L=2 conditioned rTECE"
+}

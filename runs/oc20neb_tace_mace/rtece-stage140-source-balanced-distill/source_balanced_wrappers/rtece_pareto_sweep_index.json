@@ -1,0 +1,25 @@
+{
+  "rows": [
+    {
+      "energy_weight": 1.0,
+      "output_dir": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/source_balanced_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64",
+      "run_root": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/source_balanced_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64",
+      "selection_basis": "teacher relax contributes only force/Sobolev signal; DFT/base structures anchor energy and weighted E0s",
+      "train_file": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/weighted_train_base2048_plus_teacher_relax320_forceonly_e0.extxyz",
+      "variant": "l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/source_balanced_wrappers/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew1_h64/rtece_scalar_matrix_no_export.sbatch"
+    },
+    {
+      "energy_weight": 2.0,
+      "output_dir": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/source_balanced_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64",
+      "run_root": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/source_balanced_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64",
+      "selection_basis": "same force-only teacher measure plus stronger global DFT energy anchor to test energy/force tradeoff",
+      "train_file": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/weighted_train_base2048_plus_teacher_relax320_forceonly_e0.extxyz",
+      "variant": "l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/source_balanced_wrappers/l2_active_nrad12_species24_radial_species8_cross3_cond32_forceonly_ew2_h64/rtece_scalar_matrix_no_export.sbatch"
+    }
+  ],
+  "schema_version": "rtece_stage140_train_wrapper_index.v1",
+  "stage": 140,
+  "train_file": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/weighted_train_base2048_plus_teacher_relax320_forceonly_e0.extxyz"
+}
