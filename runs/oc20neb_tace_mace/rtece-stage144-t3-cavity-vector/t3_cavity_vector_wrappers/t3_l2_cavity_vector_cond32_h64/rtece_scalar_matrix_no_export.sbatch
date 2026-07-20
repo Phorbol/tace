@@ -9,7 +9,7 @@
 #SBATCH --output=/home/gengjianrui/bin/logs/rtece-matrix-%j.out
 #SBATCH --error=/home/gengjianrui/bin/logs/rtece-matrix-%j.err
 
-set -euo pipefail
+set -eo pipefail
 # SAI policy: pass parameters inside this wrapper, not through Slurm command-line environment export.
 export VARIANTS=t3_l2_cavity_vector_cond32_h64
 export RUN_ROOT=runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/t3_cavity_vector_runs/t3_l2_cavity_vector_cond32_h64

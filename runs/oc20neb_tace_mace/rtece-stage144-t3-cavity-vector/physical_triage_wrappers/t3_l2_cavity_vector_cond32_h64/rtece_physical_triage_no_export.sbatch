@@ -9,7 +9,7 @@
 #SBATCH --output=/home/gengjianrui/bin/logs/rtece-phys144-%j.out
 #SBATCH --error=/home/gengjianrui/bin/logs/rtece-phys144-%j.err
 
-set -euo pipefail
+set -eo pipefail
 set -x
 export PYTHONUNBUFFERED=1
 

@@ -7678,6 +7678,56 @@ def test_community_baselines_stage145_manifest_materializes_no_export_wrappers(t
         assert "set -euo pipefail" not in text
 
 
+def test_community_baselines_stage145_materializes_benchmark_and_physical_wrappers(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_community_baselines_stage145 import (
+        audit_stage145_manifest,
+        make_stage145_manifest,
+        materialize_stage145,
+    )
+
+    payload = make_stage145_manifest(
+        output_root=tmp_path / "stage145",
+        limit_configs=16,
+        valid_limit_configs=4,
+        bench_limit_configs=8,
+        nep_generations=20,
+        deepmd_stop_batch=20,
+    )
+    audit = audit_stage145_manifest(payload)
+
+    assert audit["contract_pass"], audit["failed_checks"]
+    for row in payload["rows"]:
+        assert row["benchmark_wrapper"].endswith("_benchmark_no_export.sbatch")
+        assert row["physical_wrapper"].endswith("_physical_no_export.sbatch")
+        assert row["dft_benchmark"].endswith(f"{row['name']}_dft_benchmark.json")
+        assert row["physical_pareto"].endswith(f"{row['name']}_physical_pareto.json")
+
+    materialized = materialize_stage145(payload)
+
+    assert set(materialized["benchmark_wrappers"]) == {"nep4_mixed_smoke", "deepmd_dpa_like_mixed_smoke"}
+    assert set(materialized["physical_wrappers"]) == {"nep4_mixed_smoke", "deepmd_dpa_like_mixed_smoke"}
+    for wrappers in (materialized["benchmark_wrappers"], materialized["physical_wrappers"]):
+        for wrapper_path in wrappers.values():
+            text = Path(wrapper_path).read_text()
+            assert "#SBATCH --partition=16V100" in text
+            assert "#SBATCH --qos=flood-1o2gpu" in text
+            assert "--export" not in text
+            assert "--mem" not in text
+            assert "--cpus-per-task" not in text
+            assert "set -eo pipefail" in text
+            assert "set -euo pipefail" not in text
+            assert "community-baselines-stage145" in text
+
+    benchmark_text = Path(materialized["benchmark_wrappers"]["deepmd_dpa_like_mixed_smoke"]).read_text()
+    physical_text = Path(materialized["physical_wrappers"]["deepmd_dpa_like_mixed_smoke"]).read_text()
+    assert "benchmark_stage145_community.py" in benchmark_text
+    assert "physical_stage145_community.py" in physical_text
+    assert "deepmd_dpa_like_mixed_smoke_dft_benchmark.json" in benchmark_text
+    assert "deepmd_dpa_like_mixed_smoke_physical_pareto.json" in physical_text
+
+
 def test_stage145_nep_converter_writes_gpumd_train_xyz(tmp_path):
     import numpy as np
     import ase.io

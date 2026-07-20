@@ -1,7 +1,9 @@
 {
   "artifacts": {
     "audit": "runs/oc20neb_tace_mace/community-baselines-stage145/stage145_manifest_audit.json",
+    "benchmark_wrapper_root": "runs/oc20neb_tace_mace/community-baselines-stage145/benchmark_wrappers",
     "manifest": "runs/oc20neb_tace_mace/community-baselines-stage145/stage145_manifest.json",
+    "physical_wrapper_root": "runs/oc20neb_tace_mace/community-baselines-stage145/physical_wrappers",
     "stage_plan": "runs/oc20neb_tace_mace/community-baselines-stage145/stage145_plan.md",
     "wrapper_root": "runs/oc20neb_tace_mace/community-baselines-stage145/wrappers"
   },
@@ -26,19 +28,27 @@
   "row_set": "community-baselines-stage145",
   "rows": [
     {
+      "benchmark_wrapper": "runs/oc20neb_tace_mace/community-baselines-stage145/benchmark_wrappers/nep4_mixed_smoke_benchmark_no_export.sbatch",
       "descriptor_label": "nep4",
+      "dft_benchmark": "runs/oc20neb_tace_mace/community-baselines-stage145/nep4_mixed_smoke/nep4_mixed_smoke_dft_benchmark.json",
       "engine": "nep",
       "generation": 20000,
       "module": "gpumd/4.8-cuda12.4",
       "name": "nep4_mixed_smoke",
+      "physical_pareto": "runs/oc20neb_tace_mace/community-baselines-stage145/nep4_mixed_smoke/nep4_mixed_smoke_physical_pareto.json",
+      "physical_wrapper": "runs/oc20neb_tace_mace/community-baselines-stage145/physical_wrappers/nep4_mixed_smoke_physical_no_export.sbatch",
       "train_dir": "runs/oc20neb_tace_mace/community-baselines-stage145/nep4_mixed_smoke",
       "wrapper": "runs/oc20neb_tace_mace/community-baselines-stage145/wrappers/nep4_mixed_smoke_no_export.sbatch"
     },
     {
+      "benchmark_wrapper": "runs/oc20neb_tace_mace/community-baselines-stage145/benchmark_wrappers/deepmd_dpa_like_mixed_smoke_benchmark_no_export.sbatch",
       "descriptor_label": "dpa1_zero_attention",
+      "dft_benchmark": "runs/oc20neb_tace_mace/community-baselines-stage145/deepmd_dpa_like_mixed_smoke/deepmd_dpa_like_mixed_smoke_dft_benchmark.json",
       "engine": "deepmd",
       "module": "deepmd-kit/3.1.2",
       "name": "deepmd_dpa_like_mixed_smoke",
+      "physical_pareto": "runs/oc20neb_tace_mace/community-baselines-stage145/deepmd_dpa_like_mixed_smoke/deepmd_dpa_like_mixed_smoke_physical_pareto.json",
+      "physical_wrapper": "runs/oc20neb_tace_mace/community-baselines-stage145/physical_wrappers/deepmd_dpa_like_mixed_smoke_physical_no_export.sbatch",
       "stop_batch": 20000,
       "train_dir": "runs/oc20neb_tace_mace/community-baselines-stage145/deepmd_dpa_like_mixed_smoke",
       "wrapper": "runs/oc20neb_tace_mace/community-baselines-stage145/wrappers/deepmd_dpa_like_mixed_smoke_no_export.sbatch"
@@ -50,6 +60,7 @@
     "bench_limit_configs": 1024,
     "dft_energy_key": "dft_energy",
     "dft_forces_key": "dft_forces",
+    "dft_valid_file": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
     "energy_key": "energy",
     "energy_weight_key": "energy_weight",
     "forces_key": "forces",

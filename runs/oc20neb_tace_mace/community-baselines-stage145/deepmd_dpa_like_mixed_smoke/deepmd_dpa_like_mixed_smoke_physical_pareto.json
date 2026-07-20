@@ -1,0 +1,834 @@
+{
+  "configs": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "dimer_gate_pass": true,
+  "dimer_scan": {
+    "pair_summaries": [
+      {
+        "pair": "C-N",
+        "rows": [
+          {
+            "distance_a": 0.735,
+            "energy_eV": -10.217393398284912,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": -57.58002471923828,
+            "max_force_norm_ev_a": 57.58002471923828,
+            "pair": "C-N",
+            "symbol_a": "C",
+            "symbol_b": "N"
+          },
+          {
+            "distance_a": 1.176,
+            "energy_eV": -16.11327362060547,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": -0.26737532019615173,
+            "max_force_norm_ev_a": 0.26737532019615173,
+            "pair": "C-N",
+            "symbol_a": "C",
+            "symbol_b": "N"
+          },
+          {
+            "distance_a": 1.617,
+            "energy_eV": -16.01824951171875,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.3078811764717102,
+            "max_force_norm_ev_a": 0.3078811764717102,
+            "pair": "C-N",
+            "symbol_a": "C",
+            "symbol_b": "N"
+          },
+          {
+            "distance_a": 2.058,
+            "energy_eV": -15.910545825958252,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.18214133381843567,
+            "max_force_norm_ev_a": 0.18214133381843567,
+            "pair": "C-N",
+            "symbol_a": "C",
+            "symbol_b": "N"
+          },
+          {
+            "distance_a": 2.4989999999999997,
+            "energy_eV": -15.849996089935303,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.10098083317279816,
+            "max_force_norm_ev_a": 0.10098083317279816,
+            "pair": "C-N",
+            "symbol_a": "C",
+            "symbol_b": "N"
+          },
+          {
+            "distance_a": 2.9399999999999995,
+            "energy_eV": -15.815824031829834,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.05853907763957977,
+            "max_force_norm_ev_a": 0.05853907763957977,
+            "pair": "C-N",
+            "symbol_a": "C",
+            "symbol_b": "N"
+          },
+          {
+            "distance_a": 3.381,
+            "energy_eV": -15.795509815216064,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.035839274525642395,
+            "max_force_norm_ev_a": 0.035839274525642395,
+            "pair": "C-N",
+            "symbol_a": "C",
+            "symbol_b": "N"
+          },
+          {
+            "distance_a": 3.8219999999999996,
+            "energy_eV": -15.7827787399292,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.02306065894663334,
+            "max_force_norm_ev_a": 0.02306065894663334,
+            "pair": "C-N",
+            "symbol_a": "C",
+            "symbol_b": "N"
+          },
+          {
+            "distance_a": 4.263,
+            "energy_eV": -15.774416446685791,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.015486584976315498,
+            "max_force_norm_ev_a": 0.015486584976315498,
+            "pair": "C-N",
+            "symbol_a": "C",
+            "symbol_b": "N"
+          },
+          {
+            "distance_a": 4.704,
+            "energy_eV": -15.756248950958252,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.09310567378997803,
+            "max_force_norm_ev_a": 0.09310567378997803,
+            "pair": "C-N",
+            "symbol_a": "C",
+            "symbol_b": "N"
+          },
+          {
+            "distance_a": 5.145,
+            "energy_eV": -15.749800682067871,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.0,
+            "max_force_norm_ev_a": 0.0,
+            "pair": "C-N",
+            "symbol_a": "C",
+            "symbol_b": "N"
+          },
+          {
+            "distance_a": 5.585999999999999,
+            "energy_eV": -15.749800682067871,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.0,
+            "max_force_norm_ev_a": 0.0,
+            "pair": "C-N",
+            "symbol_a": "C",
+            "symbol_b": "N"
+          },
+          {
+            "distance_a": 6.027,
+            "energy_eV": -15.749800682067871,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.0,
+            "max_force_norm_ev_a": 0.0,
+            "pair": "C-N",
+            "symbol_a": "C",
+            "symbol_b": "N"
+          },
+          {
+            "distance_a": 6.468,
+            "energy_eV": -15.749800682067871,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.0,
+            "max_force_norm_ev_a": 0.0,
+            "pair": "C-N",
+            "symbol_a": "C",
+            "symbol_b": "N"
+          },
+          {
+            "distance_a": 6.909,
+            "energy_eV": -15.749800682067871,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.0,
+            "max_force_norm_ev_a": 0.0,
+            "pair": "C-N",
+            "symbol_a": "C",
+            "symbol_b": "N"
+          },
+          {
+            "distance_a": 7.35,
+            "energy_eV": -15.749800682067871,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.0,
+            "max_force_norm_ev_a": 0.0,
+            "pair": "C-N",
+            "symbol_a": "C",
+            "symbol_b": "N"
+          }
+        ],
+        "summary": {
+          "energy_max_eV": -10.217393398284912,
+          "energy_min_eV": -16.11327362060547,
+          "energy_range_eV": 5.895880222320557,
+          "has_nonfinite": false,
+          "long_distance_a": 7.35,
+          "max_abs_energy_step_eV": 5.895880222320557,
+          "max_abs_force_ev_a": 57.58002471923828,
+          "max_abs_force_step_ev_a": 57.31264939904213,
+          "max_distance_a": 7.35,
+          "min_distance_a": 0.735,
+          "num_nonfinite_energy": 0,
+          "num_nonfinite_force": 0,
+          "num_points": 16,
+          "short_distance_a": 0.735,
+          "short_force_parallel_ev_a": -57.58002471923828,
+          "short_force_repulsive": true,
+          "short_minus_long_energy_eV": 5.532407283782959
+        }
+      },
+      {
+        "pair": "C-O",
+        "rows": [
+          {
+            "distance_a": 0.71,
+            "energy_eV": -6.889091968536377,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": -68.305908203125,
+            "max_force_norm_ev_a": 68.305908203125,
+            "pair": "C-O",
+            "symbol_a": "C",
+            "symbol_b": "O"
+          },
+          {
+            "distance_a": 1.136,
+            "energy_eV": -14.717803001403809,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": -0.18423429131507874,
+            "max_force_norm_ev_a": 0.18423429131507874,
+            "pair": "C-O",
+            "symbol_a": "C",
+            "symbol_b": "O"
+          },
+          {
+            "distance_a": 1.5619999999999998,
+            "energy_eV": -14.573194026947021,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.41278570890426636,
+            "max_force_norm_ev_a": 0.41278570890426636,
+            "pair": "C-O",
+            "symbol_a": "C",
+            "symbol_b": "O"
+          },
+          {
+            "distance_a": 1.988,
+            "energy_eV": -14.436192035675049,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.2368735373020172,
+            "max_force_norm_ev_a": 0.2368735373020172,
+            "pair": "C-O",
+            "symbol_a": "C",
+            "symbol_b": "O"
+          },
+          {
+            "distance_a": 2.4139999999999997,
+            "energy_eV": -14.360525131225586,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.1298893690109253,
+            "max_force_norm_ev_a": 0.1298893690109253,
+            "pair": "C-O",
+            "symbol_a": "C",
+            "symbol_b": "O"
+          },
+          {
+            "distance_a": 2.84,
+            "energy_eV": -14.31826114654541,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.07451514154672623,
+            "max_force_norm_ev_a": 0.07451514154672623,
+            "pair": "C-O",
+            "symbol_a": "C",
+            "symbol_b": "O"
+          },
+          {
+            "distance_a": 3.266,
+            "energy_eV": -14.293416976928711,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.04508143663406372,
+            "max_force_norm_ev_a": 0.04508143663406372,
+            "pair": "C-O",
+            "symbol_a": "C",
+            "symbol_b": "O"
+          },
+          {
+            "distance_a": 3.6919999999999997,
+            "energy_eV": -14.278038501739502,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.02862875536084175,
+            "max_force_norm_ev_a": 0.02862875536084175,
+            "pair": "C-O",
+            "symbol_a": "C",
+            "symbol_b": "O"
+          },
+          {
+            "distance_a": 4.118,
+            "energy_eV": -14.268075466156006,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.018958650529384613,
+            "max_force_norm_ev_a": 0.018958650529384613,
+            "pair": "C-O",
+            "symbol_a": "C",
+            "symbol_b": "O"
+          },
+          {
+            "distance_a": 4.5440000000000005,
+            "energy_eV": -14.261013984680176,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.03539453446865082,
+            "max_force_norm_ev_a": 0.03539453446865082,
+            "pair": "C-O",
+            "symbol_a": "C",
+            "symbol_b": "O"
+          },
+          {
+            "distance_a": 4.97,
+            "energy_eV": -14.24109697341919,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": -2.1592786936253106e-07,
+            "max_force_norm_ev_a": 2.1592786936253106e-07,
+            "pair": "C-O",
+            "symbol_a": "C",
+            "symbol_b": "O"
+          },
+          {
+            "distance_a": 5.396,
+            "energy_eV": -14.24109697341919,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.0,
+            "max_force_norm_ev_a": 0.0,
+            "pair": "C-O",
+            "symbol_a": "C",
+            "symbol_b": "O"
+          },
+          {
+            "distance_a": 5.822,
+            "energy_eV": -14.24109697341919,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.0,
+            "max_force_norm_ev_a": 0.0,
+            "pair": "C-O",
+            "symbol_a": "C",
+            "symbol_b": "O"
+          },
+          {
+            "distance_a": 6.248,
+            "energy_eV": -14.24109697341919,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.0,
+            "max_force_norm_ev_a": 0.0,
+            "pair": "C-O",
+            "symbol_a": "C",
+            "symbol_b": "O"
+          },
+          {
+            "distance_a": 6.6739999999999995,
+            "energy_eV": -14.24109697341919,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.0,
+            "max_force_norm_ev_a": 0.0,
+            "pair": "C-O",
+            "symbol_a": "C",
+            "symbol_b": "O"
+          },
+          {
+            "distance_a": 7.1,
+            "energy_eV": -14.24109697341919,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.0,
+            "max_force_norm_ev_a": 0.0,
+            "pair": "C-O",
+            "symbol_a": "C",
+            "symbol_b": "O"
+          }
+        ],
+        "summary": {
+          "energy_max_eV": -6.889091968536377,
+          "energy_min_eV": -14.717803001403809,
+          "energy_range_eV": 7.828711032867432,
+          "has_nonfinite": false,
+          "long_distance_a": 7.1,
+          "max_abs_energy_step_eV": 7.828711032867432,
+          "max_abs_force_ev_a": 68.305908203125,
+          "max_abs_force_step_ev_a": 68.12167391180992,
+          "max_distance_a": 7.1,
+          "min_distance_a": 0.71,
+          "num_nonfinite_energy": 0,
+          "num_nonfinite_force": 0,
+          "num_points": 16,
+          "short_distance_a": 0.71,
+          "short_force_parallel_ev_a": -68.305908203125,
+          "short_force_repulsive": true,
+          "short_minus_long_energy_eV": 7.3520050048828125
+        }
+      },
+      {
+        "pair": "N-H",
+        "rows": [
+          {
+            "distance_a": 0.51,
+            "energy_eV": -0.7762229442596436,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": -137.4235382080078,
+            "max_force_norm_ev_a": 137.4235382080078,
+            "pair": "N-H",
+            "symbol_a": "N",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 0.8160000000000001,
+            "energy_eV": -12.219143152236938,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 1.184000015258789,
+            "max_force_norm_ev_a": 1.184000015258789,
+            "pair": "N-H",
+            "symbol_a": "N",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 1.1219999999999999,
+            "energy_eV": -11.803699493408203,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 1.1532604694366455,
+            "max_force_norm_ev_a": 1.1532604694366455,
+            "pair": "N-H",
+            "symbol_a": "N",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 1.428,
+            "energy_eV": -11.538243770599365,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.6222751140594482,
+            "max_force_norm_ev_a": 0.6222751140594482,
+            "pair": "N-H",
+            "symbol_a": "N",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 1.734,
+            "energy_eV": -11.397870779037476,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.32795947790145874,
+            "max_force_norm_ev_a": 0.32795947790145874,
+            "pair": "N-H",
+            "symbol_a": "N",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 2.04,
+            "energy_eV": -11.322889804840088,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.17881089448928833,
+            "max_force_norm_ev_a": 0.17881089448928833,
+            "pair": "N-H",
+            "symbol_a": "N",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 2.346,
+            "energy_eV": -11.281204223632812,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.10180835425853729,
+            "max_force_norm_ev_a": 0.10180835425853729,
+            "pair": "N-H",
+            "symbol_a": "N",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 2.652,
+            "energy_eV": -11.2570161819458,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.060375310480594635,
+            "max_force_norm_ev_a": 0.060375310480594635,
+            "pair": "N-H",
+            "symbol_a": "N",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 2.958,
+            "energy_eV": -11.242433071136475,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.03707645460963249,
+            "max_force_norm_ev_a": 0.03707645460963249,
+            "pair": "N-H",
+            "symbol_a": "N",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 3.2640000000000002,
+            "energy_eV": -11.233353853225708,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.023431522771716118,
+            "max_force_norm_ev_a": 0.023431522771716118,
+            "pair": "N-H",
+            "symbol_a": "N",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 3.5700000000000003,
+            "energy_eV": -11.227552890777588,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.015150228515267372,
+            "max_force_norm_ev_a": 0.015150228515267372,
+            "pair": "N-H",
+            "symbol_a": "N",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 3.8760000000000003,
+            "energy_eV": -11.223769426345825,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.009967340156435966,
+            "max_force_norm_ev_a": 0.009967340156435966,
+            "pair": "N-H",
+            "symbol_a": "N",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 4.1819999999999995,
+            "energy_eV": -11.221264839172363,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.006637350656092167,
+            "max_force_norm_ev_a": 0.006637350656092167,
+            "pair": "N-H",
+            "symbol_a": "N",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 4.4879999999999995,
+            "energy_eV": -11.219592094421387,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.0044496506452560425,
+            "max_force_norm_ev_a": 0.0044496506452560425,
+            "pair": "N-H",
+            "symbol_a": "N",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 4.794,
+            "energy_eV": -11.21794319152832,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": -0.020774897187948227,
+            "max_force_norm_ev_a": 0.020774897187948227,
+            "pair": "N-H",
+            "symbol_a": "N",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 5.1,
+            "energy_eV": -11.219220161437988,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.0,
+            "max_force_norm_ev_a": 0.0,
+            "pair": "N-H",
+            "symbol_a": "N",
+            "symbol_b": "H"
+          }
+        ],
+        "summary": {
+          "energy_max_eV": -0.7762229442596436,
+          "energy_min_eV": -12.219143152236938,
+          "energy_range_eV": 11.442920207977295,
+          "has_nonfinite": false,
+          "long_distance_a": 5.1,
+          "max_abs_energy_step_eV": 11.442920207977295,
+          "max_abs_force_ev_a": 137.4235382080078,
+          "max_abs_force_step_ev_a": 138.6075382232666,
+          "max_distance_a": 5.1,
+          "min_distance_a": 0.51,
+          "num_nonfinite_energy": 0,
+          "num_nonfinite_force": 0,
+          "num_points": 16,
+          "short_distance_a": 0.51,
+          "short_force_parallel_ev_a": -137.4235382080078,
+          "short_force_repulsive": true,
+          "short_minus_long_energy_eV": 10.442997217178345
+        }
+      },
+      {
+        "pair": "O-H",
+        "rows": [
+          {
+            "distance_a": 0.485,
+            "energy_eV": 3.8638761043548584,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": -91.85536193847656,
+            "max_force_norm_ev_a": 91.85536193847656,
+            "pair": "O-H",
+            "symbol_a": "O",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 0.776,
+            "energy_eV": -10.75394582748413,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.8688719272613525,
+            "max_force_norm_ev_a": 0.8688719272613525,
+            "pair": "O-H",
+            "symbol_a": "O",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 1.067,
+            "energy_eV": -10.349825143814087,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 1.2759947776794434,
+            "max_force_norm_ev_a": 1.2759947776794434,
+            "pair": "O-H",
+            "symbol_a": "O",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 1.358,
+            "energy_eV": -10.063435077667236,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.7214497327804565,
+            "max_force_norm_ev_a": 0.7214497327804565,
+            "pair": "O-H",
+            "symbol_a": "O",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 1.649,
+            "energy_eV": -9.907219409942627,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.3871030807495117,
+            "max_force_norm_ev_a": 0.3871030807495117,
+            "pair": "O-H",
+            "symbol_a": "O",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 1.94,
+            "energy_eV": -9.822722434997559,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.2126462608575821,
+            "max_force_norm_ev_a": 0.2126462608575821,
+            "pair": "O-H",
+            "symbol_a": "O",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 2.231,
+            "energy_eV": -9.775522470474243,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.12127909064292908,
+            "max_force_norm_ev_a": 0.12127909064292908,
+            "pair": "O-H",
+            "symbol_a": "O",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 2.522,
+            "energy_eV": -9.74815320968628,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.07166513055562973,
+            "max_force_norm_ev_a": 0.07166513055562973,
+            "pair": "O-H",
+            "symbol_a": "O",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 2.8129999999999997,
+            "energy_eV": -9.731753826141357,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.04360274225473404,
+            "max_force_norm_ev_a": 0.04360274225473404,
+            "pair": "O-H",
+            "symbol_a": "O",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 3.1039999999999996,
+            "energy_eV": -9.721667051315308,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.02712806686758995,
+            "max_force_norm_ev_a": 0.02712806686758995,
+            "pair": "O-H",
+            "symbol_a": "O",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 3.3949999999999996,
+            "energy_eV": -9.715342998504639,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.017140807583928108,
+            "max_force_norm_ev_a": 0.017140807583928108,
+            "pair": "O-H",
+            "symbol_a": "O",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 3.6859999999999995,
+            "energy_eV": -9.711329460144043,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.010920011438429356,
+            "max_force_norm_ev_a": 0.010920011438429356,
+            "pair": "O-H",
+            "symbol_a": "O",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 3.977,
+            "energy_eV": -9.708770275115967,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.0069566951133310795,
+            "max_force_norm_ev_a": 0.0069566951133310795,
+            "pair": "O-H",
+            "symbol_a": "O",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 4.268,
+            "energy_eV": -9.707146644592285,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.004384472966194153,
+            "max_force_norm_ev_a": 0.004384472966194153,
+            "pair": "O-H",
+            "symbol_a": "O",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 4.559,
+            "energy_eV": -9.705973386764526,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": 0.009765759110450745,
+            "max_force_norm_ev_a": 0.009765759110450745,
+            "pair": "O-H",
+            "symbol_a": "O",
+            "symbol_b": "H"
+          },
+          {
+            "distance_a": 4.85,
+            "energy_eV": -9.70999002456665,
+            "force_balance_error_ev_a": 0.0,
+            "force_parallel_ev_a": -0.016054291278123856,
+            "max_force_norm_ev_a": 0.016054291278123856,
+            "pair": "O-H",
+            "symbol_a": "O",
+            "symbol_b": "H"
+          }
+        ],
+        "summary": {
+          "energy_max_eV": 3.8638761043548584,
+          "energy_min_eV": -10.75394582748413,
+          "energy_range_eV": 14.61782193183899,
+          "has_nonfinite": false,
+          "long_distance_a": 4.85,
+          "max_abs_energy_step_eV": 14.61782193183899,
+          "max_abs_force_ev_a": 91.85536193847656,
+          "max_abs_force_step_ev_a": 92.72423386573792,
+          "max_distance_a": 4.85,
+          "min_distance_a": 0.485,
+          "num_nonfinite_energy": 0,
+          "num_nonfinite_force": 0,
+          "num_points": 16,
+          "short_distance_a": 0.485,
+          "short_force_parallel_ev_a": -91.85536193847656,
+          "short_force_repulsive": true,
+          "short_minus_long_energy_eV": 13.573866128921509
+        }
+      }
+    ]
+  },
+  "engine": "deepmd",
+  "model_artifact": "runs/oc20neb_tace_mace/community-baselines-stage145/deepmd_dpa_like_mixed_smoke/frozen_model.pth",
+  "physical_gate_pass": true,
+  "rattle_gate_pass": true,
+  "rattle_relax": {
+    "records": [
+      {
+        "config_index": 0,
+        "converged": true,
+        "final_energy_eV": -295.4299716949463,
+        "final_fmax_ev_a": 0.045540686056459445,
+        "final_rmsd_a": 0.1105032272015321,
+        "focus_groups": [
+          "C_or_N",
+          "CHNO"
+        ],
+        "formula": "CGa24NTc24",
+        "initial_energy_eV": -295.3822331428528,
+        "initial_fmax_ev_a": 0.06466562490387391,
+        "initial_rmsd_a": 0.08692465205656032,
+        "max_fmax_ev_a": 0.06466562490387391,
+        "max_steps": 5,
+        "num_atoms": 50,
+        "rattle_seed": 20260721,
+        "rattle_std_a": 0.05,
+        "steps_recorded": 3,
+        "wall_s": 0.41025013802573085
+      },
+      {
+        "config_index": 1,
+        "converged": true,
+        "final_energy_eV": -295.43357014656067,
+        "final_fmax_ev_a": 0.03615221786618389,
+        "final_rmsd_a": 0.14906770788869128,
+        "focus_groups": [
+          "C_or_N",
+          "CHNO"
+        ],
+        "formula": "CGa24NTc24",
+        "initial_energy_eV": -295.3635129928589,
+        "initial_fmax_ev_a": 0.055926028792650906,
+        "initial_rmsd_a": 0.08313260475999765,
+        "max_fmax_ev_a": 0.055926028792650906,
+        "max_steps": 5,
+        "num_atoms": 50,
+        "rattle_seed": 20260722,
+        "rattle_std_a": 0.05,
+        "steps_recorded": 4,
+        "wall_s": 0.02422045508865267
+      }
+    ],
+    "summary": {
+      "converged_count": 2,
+      "converged_fraction": 1.0,
+      "focus_groups": [
+        {
+          "converged_count": 2,
+          "converged_fraction": 1.0,
+          "count": 2,
+          "label": "C_or_N",
+          "max_final_rmsd_a": 0.14906770788869128,
+          "max_fmax_ev_a": 0.06466562490387391,
+          "mean_final_rmsd_a": 0.1297854675451117,
+          "mean_initial_rmsd_a": 0.08502862840827899,
+          "mean_max_fmax_ev_a": 0.06029582684826241
+        },
+        {
+          "converged_count": 2,
+          "converged_fraction": 1.0,
+          "count": 2,
+          "label": "CHNO",
+          "max_final_rmsd_a": 0.14906770788869128,
+          "max_fmax_ev_a": 0.06466562490387391,
+          "mean_final_rmsd_a": 0.1297854675451117,
+          "mean_initial_rmsd_a": 0.08502862840827899,
+          "mean_max_fmax_ev_a": 0.06029582684826241
+        }
+      ],
+      "max_final_rmsd_a": 0.14906770788869128,
+      "max_fmax_ev_a": 0.06466562490387391,
+      "mean_final_rmsd_a": 0.1297854675451117,
+      "mean_initial_rmsd_a": 0.08502862840827899,
+      "mean_max_fmax_ev_a": 0.06029582684826241,
+      "num_configs": 2,
+      "schema_version": "rtece_rattle_relax_summary.v1"
+    }
+  },
+  "row_name": "deepmd_dpa_like_mixed_smoke",
+  "schema_version": "community_baseline_physical_pareto.v1",
+  "status": "completed"
+}

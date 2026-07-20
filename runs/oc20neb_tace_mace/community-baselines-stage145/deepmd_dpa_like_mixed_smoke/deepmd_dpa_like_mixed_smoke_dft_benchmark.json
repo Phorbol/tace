@@ -1,0 +1,31 @@
+{
+  "atoms_per_second": 10501.655800492914,
+  "bias_e_mev_atom": -33.07550828527957,
+  "configs": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "device_request": "cuda",
+  "energy_key": "dft_energy",
+  "engine": "deepmd",
+  "engine_protocol": "deepmd_ase_DP",
+  "forces_key": "dft_forces",
+  "limit_configs": 1024,
+  "mae_e_mev_atom": 253.37610861097858,
+  "mae_f_mev_a": 29.23685780781249,
+  "max_abs_e_mev_atom": 867.3128633549553,
+  "max_abs_f_mev_a": 4429.18120761457,
+  "mean_signed_e_mev_atom": -33.07550828527957,
+  "mean_time_s": 5.63653971569147,
+  "model_artifact": "runs/oc20neb_tace_mace/community-baselines-stage145/deepmd_dpa_like_mixed_smoke/frozen_model.pth",
+  "num_configs": 1024,
+  "pass_times_s": [
+    5.654367589042522,
+    5.628181690000929,
+    5.627069868030958
+  ],
+  "rmse_e_mev_atom": 325.28127548401045,
+  "rmse_f_mev_a": 109.85922351320076,
+  "row_name": "deepmd_dpa_like_mixed_smoke",
+  "schema_version": "community_baseline_dft_benchmark.v1",
+  "start_config": 0,
+  "status": "completed",
+  "total_atoms": 59193
+}

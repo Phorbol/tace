@@ -13,7 +13,7 @@ Stage144 plan commit: `2fdd807` (`Plan rTECE stage144 cavity vector`).
 
 ## Observed Failure Mode
 
-The training wrapper launched correctly and did not hit the previous SAI sbatch failure mode. The wrapper contained no `--export`, `--mem`, or `--cpus-per-task` flags, and stdout/stderr recorded the expected Stage144 configuration:
+The training wrapper launched correctly and did not hit the previous SAI sbatch failure mode. The wrapper contained no forbidden Slurm options, and stdout/stderr recorded the expected Stage144 configuration:
 
 - train file: `runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/weighted_train_base2048_plus_teacher_relax640_forceonly_eanchor.extxyz`
 - scalar paths: `atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot,atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius,edge.cavity.vector_dot`

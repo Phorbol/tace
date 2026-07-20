@@ -1,6 +1,10 @@
 {
   "checks": {
+    "has_benchmark_outputs": true,
+    "has_benchmark_wrappers": true,
     "has_nep_and_deepmd": true,
+    "has_physical_outputs": true,
+    "has_physical_wrappers": true,
     "mixed_label_contract": true,
     "no_export_wrapper_names": true,
     "rmse_metrics_present": true,
