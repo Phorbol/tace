@@ -4082,7 +4082,37 @@ def test_loss_for_batch_supports_per_config_sobolev_weights():
         force_sample_weights=torch.tensor([1.0, 0.0], dtype=torch.float64),
     )
 
-    assert torch.allclose(weighted, torch.tensor(0.625, dtype=torch.float64))
+    assert torch.allclose(weighted, torch.tensor(1.0, dtype=torch.float64))
+
+
+def test_loss_for_batch_normalizes_batched_energy_by_each_config_natoms():
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import loss_for_batch
+
+    config = build_rtece_config("rtece_pair")
+    model = RTECEScalarModel(config).double()
+    for param in model.parameters():
+        param.data.zero_()
+    graph = RTECEGraph(
+        z=torch.tensor([1, 1, 1, 1, 1], dtype=torch.long),
+        pos=torch.tensor(
+            [
+                [0.0, 0.0, 0.0],
+                [0.7, 0.0, 0.0],
+                [2.0, 0.0, 0.0],
+                [2.7, 0.0, 0.0],
+                [3.4, 0.0, 0.0],
+            ],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(5),
+        batch=torch.tensor([0, 0, 1, 1, 1], dtype=torch.long),
+    )
+    ref_energy = torch.tensor([2.0, 6.0], dtype=torch.float64)
+    ref_forces = torch.zeros((5, 3), dtype=torch.float64)
+
+    loss = loss_for_batch(model, graph, ref_energy, ref_forces, energy_weight=1.0, force_weight=0.0)
+
+    assert torch.allclose(loss, torch.tensor(2.5, dtype=torch.float64))
 
 
 def test_lightning_load_samples_reads_extxyz_property_weights(tmp_path):

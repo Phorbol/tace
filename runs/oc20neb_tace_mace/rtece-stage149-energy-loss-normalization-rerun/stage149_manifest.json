@@ -1,0 +1,56 @@
+{
+  "bug_fixed": {
+    "file": "tace/models/rtece_workflow.py",
+    "impact": "Lightning batch_size=8 underweighted energy loss by about batch_size^2 for similarly sized configs, making previous 20k-step runs effectively too force-dominated.",
+    "new_behavior": "energy errors are divided by each config natoms from graph.batch bincount",
+    "old_behavior": "energy errors for each config in a batch were divided by total batch atom count"
+  },
+  "comparison_question": "After fixing batched energy loss normalization from total-batch atoms to per-configuration natoms, do the Stage142 L2 anchor and Stage144 minimal T3 cavity-vector rTECE points recover absolute energy RMSE without destroying force RMSE, relative NEB shape, throughput, or physical probes?",
+  "document_alignment": [
+    "TECE_design_space: total energy, force, virial and local relational response remain primary; atomic energy/gauge must be handled explicitly.",
+    "rTECE_review: global shift is insufficient; E/F RMSE, max, bias and NEB relative/barrier metrics must be reported separately.",
+    "Stage146: raw E RMSE is mostly case/slab-level offset, but corrected training loss must be rerun before attributing all residual to architecture or data."
+  ],
+  "metrics_required": [
+    "DFT E MAE/RMSE/max/bias",
+    "DFT F MAE/RMSE/max",
+    "teacher E/F metrics",
+    "relative image and barrier RMSE/MAE",
+    "case mean-offset and first-image-anchor decomposition",
+    "atoms/s throughput",
+    "dimer scan and rattle-relax physical probes"
+  ],
+  "row_set": "stage149-energy-loss-normalization-rerun",
+  "rows": [
+    {
+      "name": "stage149_l2_anchor_lossfix",
+      "run_root": "runs/oc20neb_tace_mace/rtece-stage149-energy-loss-normalization-rerun/corrected_energy_loss_runs/stage149_l2_anchor_lossfix",
+      "scalar_path_ids": "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot,atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius",
+      "source_stage": "stage142_l2_active_nrad12_species24_radial_species8_cross3_cond32_h64",
+      "tece_tier": "T3_atomic_L2_conditioned_anchor_no_edge_relational",
+      "variants": "stage149_l2_anchor_lossfix",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage149-energy-loss-normalization-rerun/wrappers/stage149_l2_anchor_lossfix/rtece_scalar_matrix_no_export.sbatch"
+    },
+    {
+      "name": "stage149_t3_cavity_vector_lossfix",
+      "run_root": "runs/oc20neb_tace_mace/rtece-stage149-energy-loss-normalization-rerun/corrected_energy_loss_runs/stage149_t3_cavity_vector_lossfix",
+      "scalar_path_ids": "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot,atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius,edge.cavity.vector_dot",
+      "source_stage": "stage144_t3_l2_cavity_vector_cond32_h64",
+      "tece_tier": "T3_rtece_edge_relational_minimal",
+      "variants": "stage149_t3_cavity_vector_lossfix",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage149-energy-loss-normalization-rerun/wrappers/stage149_t3_cavity_vector_lossfix/rtece_scalar_matrix_no_export.sbatch"
+    }
+  ],
+  "schema_version": "rtece_stage149_energy_loss_normalization_rerun.v1",
+  "stage": "stage149_energy_loss_normalization_rerun",
+  "train_contract": {
+    "batch_size": 8,
+    "early_stopping_patience": 400,
+    "energy_anchor": "DFT base frames only; teacher-relax frames have energy_weight=0 in Stage142 weighted extxyz",
+    "lr_scheduler": "plateau",
+    "lr_warmup_steps": 500,
+    "max_steps": 20000,
+    "train_file": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/weighted_train_base2048_plus_teacher_relax640_forceonly_eanchor.extxyz",
+    "valid_batch_size": 16
+  }
+}

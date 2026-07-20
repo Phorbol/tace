@@ -123,7 +123,10 @@ def loss_for_batch(
     force_sample_weights: torch.Tensor | None = None,
 ) -> torch.Tensor:
     out = model(graph)
-    natoms = graph.z.numel()
+    num_configs = int(ref_energy.numel())
+    natoms = torch.bincount(graph.batch, minlength=num_configs).to(
+        device=ref_energy.device, dtype=ref_energy.dtype
+    ).clamp_min(1)
     energy_sq = ((out["energy"] - ref_energy) / natoms).pow(2)
     if energy_sample_weights is not None:
         weights = energy_sample_weights.to(device=energy_sq.device, dtype=energy_sq.dtype).reshape(-1)
