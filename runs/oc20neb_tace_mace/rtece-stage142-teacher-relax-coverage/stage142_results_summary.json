@@ -1,0 +1,157 @@
+{
+  "commits": {
+    "plan": "3cad750",
+    "walltime_fix": "9212a05"
+  },
+  "data_contract": {
+    "energy_weight_range": [
+      0.0,
+      1.0,
+      1.3125
+    ],
+    "force_weight_range": [
+      0.8076923076923077,
+      1.0,
+      1.6153846153846154
+    ],
+    "source_counts": {
+      "base_mixed_train_tw0p75": 2048,
+      "teacher_relax_trajectory640": 640
+    },
+    "source_energy_multipliers": {
+      "base_mixed_train_tw0p75": 1.25,
+      "teacher_relax_trajectory640": 0.0
+    },
+    "source_force_multipliers": {
+      "teacher_relax_trajectory640": 2.0
+    },
+    "teacher_relax_atoms": 29360,
+    "teacher_relax_configs": 640,
+    "weighted_train_atoms": 139746,
+    "weighted_train_configs": 2688
+  },
+  "dft_benchmark": {
+    "atoms": 59193,
+    "atoms_per_second": 1013545.9934994743,
+    "configs": 1024,
+    "e_bias_mev_atom": -17.912582329380868,
+    "e_mae_mev_atom": 239.99575591200514,
+    "e_max_abs_mev_atom": 730.5712952435664,
+    "e_rmse_mev_atom": 304.5365124707372,
+    "f_mae_mev_a": 46.59605760667106,
+    "f_max_abs_mev_a": 1758.2781489486695,
+    "f_rmse_mev_a": 107.62198913872383
+  },
+  "interpretation": {
+    "next_priority": "Do not keep expanding the same teacher-relax window; move to semantic path active-set / projection diagnostics guided by TECE_design_space and rTECE_review.",
+    "result": "negative_or_mixed",
+    "summary": "Doubling teacher-relax coverage to 640 force-only frames did not create a new Pareto or physical frontier point."
+  },
+  "manifest_contract": {
+    "checks": {
+      "base_energy_anchor_present": true,
+      "coverage_larger_than_stage140": true,
+      "distillation_semantics": true,
+      "moment_l_max_2_cond32": true,
+      "no_forbidden_sbatch_flags": true,
+      "schema_version": true,
+      "single_cond32_row": true,
+      "stage": true,
+      "teacher_energy_multiplier_fixed_zero": true,
+      "teacher_force_multiplier_present": true,
+      "training_contract": true,
+      "trajectory_count": true,
+      "uses_source_weight_tool": true,
+      "uses_teacher_relax_generator": true
+    },
+    "checks_pass_individually": true
+  },
+  "model_contract": {
+    "learnable_radial_mixing": true,
+    "moment_l_max": 2,
+    "num_parameters": 51367,
+    "num_radial": 12,
+    "scalar_path_ids": [
+      "atomic.radial_density",
+      "atomic.species_basis_density",
+      "atomic.vector_norm",
+      "atomic.vector_cross_radial_dot",
+      "atomic.quadrupole_norm",
+      "atomic.quadrupole_cross_radial_frobenius"
+    ],
+    "short_range_repulsion_potential": "zbl"
+  },
+  "physical_rattle": {
+    "converged_fraction": 0.0,
+    "focus_C_or_N": {
+      "converged_count": 0,
+      "converged_fraction": 0.0,
+      "count": 8,
+      "label": "C_or_N",
+      "max_final_rmsd_a": 0.15649466892796823,
+      "max_fmax_ev_a": 11.093982918541293,
+      "mean_final_rmsd_a": 0.10411026557489324,
+      "mean_initial_rmsd_a": 0.08687628640562584,
+      "mean_max_fmax_ev_a": 4.671082634360638
+    },
+    "max_final_rmsd_a": 0.15649466892796823,
+    "max_fmax_ev_a": 11.093982918541293,
+    "mean_final_rmsd_a": 0.10411026557489324,
+    "mean_max_fmax_ev_a": 4.671082634360638,
+    "num_configs": 8
+  },
+  "schema_version": "rtece_stage142_results_summary.v1",
+  "slurm_jobs": [
+    {
+      "elapsed": "00:04:25",
+      "exit_code": "0:0",
+      "job_id": 685578,
+      "role": "prepare",
+      "state": "COMPLETED"
+    },
+    {
+      "elapsed": "00:11:59",
+      "exit_code": "0:0",
+      "job_id": 685579,
+      "role": "train",
+      "state": "COMPLETED"
+    },
+    {
+      "elapsed": "00:00:09",
+      "exit_code": "0:0",
+      "job_id": 685580,
+      "role": "physical_triage",
+      "state": "COMPLETED"
+    }
+  ],
+  "stage": "stage142_teacher_relax_coverage",
+  "teacher_benchmark": {
+    "atoms_per_second": 1014481.6317760408,
+    "e_bias_mev_atom": -21.88862735792052,
+    "e_mae_mev_atom": 224.83178791408443,
+    "e_max_abs_mev_atom": 689.3314137178309,
+    "e_rmse_mev_atom": 286.4604907372185,
+    "f_mae_mev_a": 47.57417718514245,
+    "f_max_abs_mev_a": 1721.411064031372,
+    "f_rmse_mev_a": 105.64299181615021
+  },
+  "training_contract": {
+    "batch_size": 8,
+    "best_step": 18816,
+    "best_valid_loss": 0.1013742983341217,
+    "early_stopping_patience": 400,
+    "lr_scheduler": "plateau",
+    "lr_warmup_steps": 500,
+    "max_steps": 20000,
+    "sample_weight_keys": [
+      "energy_weight",
+      "forces_weight"
+    ],
+    "steps": 20000,
+    "train_configs": 2688,
+    "trainer_backend": "lightning",
+    "valid_batch_size": 16,
+    "valid_configs": 256
+  },
+  "variant": "l2_active_nrad12_species24_radial_species8_cross3_cond32_h64"
+}
