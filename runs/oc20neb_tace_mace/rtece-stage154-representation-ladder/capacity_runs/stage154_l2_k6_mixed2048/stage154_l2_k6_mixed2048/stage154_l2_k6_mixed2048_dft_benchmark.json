@@ -1,0 +1,871 @@
+{
+  "atom_steps_per_pass": 59193,
+  "atomic_energies": {
+    "1": -3.5822312189278946,
+    "11": -1.252303678399599,
+    "13": -3.5201211373987715,
+    "14": -5.408909580927378,
+    "15": -4.6433844865152825,
+    "19": -1.164509669391637,
+    "20": -1.748664486522084,
+    "21": -6.481540890034114,
+    "22": -7.41243912714521,
+    "30": -0.5496757565904412,
+    "31": -2.6110725570713584,
+    "32": -4.187094683283909,
+    "33": -4.224256445499343,
+    "38": -1.9960451746076884,
+    "39": -6.683612614485245,
+    "40": -8.32017559702244,
+    "41": -9.40380129066543,
+    "43": -9.082019245531308,
+    "45": -6.889581872828801,
+    "46": -4.967578925632857,
+    "47": -1.944831580223371,
+    "48": 0.040650609828826165,
+    "49": -2.7895338592194903,
+    "50": -3.5256243660831106,
+    "51": -4.073220509841227,
+    "6": -7.612668729300206,
+    "7": -8.392043870949527,
+    "72": -9.572196302384054,
+    "73": -10.780036189557332,
+    "75": -12.348690915783441,
+    "77": -8.764525990940072,
+    "78": -5.638107577265353,
+    "79": -2.638164790845411,
+    "8": -7.089074271403033,
+    "80": 0.4167699967444077,
+    "81": -1.0690596407950295,
+    "82": -2.8334910985755624,
+    "83": -3.3590051222824022
+  },
+  "atoms": 59193,
+  "atoms_per_second": 950850.1897380695,
+  "backend": "rtece_scalar",
+  "barrier_mae_mev_atom": 14.734363220557702,
+  "barrier_max_abs_mev_atom": 33.227749861778804,
+  "barrier_rmse_mev_atom": 17.57321780345462,
+  "baseline": "raw_vs_global_vs_group_mean_vs_first_image_anchor",
+  "batched_graph_construction": false,
+  "bias_e_mev_atom": -9.857804142213695,
+  "configs": 1024,
+  "configs_path": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "configs_per_second": 16449.083410061718,
+  "cutoff": 5.0,
+  "default_dtype": "float32",
+  "device": "cuda",
+  "energy_decomposition_metric_schema_version": "rtece_energy_error_decomposition.v1",
+  "energy_per_atom_shift": 0.0,
+  "extxyz_index": ":1024",
+  "first_image_anchor_mae_mev_atom": 12.021898303663422,
+  "first_image_anchor_max_abs_mev_atom": 50.86883741319386,
+  "first_image_anchor_rmse_mev_atom": 16.32697021318556,
+  "first_image_offsets_eV_per_atom": {
+    "dissociation_id_104_2948_48_111-1_neb1.0": -0.07609929703593707,
+    "dissociation_id_108_99_21_111-0_neb1.0": -0.06676559588169642,
+    "dissociation_id_127_9635_0_100-1_neb1.0": 0.1677761784351324,
+    "dissociation_id_146_7638_30_100-4_neb1.0": -0.005061692873757098,
+    "dissociation_id_154_1581_1_111-0_neb1.0": -0.01072720755912173,
+    "dissociation_id_181_116_6_111-0_neb1.0": 0.021304714876302075,
+    "dissociation_id_182_2807_43_111-2_neb1.0": -0.12636855520982115,
+    "dissociation_id_195_6923_47_111-1_neb1.0": 0.20639516230040006,
+    "dissociation_id_212_7241_50_011-0_neb1.0": 0.3117835968166537,
+    "dissociation_id_219_10897_5_100-0_neb1.0": -0.011411721254938943,
+    "dissociation_id_236_2395_27_000-0_neb1.0": -0.35024731615262716,
+    "dissociation_id_239_6570_8_211-5_neb1.0": -0.04983271815328686,
+    "dissociation_id_245_139_42_211-1_neb1.0": 0.05335994893015892,
+    "dissociation_id_250_4710_31_111-0_neb1.0": -0.039602656693209434,
+    "dissociation_id_252_5588_26_011-1_neb1.0": 0.23580804084007376,
+    "dissociation_id_258_5496_39_100-1_neb1.0": -0.03102228473223308,
+    "dissociation_id_266_9844_9_111-2_neb1.0": 0.1564571992645477,
+    "dissociation_id_271_7189_22_211-5_neb1.0": 0.035868178914513424,
+    "dissociation_id_281_2644_33_200-4_neb1.0": 0.06006332874410354,
+    "dissociation_id_293_11099_47_100-0_neb1.0": -0.13028639114346613,
+    "dissociation_id_294_2408_32_222-0_neb1.0": -0.08909471186371497,
+    "dissociation_id_295_8139_40_211-10_neb1.0": 0.15420337768952558
+  },
+  "force_mode": "autograd",
+  "force_steps_per_pass": 1,
+  "global_offset_mae_mev_atom": 96.89822541674508,
+  "global_offset_max_abs_mev_atom": 368.9648344209659,
+  "global_offset_rmse_mev_atom": 140.4071948287303,
+  "global_per_atom_residual_offset_eV": -0.009857804142213697,
+  "graph_construction_backend": "ase_neighborlist",
+  "graph_update_backend": "ase_neighborlist",
+  "graph_update_backend_metadata": {},
+  "graph_update_chunk_configs": 128,
+  "graph_update_rebuild_count": 0,
+  "graph_update_times_s": [],
+  "graph_update_total_s": 0.0,
+  "group_key_semantics": "case_id",
+  "group_mean_offset_mae_mev_atom": 5.055167074260013,
+  "group_mean_offset_max_abs_mev_atom": 33.95988781423575,
+  "group_mean_offset_rmse_mev_atom": 6.562292236651333,
+  "group_mean_offsets_eV_per_atom": {
+    "dissociation_id_104_2948_48_111-1_neb1.0": -0.07038939669023432,
+    "dissociation_id_108_99_21_111-0_neb1.0": -0.05568874357292659,
+    "dissociation_id_127_9635_0_100-1_neb1.0": 0.16815912329263447,
+    "dissociation_id_146_7638_30_100-4_neb1.0": -0.015701675889445064,
+    "dissociation_id_154_1581_1_111-0_neb1.0": -0.02077611699770752,
+    "dissociation_id_181_116_6_111-0_neb1.0": 0.02141482775134943,
+    "dissociation_id_182_2807_43_111-2_neb1.0": -0.112605545191889,
+    "dissociation_id_195_6923_47_111-1_neb1.0": 0.20372976871761858,
+    "dissociation_id_212_7241_50_011-0_neb1.0": 0.316210595674039,
+    "dissociation_id_219_10897_5_100-0_neb1.0": -0.013299001561804056,
+    "dissociation_id_236_2395_27_000-0_neb1.0": -0.35999718165268196,
+    "dissociation_id_239_6570_8_211-5_neb1.0": -0.03275707360307519,
+    "dissociation_id_245_139_42_211-1_neb1.0": 0.05061376308212104,
+    "dissociation_id_250_4710_31_111-0_neb1.0": -0.006583512112179517,
+    "dissociation_id_252_5588_26_011-1_neb1.0": 0.25424117527578016,
+    "dissociation_id_258_5496_39_100-1_neb1.0": -0.002887456857342278,
+    "dissociation_id_266_9844_9_111-2_neb1.0": 0.15344625327339262,
+    "dissociation_id_271_7189_22_211-5_neb1.0": 0.04054183864768631,
+    "dissociation_id_281_2644_33_200-4_neb1.0": 0.06258819680585508,
+    "dissociation_id_293_11099_47_100-0_neb1.0": -0.12124144210838632,
+    "dissociation_id_294_2408_32_222-0_neb1.0": -0.05513482404947922,
+    "dissociation_id_295_8139_40_211-10_neb1.0": 0.16307488538654788
+  },
+  "hidden_channels": [
+    64,
+    64
+  ],
+  "image_key_semantics": "source_frame",
+  "includes_graph_construction": false,
+  "learnable_radial_mixing": true,
+  "mae_e_mev_atom": 97.71288661198935,
+  "mae_f_mev_a": 50.72670576365499,
+  "max_abs_e_mev_atom": 378.8226385631796,
+  "max_abs_f_mev_a": 2455.9357215753175,
+  "max_atomic_number": 100,
+  "mean_signed_e_mev_atom": -9.857804142213695,
+  "measure_passes": 5,
+  "model": "runs/oc20neb_tace_mace/rtece-stage154-representation-ladder/capacity_runs/stage154_l2_k6_mixed2048/stage154_l2_k6_mixed2048/rtece_scalar_best.pt",
+  "model_class": "RTECEScalarModel",
+  "moment_l_max": 2,
+  "num_groups": 22,
+  "num_images": 1024,
+  "num_parameters": 54499,
+  "num_radial": 12,
+  "num_skipped_groups": 0,
+  "pass_times_s": [
+    0.06290839705616236,
+    0.0621303670341149,
+    0.06201226601842791,
+    0.06215527805034071,
+    0.06205723597668111
+  ],
+  "peak_allocated_mb": 5720.58154296875,
+  "peak_reserved_mb": 5992.0,
+  "prebuilt_batched_graph": true,
+  "prediction_errors_available": true,
+  "raw_mae_mev_atom": 97.71288661198935,
+  "raw_max_abs_mev_atom": 378.8226385631796,
+  "raw_rmse_mev_atom": 140.75282115175978,
+  "relative_energy_baseline": "observed_endpoint_min_per_group",
+  "relative_energy_errors_available": true,
+  "relative_energy_metric_schema_version": "rtece_relative_neb_energy_metrics.v1",
+  "relative_image_mae_mev_atom": 6.111136126358808,
+  "relative_image_max_abs_mev_atom": 33.227749861778804,
+  "relative_image_rmse_mev_atom": 8.536310013824405,
+  "replay_cached_graph": false,
+  "requested_force_mode": "autograd",
+  "rmse_e_mev_atom": 140.75282115175978,
+  "rmse_f_mev_a": 113.50348373565957,
+  "seconds_per_pass": 0.0622527088271454,
+  "short_range_repulsion_potential": "zbl",
+  "start_config": 0,
+  "tece_architecture_path_manifest": {
+    "compiler_status": "explicit_manifest_not_full_compiler",
+    "config": {
+      "atomic_cross_radial_projection": "learnable",
+      "atomic_cross_radial_sketch_channels": 6,
+      "cutoff": 5.0,
+      "descriptor_bottleneck_dim": 0,
+      "descriptor_conditioner": "residual_mlp",
+      "descriptor_conditioner_hidden_channels": 32,
+      "energy_reference": "per_element_atomic_energies",
+      "hidden_channels": [
+        64,
+        64
+      ],
+      "learnable_radial_mixing": true,
+      "max_atomic_number": 100,
+      "moment_l_max": 2,
+      "num_edge_sketches": 0,
+      "num_radial": 12,
+      "radial_edge_sketch_channels": 0,
+      "radial_species_adapter_channels": 8,
+      "radial_species_adapter_scope": "all",
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius"
+      ],
+      "short_range_repulsion": {
+        "beta": 10.0,
+        "enabled": true,
+        "potential": "zbl",
+        "radius_scale": 0.75,
+        "strength": 0.0
+      },
+      "species_basis_channels": 24,
+      "species_basis_mode": "learnable_embedding",
+      "use_atomic_moments": true,
+      "use_cavity_edge_sketches": false,
+      "use_density_quadratic": false,
+      "use_element_density": false,
+      "use_vector_moments": true,
+      "variant": "stage154_l2_k6_mixed2048"
+    },
+    "deleted_tece_groups": [
+      "persistent_equivariant_node_state",
+      "persistent_equivariant_edge_state",
+      "edge_tensor_product_channel_mixing",
+      "multi_layer_equivariant_message_passing"
+    ],
+    "manifest_hash": "d4c8c4c0cb87a21a",
+    "moments": [
+      {
+        "chemistry_basis": "learnable_center_neighbor_pair_embedding_8",
+        "ell": 0,
+        "id": "moment.l0.radial_density",
+        "radial_projection": "learnable_identity_initialized_linear_mixing"
+      },
+      {
+        "chemistry_basis": "learnable_embedding_24",
+        "ell": 0,
+        "id": "moment.l0.species_basis_density",
+        "radial_projection": "learnable_identity_initialized_linear_mixing"
+      },
+      {
+        "chemistry_basis": "none",
+        "ell": 1,
+        "id": "moment.l1.vector",
+        "radial_projection": "full_radial_mean"
+      },
+      {
+        "chemistry_basis": "none",
+        "ell": 2,
+        "id": "moment.l2.quadrupole",
+        "radial_projection": "full_radial_mean"
+      }
+    ],
+    "output_contract": {
+      "ase_implemented": [
+        "energy",
+        "free_energy",
+        "forces",
+        "stress"
+      ],
+      "force_realization": "autograd_conservative",
+      "implemented": [
+        "energy",
+        "atomic_energy",
+        "forces"
+      ],
+      "missing": {
+        "virial": "requires validated edge-gradient virial backend"
+      },
+      "stress_realization": "ase_autograd_finite_strain_inference",
+      "virial_realization": "not_implemented"
+    },
+    "retained_tece_groups": [
+      "radial_density",
+      "low_order_vector_moment_norm",
+      "atomic_cross_radial_invariants",
+      "atomic_cross_radial_rank_6",
+      "learnable_atomic_cross_radial_projection",
+      "learnable_low_rank_species_basis",
+      "trainable_low_rank_radial_mixing",
+      "trainable_edge_species_radial_basis",
+      "short_range_zbl_prior",
+      "trainable_scalar_descriptor_conditioner"
+    ],
+    "route": {
+      "ase_implemented_outputs": [
+        "energy",
+        "free_energy",
+        "forces",
+        "stress"
+      ],
+      "deleted_tece_groups": [
+        "persistent_equivariant_node_state",
+        "persistent_equivariant_edge_state",
+        "edge_tensor_product_channel_mixing",
+        "multi_layer_equivariant_message_passing"
+      ],
+      "descriptor_dim": 354,
+      "descriptor_family": "vector_moment_norm_learnable_species_basis_learnable_radial_mixing_learnable_edge_species_radial_adapter_plus_short_range_zbl_prior_scalar_conditioned",
+      "descriptor_readout_dim": 354,
+      "descriptor_realization": "pytorch_edge_scatter",
+      "edge_state_lifetime": "caller_supplied_edge_index",
+      "energy_reference": "per_element_atomic_energies",
+      "feature_extractor": "learnable_radial_linear_mixing+learnable_edge_species_radial_adapter+learnable_species_basis+residual_scalar_descriptor_conditioner",
+      "force_mode": "autograd",
+      "force_realization": "autograd_conservative",
+      "fused_descriptor": false,
+      "fused_force": false,
+      "graph_construction_backend": null,
+      "graph_semantics": "prebuilt_edge_index",
+      "graph_update_backend": null,
+      "hidden_channels": [
+        64,
+        64
+      ],
+      "implemented_outputs": [
+        "energy",
+        "atomic_energy",
+        "forces"
+      ],
+      "missing_output_contracts": [
+        "validated_edge_gradient_virial"
+      ],
+      "moment_l_max": 2,
+      "num_radial": 12,
+      "pareto_axes": [
+        "semantic_projection",
+        "scalar_head_capacity",
+        "force_realization",
+        "angular_bandwidth_l_max",
+        "radial_rank",
+        "trainable_cross_radial_projection",
+        "trainable_species_basis",
+        "trainable_feature_extractor",
+        "trainable_edge_species_radial_basis",
+        "scalar_descriptor_conditioning",
+        "short_range_physical_prior"
+      ],
+      "retained_tece_groups": [
+        "radial_density",
+        "low_order_vector_moment_norm",
+        "atomic_cross_radial_invariants",
+        "atomic_cross_radial_rank_6",
+        "learnable_atomic_cross_radial_projection",
+        "learnable_low_rank_species_basis",
+        "trainable_low_rank_radial_mixing",
+        "trainable_edge_species_radial_basis",
+        "short_range_zbl_prior",
+        "trainable_scalar_descriptor_conditioner"
+      ],
+      "semantic_tier": "T3_vector_moment_scalarization_learnable_species_basis_learnable_radial_mixing_learnable_edge_species_radial_adapter_with_short_range_zbl_prior_scalar_conditioned",
+      "stress_realization": "ase_autograd_finite_strain_inference",
+      "virial_realization": "not_implemented"
+    },
+    "scalar_paths": [
+      {
+        "cavity": false,
+        "contraction": "identity",
+        "cost_group": "atomic_scalar_density",
+        "cutoff_power": 0,
+        "id": "atomic.radial_density",
+        "inputs": [
+          "moment.l0.radial_density"
+        ],
+        "parity": 1,
+        "placement": "atomic",
+        "radial_gate": null,
+        "radial_projection": "identity"
+      },
+      {
+        "cavity": false,
+        "contraction": "identity",
+        "cost_group": "atomic_low_rank_species_density",
+        "cutoff_power": 0,
+        "id": "atomic.species_basis_density",
+        "inputs": [
+          "moment.l0.species_basis_density"
+        ],
+        "parity": 1,
+        "placement": "atomic",
+        "radial_gate": null,
+        "radial_projection": "identity"
+      },
+      {
+        "cavity": false,
+        "contraction": "dot_self",
+        "cost_group": "atomic_low_order_moments",
+        "cutoff_power": 0,
+        "id": "atomic.vector_norm",
+        "inputs": [
+          "moment.l1.vector"
+        ],
+        "parity": 1,
+        "placement": "atomic",
+        "radial_gate": null,
+        "radial_projection": "diagonal_radial_channels"
+      },
+      {
+        "cavity": false,
+        "contraction": "off_diagonal_shell_dot",
+        "cost_group": "atomic_cross_radial_invariants",
+        "cutoff_power": 0,
+        "id": "atomic.vector_cross_radial_dot",
+        "inputs": [
+          "moment.l1.vector"
+        ],
+        "parity": 1,
+        "placement": "atomic",
+        "radial_gate": null,
+        "radial_projection": "learnable_6x12_cross_radial_projection"
+      },
+      {
+        "cavity": false,
+        "contraction": "frobenius_self",
+        "cost_group": "atomic_low_order_moments",
+        "cutoff_power": 0,
+        "id": "atomic.quadrupole_norm",
+        "inputs": [
+          "moment.l2.quadrupole"
+        ],
+        "parity": 1,
+        "placement": "atomic",
+        "radial_gate": null,
+        "radial_projection": "diagonal_radial_channels"
+      },
+      {
+        "cavity": false,
+        "contraction": "off_diagonal_shell_frobenius",
+        "cost_group": "atomic_cross_radial_invariants",
+        "cutoff_power": 0,
+        "id": "atomic.quadrupole_cross_radial_frobenius",
+        "inputs": [
+          "moment.l2.quadrupole"
+        ],
+        "parity": 1,
+        "placement": "atomic",
+        "radial_gate": null,
+        "radial_projection": "learnable_6x12_cross_radial_projection"
+      }
+    ],
+    "schema_version": "rtece_path_manifest.v1"
+  },
+  "tece_architecture_path_manifest_hash": "d4c8c4c0cb87a21a",
+  "tece_architecture_route": {
+    "ase_implemented_outputs": [
+      "energy",
+      "free_energy",
+      "forces",
+      "stress"
+    ],
+    "deleted_tece_groups": [
+      "persistent_equivariant_node_state",
+      "persistent_equivariant_edge_state",
+      "edge_tensor_product_channel_mixing",
+      "multi_layer_equivariant_message_passing"
+    ],
+    "descriptor_dim": 354,
+    "descriptor_family": "vector_moment_norm_learnable_species_basis_learnable_radial_mixing_learnable_edge_species_radial_adapter_plus_short_range_zbl_prior_scalar_conditioned",
+    "descriptor_readout_dim": 354,
+    "descriptor_realization": "pytorch_edge_scatter",
+    "edge_state_lifetime": "caller_supplied_edge_index",
+    "energy_reference": "per_element_atomic_energies",
+    "feature_extractor": "learnable_radial_linear_mixing+learnable_edge_species_radial_adapter+learnable_species_basis+residual_scalar_descriptor_conditioner",
+    "force_mode": "autograd",
+    "force_realization": "autograd_conservative",
+    "fused_descriptor": false,
+    "fused_force": false,
+    "graph_construction_backend": null,
+    "graph_semantics": "prebuilt_edge_index",
+    "graph_update_backend": null,
+    "hidden_channels": [
+      64,
+      64
+    ],
+    "implemented_outputs": [
+      "energy",
+      "atomic_energy",
+      "forces"
+    ],
+    "missing_output_contracts": [
+      "validated_edge_gradient_virial"
+    ],
+    "moment_l_max": 2,
+    "num_radial": 12,
+    "pareto_axes": [
+      "semantic_projection",
+      "scalar_head_capacity",
+      "force_realization",
+      "angular_bandwidth_l_max",
+      "radial_rank",
+      "trainable_cross_radial_projection",
+      "trainable_species_basis",
+      "trainable_feature_extractor",
+      "trainable_edge_species_radial_basis",
+      "scalar_descriptor_conditioning",
+      "short_range_physical_prior"
+    ],
+    "retained_tece_groups": [
+      "radial_density",
+      "low_order_vector_moment_norm",
+      "atomic_cross_radial_invariants",
+      "atomic_cross_radial_rank_6",
+      "learnable_atomic_cross_radial_projection",
+      "learnable_low_rank_species_basis",
+      "trainable_low_rank_radial_mixing",
+      "trainable_edge_species_radial_basis",
+      "short_range_zbl_prior",
+      "trainable_scalar_descriptor_conditioner"
+    ],
+    "semantic_tier": "T3_vector_moment_scalarization_learnable_species_basis_learnable_radial_mixing_learnable_edge_species_radial_adapter_with_short_range_zbl_prior_scalar_conditioned",
+    "stress_realization": "ase_autograd_finite_strain_inference",
+    "virial_realization": "not_implemented"
+  },
+  "tece_path_manifest": {
+    "compiler_status": "explicit_manifest_not_full_compiler",
+    "config": {
+      "atomic_cross_radial_projection": "learnable",
+      "atomic_cross_radial_sketch_channels": 6,
+      "cutoff": 5.0,
+      "descriptor_bottleneck_dim": 0,
+      "descriptor_conditioner": "residual_mlp",
+      "descriptor_conditioner_hidden_channels": 32,
+      "energy_reference": "per_element_atomic_energies",
+      "hidden_channels": [
+        64,
+        64
+      ],
+      "learnable_radial_mixing": true,
+      "max_atomic_number": 100,
+      "moment_l_max": 2,
+      "num_edge_sketches": 0,
+      "num_radial": 12,
+      "radial_edge_sketch_channels": 0,
+      "radial_species_adapter_channels": 8,
+      "radial_species_adapter_scope": "all",
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius"
+      ],
+      "short_range_repulsion": {
+        "beta": 10.0,
+        "enabled": true,
+        "potential": "zbl",
+        "radius_scale": 0.75,
+        "strength": 0.0
+      },
+      "species_basis_channels": 24,
+      "species_basis_mode": "learnable_embedding",
+      "use_atomic_moments": true,
+      "use_cavity_edge_sketches": false,
+      "use_density_quadratic": false,
+      "use_element_density": false,
+      "use_vector_moments": true,
+      "variant": "stage154_l2_k6_mixed2048"
+    },
+    "deleted_tece_groups": [
+      "persistent_equivariant_node_state",
+      "persistent_equivariant_edge_state",
+      "edge_tensor_product_channel_mixing",
+      "multi_layer_equivariant_message_passing"
+    ],
+    "manifest_hash": "1c2c64bf10cda26d",
+    "moments": [
+      {
+        "chemistry_basis": "learnable_center_neighbor_pair_embedding_8",
+        "ell": 0,
+        "id": "moment.l0.radial_density",
+        "radial_projection": "learnable_identity_initialized_linear_mixing"
+      },
+      {
+        "chemistry_basis": "learnable_embedding_24",
+        "ell": 0,
+        "id": "moment.l0.species_basis_density",
+        "radial_projection": "learnable_identity_initialized_linear_mixing"
+      },
+      {
+        "chemistry_basis": "none",
+        "ell": 1,
+        "id": "moment.l1.vector",
+        "radial_projection": "full_radial_mean"
+      },
+      {
+        "chemistry_basis": "none",
+        "ell": 2,
+        "id": "moment.l2.quadrupole",
+        "radial_projection": "full_radial_mean"
+      }
+    ],
+    "output_contract": {
+      "ase_implemented": [
+        "energy",
+        "free_energy",
+        "forces",
+        "stress"
+      ],
+      "force_realization": "autograd_conservative",
+      "implemented": [
+        "energy",
+        "atomic_energy",
+        "forces"
+      ],
+      "missing": {
+        "virial": "requires validated edge-gradient virial backend"
+      },
+      "stress_realization": "ase_autograd_finite_strain_inference",
+      "virial_realization": "not_implemented"
+    },
+    "retained_tece_groups": [
+      "radial_density",
+      "low_order_vector_moment_norm",
+      "atomic_cross_radial_invariants",
+      "atomic_cross_radial_rank_6",
+      "learnable_atomic_cross_radial_projection",
+      "learnable_low_rank_species_basis",
+      "trainable_low_rank_radial_mixing",
+      "trainable_edge_species_radial_basis",
+      "short_range_zbl_prior",
+      "trainable_scalar_descriptor_conditioner"
+    ],
+    "route": {
+      "ase_implemented_outputs": [
+        "energy",
+        "free_energy",
+        "forces",
+        "stress"
+      ],
+      "deleted_tece_groups": [
+        "persistent_equivariant_node_state",
+        "persistent_equivariant_edge_state",
+        "edge_tensor_product_channel_mixing",
+        "multi_layer_equivariant_message_passing"
+      ],
+      "descriptor_dim": 354,
+      "descriptor_family": "vector_moment_norm_learnable_species_basis_learnable_radial_mixing_learnable_edge_species_radial_adapter_plus_short_range_zbl_prior_scalar_conditioned",
+      "descriptor_readout_dim": 354,
+      "descriptor_realization": "pytorch_edge_scatter",
+      "edge_state_lifetime": "runtime_materialized_edge_index",
+      "energy_reference": "per_element_atomic_energies",
+      "feature_extractor": "learnable_radial_linear_mixing+learnable_edge_species_radial_adapter+learnable_species_basis+residual_scalar_descriptor_conditioner",
+      "force_mode": "autograd",
+      "force_realization": "autograd_conservative",
+      "fused_descriptor": false,
+      "fused_force": false,
+      "graph_construction_backend": "ase_neighborlist",
+      "graph_semantics": "ase_neighborlist_pbc",
+      "graph_update_backend": "ase_neighborlist",
+      "hidden_channels": [
+        64,
+        64
+      ],
+      "implemented_outputs": [
+        "energy",
+        "atomic_energy",
+        "forces"
+      ],
+      "missing_output_contracts": [
+        "validated_edge_gradient_virial"
+      ],
+      "moment_l_max": 2,
+      "num_radial": 12,
+      "pareto_axes": [
+        "semantic_projection",
+        "scalar_head_capacity",
+        "force_realization",
+        "angular_bandwidth_l_max",
+        "radial_rank",
+        "trainable_cross_radial_projection",
+        "trainable_species_basis",
+        "trainable_feature_extractor",
+        "trainable_edge_species_radial_basis",
+        "scalar_descriptor_conditioning",
+        "short_range_physical_prior",
+        "topology_provider"
+      ],
+      "retained_tece_groups": [
+        "radial_density",
+        "low_order_vector_moment_norm",
+        "atomic_cross_radial_invariants",
+        "atomic_cross_radial_rank_6",
+        "learnable_atomic_cross_radial_projection",
+        "learnable_low_rank_species_basis",
+        "trainable_low_rank_radial_mixing",
+        "trainable_edge_species_radial_basis",
+        "short_range_zbl_prior",
+        "trainable_scalar_descriptor_conditioner"
+      ],
+      "semantic_tier": "T3_vector_moment_scalarization_learnable_species_basis_learnable_radial_mixing_learnable_edge_species_radial_adapter_with_short_range_zbl_prior_scalar_conditioned",
+      "stress_realization": "ase_autograd_finite_strain_inference",
+      "virial_realization": "not_implemented"
+    },
+    "scalar_paths": [
+      {
+        "cavity": false,
+        "contraction": "identity",
+        "cost_group": "atomic_scalar_density",
+        "cutoff_power": 0,
+        "id": "atomic.radial_density",
+        "inputs": [
+          "moment.l0.radial_density"
+        ],
+        "parity": 1,
+        "placement": "atomic",
+        "radial_gate": null,
+        "radial_projection": "identity"
+      },
+      {
+        "cavity": false,
+        "contraction": "identity",
+        "cost_group": "atomic_low_rank_species_density",
+        "cutoff_power": 0,
+        "id": "atomic.species_basis_density",
+        "inputs": [
+          "moment.l0.species_basis_density"
+        ],
+        "parity": 1,
+        "placement": "atomic",
+        "radial_gate": null,
+        "radial_projection": "identity"
+      },
+      {
+        "cavity": false,
+        "contraction": "dot_self",
+        "cost_group": "atomic_low_order_moments",
+        "cutoff_power": 0,
+        "id": "atomic.vector_norm",
+        "inputs": [
+          "moment.l1.vector"
+        ],
+        "parity": 1,
+        "placement": "atomic",
+        "radial_gate": null,
+        "radial_projection": "diagonal_radial_channels"
+      },
+      {
+        "cavity": false,
+        "contraction": "off_diagonal_shell_dot",
+        "cost_group": "atomic_cross_radial_invariants",
+        "cutoff_power": 0,
+        "id": "atomic.vector_cross_radial_dot",
+        "inputs": [
+          "moment.l1.vector"
+        ],
+        "parity": 1,
+        "placement": "atomic",
+        "radial_gate": null,
+        "radial_projection": "learnable_6x12_cross_radial_projection"
+      },
+      {
+        "cavity": false,
+        "contraction": "frobenius_self",
+        "cost_group": "atomic_low_order_moments",
+        "cutoff_power": 0,
+        "id": "atomic.quadrupole_norm",
+        "inputs": [
+          "moment.l2.quadrupole"
+        ],
+        "parity": 1,
+        "placement": "atomic",
+        "radial_gate": null,
+        "radial_projection": "diagonal_radial_channels"
+      },
+      {
+        "cavity": false,
+        "contraction": "off_diagonal_shell_frobenius",
+        "cost_group": "atomic_cross_radial_invariants",
+        "cutoff_power": 0,
+        "id": "atomic.quadrupole_cross_radial_frobenius",
+        "inputs": [
+          "moment.l2.quadrupole"
+        ],
+        "parity": 1,
+        "placement": "atomic",
+        "radial_gate": null,
+        "radial_projection": "learnable_6x12_cross_radial_projection"
+      }
+    ],
+    "schema_version": "rtece_path_manifest.v1"
+  },
+  "tece_path_manifest_hash": "1c2c64bf10cda26d",
+  "tece_route": {
+    "ase_implemented_outputs": [
+      "energy",
+      "free_energy",
+      "forces",
+      "stress"
+    ],
+    "deleted_tece_groups": [
+      "persistent_equivariant_node_state",
+      "persistent_equivariant_edge_state",
+      "edge_tensor_product_channel_mixing",
+      "multi_layer_equivariant_message_passing"
+    ],
+    "descriptor_dim": 354,
+    "descriptor_family": "vector_moment_norm_learnable_species_basis_learnable_radial_mixing_learnable_edge_species_radial_adapter_plus_short_range_zbl_prior_scalar_conditioned",
+    "descriptor_readout_dim": 354,
+    "descriptor_realization": "pytorch_edge_scatter",
+    "edge_state_lifetime": "runtime_materialized_edge_index",
+    "energy_reference": "per_element_atomic_energies",
+    "feature_extractor": "learnable_radial_linear_mixing+learnable_edge_species_radial_adapter+learnable_species_basis+residual_scalar_descriptor_conditioner",
+    "force_mode": "autograd",
+    "force_realization": "autograd_conservative",
+    "fused_descriptor": false,
+    "fused_force": false,
+    "graph_construction_backend": "ase_neighborlist",
+    "graph_semantics": "ase_neighborlist_pbc",
+    "graph_update_backend": "ase_neighborlist",
+    "hidden_channels": [
+      64,
+      64
+    ],
+    "implemented_outputs": [
+      "energy",
+      "atomic_energy",
+      "forces"
+    ],
+    "missing_output_contracts": [
+      "validated_edge_gradient_virial"
+    ],
+    "moment_l_max": 2,
+    "num_radial": 12,
+    "pareto_axes": [
+      "semantic_projection",
+      "scalar_head_capacity",
+      "force_realization",
+      "angular_bandwidth_l_max",
+      "radial_rank",
+      "trainable_cross_radial_projection",
+      "trainable_species_basis",
+      "trainable_feature_extractor",
+      "trainable_edge_species_radial_basis",
+      "scalar_descriptor_conditioning",
+      "short_range_physical_prior",
+      "topology_provider"
+    ],
+    "retained_tece_groups": [
+      "radial_density",
+      "low_order_vector_moment_norm",
+      "atomic_cross_radial_invariants",
+      "atomic_cross_radial_rank_6",
+      "learnable_atomic_cross_radial_projection",
+      "learnable_low_rank_species_basis",
+      "trainable_low_rank_radial_mixing",
+      "trainable_edge_species_radial_basis",
+      "short_range_zbl_prior",
+      "trainable_scalar_descriptor_conditioner"
+    ],
+    "semantic_tier": "T3_vector_moment_scalarization_learnable_species_basis_learnable_radial_mixing_learnable_edge_species_radial_adapter_with_short_range_zbl_prior_scalar_conditioned",
+    "stress_realization": "ase_autograd_finite_strain_inference",
+    "virial_realization": "not_implemented"
+  },
+  "trajectory_displacement_std": 0.0,
+  "trajectory_max_displacement_since_rebuild_a": 0.0,
+  "trajectory_rebuild_causes": [],
+  "trajectory_rebuild_count": 0,
+  "trajectory_rebuild_interval": 0,
+  "trajectory_rebuild_steps": [],
+  "trajectory_replay": false,
+  "trajectory_replay_steps": 0,
+  "trajectory_skin_margin": 0.0,
+  "trajectory_skin_threshold": null,
+  "trajectory_update_only": false,
+  "trajectory_validity_only": false,
+  "variant": "stage154_l2_k6_mixed2048"
+}
