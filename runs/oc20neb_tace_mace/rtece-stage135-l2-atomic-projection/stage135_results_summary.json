@@ -1,0 +1,92 @@
+{
+  "delta_vs_stage132_atomic": {
+    "atoms_per_second": -158972.9396172387,
+    "best_valid_loss": -0.010871775448322296,
+    "cn_rattle_final_rmsd_a": 0.006458885519713922,
+    "dft_e_rmse_mev_atom": 1.5539372866181225,
+    "dft_f_max_abs_mev_a": 809.3731694793698,
+    "dft_f_rmse_mev_a": 4.605566479097476,
+    "rattle_max_fmax_ev_a": 0.19556011451905952
+  },
+  "delta_vs_stage134_balanced_teacher_relax": {
+    "atoms_per_second": -156732.32135331235,
+    "best_valid_loss": 0.0011236220598220825,
+    "cn_rattle_final_rmsd_a": -0.0076118502239583274,
+    "dft_e_rmse_mev_atom": -42.3248031993586,
+    "dft_f_max_abs_mev_a": 194.91249798461877,
+    "dft_f_rmse_mev_a": 5.940017485547756,
+    "rattle_max_fmax_ev_a": 0.8082607361202179
+  },
+  "interpretation": {
+    "l2_result": "Adding L_A=2 atomic quadrupole scalar paths lowers validation loss relative to the Stage132 L1 atomic anchor but worsens DFT force RMSE/max and reduces throughput by about 13%.",
+    "pareto_result": "Stage135 is not a clean Pareto improvement: it fails the benchmark gate due to force tail, keeps the rattle physical failure, and is slower than the Stage132 atomic anchor.",
+    "theory_update": "For this OC20NEB deployment slice, naive atomic quadrupole bandwidth is not the next retained TECE coordinate. The next priority should be projection diagnostics for L2 residual value and a low-rank trainable front mixer or better Sobolev/distillation target, not simply increasing L_A or adding edge cost."
+  },
+  "jobs": {
+    "physical": 685234,
+    "physical_elapsed": "00:00:10",
+    "slurm_exit": "all COMPLETED 0:0",
+    "train": 685231,
+    "train_elapsed": "00:16:56"
+  },
+  "row": {
+    "dft": {
+      "atoms_per_second": 1058909.3264312164,
+      "e_mae_mev_atom": 232.09355151122807,
+      "e_max_abs_mev_atom": 720.403556272978,
+      "e_rmse_mev_atom": 294.9453104908115,
+      "f_mae_mev_a": 47.506089388709796,
+      "f_max_abs_mev_a": 2649.912420471191,
+      "f_rmse_mev_a": 112.9600930248914
+    },
+    "moment_l_max": 2,
+    "num_parameters": 29885,
+    "physical": {
+      "benchmark_gate_pass": false,
+      "cn_rattle_final_rmsd_a": 0.10959208802356364,
+      "dimer_gate_pass": true,
+      "dimer_short_repulsive_fraction": 1.0,
+      "physical_gate_pass": false,
+      "physical_score": 14.897396530304288,
+      "rattle_gate_pass": false,
+      "rattle_max_fmax_ev_a": 10.754141574038577
+    },
+    "readout_parameters_estimate": 25473,
+    "representation_parameters_estimate": 4412,
+    "scalar_path_ids": [
+      "atomic.radial_density",
+      "atomic.species_basis_density",
+      "atomic.vector_norm",
+      "atomic.vector_cross_radial_dot",
+      "atomic.quadrupole_norm",
+      "atomic.quadrupole_cross_radial_frobenius"
+    ],
+    "teacher": {
+      "e_mae_mev_atom": 217.08663322142087,
+      "e_max_abs_mev_atom": 679.1636747472426,
+      "e_rmse_mev_atom": 278.50409558402333,
+      "f_mae_mev_a": 48.11748465712022,
+      "f_max_abs_mev_a": 2408.639609401245,
+      "f_rmse_mev_a": 109.36348560012806
+    },
+    "train": {
+      "batch_size": 8,
+      "best_step": 19840,
+      "best_valid_loss": 0.0936763733625412,
+      "early_stopping_patience": 400,
+      "lr_scheduler": "plateau",
+      "lr_warmup_steps": 500,
+      "steps": 20000,
+      "trainer_backend": "lightning",
+      "valid_batch_size": 16
+    },
+    "variant": "l2_active_nrad12_species24_radial_species8_cross3_h64"
+  },
+  "schema_version": "rtece_stage135_results_summary.v1",
+  "stage": "stage135_l2_atomic_projection",
+  "training_data": {
+    "limit_configs": 2560,
+    "source": "stage132 broad-teacher-rattle augmented train",
+    "train_file": "runs/oc20neb_tace_mace/rtece-stage132-broad-teacher-distill/augmented_train_base2048_plus_teacher_rattle512.extxyz"
+  }
+}
