@@ -1,0 +1,468 @@
+{
+  "atoms": 16000,
+  "configs": 320,
+  "copies_per_config": 2,
+  "frames_per_copy": 5,
+  "input": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "model": "runs/oc20neb_tace_mace/675969_resume/checkpoints_epoch/TACE-0-100000-0.1329.ckpt",
+  "output": "runs/oc20neb_tace_mace/rtece-stage133-teacher-relax-distill/teacher_relax_valid_start0_limit32_copies2_std0p05_steps4.extxyz",
+  "rattle_std_a": 0.05,
+  "records": [
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20260720,
+      "source_config_index": 0
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20260721,
+      "source_config_index": 0
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20261729,
+      "source_config_index": 1
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20261730,
+      "source_config_index": 1
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20262738,
+      "source_config_index": 2
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20262739,
+      "source_config_index": 2
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20263747,
+      "source_config_index": 3
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20263748,
+      "source_config_index": 3
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20264756,
+      "source_config_index": 4
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20264757,
+      "source_config_index": 4
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20265765,
+      "source_config_index": 5
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20265766,
+      "source_config_index": 5
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20266774,
+      "source_config_index": 6
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20266775,
+      "source_config_index": 6
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20267783,
+      "source_config_index": 7
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20267784,
+      "source_config_index": 7
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20268792,
+      "source_config_index": 8
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20268793,
+      "source_config_index": 8
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20269801,
+      "source_config_index": 9
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20269802,
+      "source_config_index": 9
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20270810,
+      "source_config_index": 10
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20270811,
+      "source_config_index": 10
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20271819,
+      "source_config_index": 11
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20271820,
+      "source_config_index": 11
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20272828,
+      "source_config_index": 12
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20272829,
+      "source_config_index": 12
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20273837,
+      "source_config_index": 13
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20273838,
+      "source_config_index": 13
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20274846,
+      "source_config_index": 14
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20274847,
+      "source_config_index": 14
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20275855,
+      "source_config_index": 15
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20275856,
+      "source_config_index": 15
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20276864,
+      "source_config_index": 16
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20276865,
+      "source_config_index": 16
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20277873,
+      "source_config_index": 17
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20277874,
+      "source_config_index": 17
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20278882,
+      "source_config_index": 18
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20278883,
+      "source_config_index": 18
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20279891,
+      "source_config_index": 19
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20279892,
+      "source_config_index": 19
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20280900,
+      "source_config_index": 20
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20280901,
+      "source_config_index": 20
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20281909,
+      "source_config_index": 21
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20281910,
+      "source_config_index": 21
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20282918,
+      "source_config_index": 22
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20282919,
+      "source_config_index": 22
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20283927,
+      "source_config_index": 23
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20283928,
+      "source_config_index": 23
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20284936,
+      "source_config_index": 24
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20284937,
+      "source_config_index": 24
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20285945,
+      "source_config_index": 25
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20285946,
+      "source_config_index": 25
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20286954,
+      "source_config_index": 26
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20286955,
+      "source_config_index": 26
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20287963,
+      "source_config_index": 27
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20287964,
+      "source_config_index": 27
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20288972,
+      "source_config_index": 28
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20288973,
+      "source_config_index": 28
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20289981,
+      "source_config_index": 29
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20289982,
+      "source_config_index": 29
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20290990,
+      "source_config_index": 30
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20290991,
+      "source_config_index": 30
+    },
+    {
+      "atoms": 50,
+      "copy_index": 0,
+      "frames": 5,
+      "rattle_seed": 20291999,
+      "source_config_index": 31
+    },
+    {
+      "atoms": 50,
+      "copy_index": 1,
+      "frames": 5,
+      "rattle_seed": 20292000,
+      "source_config_index": 31
+    }
+  ],
+  "reference_prefix": "source_",
+  "relax_max_steps": 4,
+  "schema_version": "teacher_relax_distill_configs.v1",
+  "seed": 20260720,
+  "source_configs": 32,
+  "source_start_config": 0,
+  "target_energy_key": "energy",
+  "target_forces_key": "forces"
+}

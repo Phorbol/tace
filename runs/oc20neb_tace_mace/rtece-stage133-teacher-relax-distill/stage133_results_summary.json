@@ -1,0 +1,123 @@
+{
+  "comparison": {
+    "delta_vs_stage132_atomic": {
+      "atoms_per_second": -4178.448289366672,
+      "cn_rattle_final_rmsd_a": 0.010030870437607406,
+      "dft_e_max_abs_mev_atom": 109.15483446936787,
+      "dft_e_rmse_mev_atom": 70.22372337017862,
+      "dft_f_mae_mev_a": -2.290875069358073,
+      "dft_f_max_abs_mev_a": 258.3832388623048,
+      "dft_f_rmse_mev_a": -1.5884126875589715,
+      "physical_score": -1.3174439212801072,
+      "rattle_max_fmax_ev_a": -1.795318865227058
+    },
+    "stage132_atomic_reference": {
+      "dft": {
+        "atoms_per_second": 1217882.2660484551,
+        "e_mae_mev_atom": 230.09653626407908,
+        "e_max_abs_mev_atom": 697.3013906020223,
+        "e_rmse_mev_atom": 293.39137320419337,
+        "f_mae_mev_a": 46.5025060854312,
+        "f_max_abs_mev_a": 1840.5392509918213,
+        "f_rmse_mev_a": 108.35452654579393,
+        "num_parameters": 28925
+      },
+      "physical": {
+        "benchmark_gate_pass": true,
+        "cn_rattle_final_rmsd_a": 0.10313320250384972,
+        "dimer_energy_shape_penalty": 0.0,
+        "dimer_gate_pass": true,
+        "dimer_short_repulsive_fraction": 1.0,
+        "physical_gate_pass": false,
+        "physical_score": 14.298451723191814,
+        "rattle_gate_pass": false,
+        "rattle_max_fmax_ev_a": 10.558581459519518
+      },
+      "train": {
+        "batch_size": 8,
+        "best_step": 18240,
+        "best_valid_loss": 0.1045481488108635,
+        "early_stopping_patience": 400,
+        "lr_scheduler": "plateau",
+        "lr_warmup_steps": 500,
+        "steps": 20000,
+        "trainer_backend": "lightning",
+        "valid_batch_size": 16
+      }
+    }
+  },
+  "interpretation": {
+    "distillation_error_signal": "The lower best valid loss and lower physical score indicate that trajectory labels add useful force-field-manifold information, but the degraded DFT energy metrics show that simply adding short teacher trajectories shifts the target distribution and does not close the DFT-comparable PES.",
+    "next_priority": "Stop increasing same-family fake labels alone. Next TECE-consistent step should either introduce explicit Sobolev/Jacobian weighting with DFT/teacher balance or test a front-representation axis that is still theoretically clean: higher controlled L_A/cross-radial paths or low-rank trainable feature mixers, evaluated by RMSE/max/physical tests and throughput scaling.",
+    "result": "Teacher-relax trajectory coverage is not a clean Pareto improvement over the stage132 fixed atomic row: it slightly improves F RMSE and rattle force-tail score, but worsens energy RMSE/max, F max, C/N relax RMSD, and benchmark gate status at essentially unchanged throughput."
+  },
+  "jobs": {
+    "elapsed": {
+      "physical": "00:00:07",
+      "prepare": "00:00:35",
+      "train": "00:08:47"
+    },
+    "physical": 685199,
+    "prepare": 685197,
+    "slurm_exit": "all COMPLETED 0:0",
+    "train": 685198
+  },
+  "rows": [
+    {
+      "dft": {
+        "atoms_per_second": 1213703.8177590885,
+        "e_mae_mev_atom": 294.55344546910544,
+        "e_max_abs_mev_atom": 806.4562250713901,
+        "e_rmse_mev_atom": 363.615096574372,
+        "f_mae_mev_a": 44.21163101607313,
+        "f_max_abs_mev_a": 2098.922489854126,
+        "f_rmse_mev_a": 106.76611385823496,
+        "num_parameters": 28925
+      },
+      "physical": {
+        "benchmark_gate_pass": false,
+        "cn_rattle_final_rmsd_a": 0.11316407294145713,
+        "dimer_gate_pass": true,
+        "dimer_short_repulsive_fraction": 1.0,
+        "physical_gate_pass": false,
+        "physical_score": 12.981007801911707,
+        "rattle_gate_pass": false,
+        "rattle_max_fmax_ev_a": 8.76326259429246
+      },
+      "teacher": {
+        "e_mae_mev_atom": 280.6290687485708,
+        "e_max_abs_mev_atom": 796.2391294282058,
+        "e_rmse_mev_atom": 350.56899554113187,
+        "f_mae_mev_a": 45.91559700631449,
+        "f_max_abs_mev_a": 2361.4075227642825,
+        "f_rmse_mev_a": 104.22180987649239
+      },
+      "train": {
+        "batch_size": 8,
+        "best_step": 9176,
+        "best_valid_loss": 0.10266024619340897,
+        "early_stopping_patience": 400,
+        "lr_warmup_steps": 500,
+        "steps": 20000,
+        "trainer_backend": "lightning",
+        "valid_batch_size": 16
+      },
+      "variant": "l1_active_nrad12_species24_radial_species8_cross3_h64"
+    }
+  ],
+  "schema_version": "rtece_stage133_results_summary.v1",
+  "source_commit": "bfa1293",
+  "stage": "stage133_teacher_relax_trajectory_distill",
+  "training_data": {
+    "augmented_atoms": 126386,
+    "augmented_configs": 2368,
+    "base_configs": 2048,
+    "copies_per_config": 2,
+    "frames_per_copy": 5,
+    "rattle_std_a": 0.05,
+    "relax_max_steps": 4,
+    "source_window": "valid[0:32]",
+    "teacher_relax_atoms": 16000,
+    "teacher_relax_configs": 320
+  }
+}
