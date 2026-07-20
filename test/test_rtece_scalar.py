@@ -7578,6 +7578,63 @@ def test_rtece_stage144_t3_cavity_vector_manifest_materializes_minimal_edge_row(
     assert "dimer_scan_rtece.py" in physical_text
 
 
+def test_community_baselines_stage145_manifest_materializes_no_export_wrappers(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_community_baselines_stage145 import (
+        audit_stage145_manifest,
+        make_stage145_manifest,
+        materialize_stage145,
+    )
+
+    payload = make_stage145_manifest(
+        output_root=tmp_path / "stage145",
+        limit_configs=16,
+        valid_limit_configs=4,
+        bench_limit_configs=8,
+        nep_generations=20,
+        deepmd_stop_batch=20,
+    )
+
+    assert payload["schema_version"] == "community_baselines_stage145.v1"
+    assert payload["stage"] == "community_baselines_stage145"
+    assert payload["train_contract"]["label_target"] == "mixed_energy_forces"
+    assert payload["train_contract"]["energy_key"] == "energy"
+    assert payload["train_contract"]["forces_key"] == "forces"
+    assert payload["train_contract"]["dft_energy_key"] == "dft_energy"
+    assert payload["train_contract"]["teacher_forces_key"] == "teacher_forces"
+
+    rows = {row["name"]: row for row in payload["rows"]}
+    assert set(rows) == {"nep4_mixed_smoke", "deepmd_dpa_like_mixed_smoke"}
+    assert rows["nep4_mixed_smoke"]["engine"] == "nep"
+    assert rows["nep4_mixed_smoke"]["module"] == "gpumd/4.8-cuda12.4"
+    assert rows["deepmd_dpa_like_mixed_smoke"]["engine"] == "deepmd"
+    assert rows["deepmd_dpa_like_mixed_smoke"]["module"] == "deepmd-kit/3.1.2"
+    assert rows["deepmd_dpa_like_mixed_smoke"]["descriptor_label"] in {
+        "dpa1_zero_attention",
+        "dpa_like_low_attention",
+    }
+
+    audit = audit_stage145_manifest(payload)
+    assert audit["contract_pass"], audit["failed_checks"]
+
+    materialized = materialize_stage145(payload)
+    assert Path(materialized["manifest"]).exists()
+    assert Path(materialized["audit"]).exists()
+    assert Path(materialized["stage_plan"]).exists()
+    assert set(materialized["wrappers"]) == {"nep4_mixed_smoke", "deepmd_dpa_like_mixed_smoke"}
+
+    for wrapper_path in materialized["wrappers"].values():
+        text = Path(wrapper_path).read_text()
+        assert "#SBATCH --nodes=1" in text
+        assert "#SBATCH --ntasks=1" in text
+        assert "#SBATCH --gpus-per-node=1" in text
+        assert "--export" not in text
+        assert "--mem" not in text
+        assert "--cpus-per-task" not in text
+        assert "community-baselines-stage145" in text
+
+
 def test_rtece_stage136_l2_projection_diagnostic_manifest_materializes_no_export_wrapper(tmp_path):
     from pathlib import Path
 

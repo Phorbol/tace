@@ -1,0 +1,14 @@
+{
+  "checks": {
+    "has_nep_and_deepmd": true,
+    "mixed_label_contract": true,
+    "no_export_wrapper_names": true,
+    "rmse_metrics_present": true,
+    "row_set": true,
+    "schema_version": true,
+    "stage": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "schema_version": "community_baselines_stage145_audit.v1"
+}
