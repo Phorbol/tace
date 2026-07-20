@@ -1,0 +1,270 @@
+{
+  "deltas": {
+    "train64_l1_minus_full_l2": {
+      "force_max_abs": 0.010056995591639861,
+      "force_rmse": 0.0038354962489020594,
+      "relative_residual": 0.032043439235753104
+    },
+    "valid64_drop_cross_minus_full_l2": {
+      "force_max_abs": 0.003322558200579806,
+      "force_rmse": 0.00047962204304753675,
+      "relative_residual": 0.0007394019773775737
+    },
+    "valid64_l1_minus_full_l2": {
+      "force_max_abs": 0.14670996279664905,
+      "force_rmse": 0.01009700645607954,
+      "relative_residual": 0.011735243502580069
+    }
+  },
+  "diagnostic_scope": {
+    "atomic_cross_radial_sketch_channels": 3,
+    "candidate_of_interest": "Stage132 L_A=1 atomic path subset",
+    "energy_eval_stride": 4,
+    "force_eval_stride": 4,
+    "num_radial": 12,
+    "reference": "Stage135 L_A=2 atomic quadrupole path set",
+    "species_basis_channels": 24
+  },
+  "interpretation": {
+    "energy_caveat": "Energy projection is underdetermined for 64 configs because descriptor dimensions exceed held-out fit configs; use force projection and physical tests as stronger evidence until the energy projection is rerun with many more configs or lower-rank/better-regularized fits.",
+    "force_projection": "Valid DFT64 force projection favors the full L2 atomic reference: force RMSE 0.1024 vs 0.1125 for the Stage132 L1 subset, and force max 1.128 vs 1.275. Thus L2 quadrupole paths carry force-response information in the current nrad12/species24/cross3 coordinate system.",
+    "next_priority": "Do not discard L2 entirely, but do not keep naive full L2 training as the next Pareto row. Next step should test a low-rank/conditioned L2 front or projection-regularized distillation that retains L2 force information without exploding force tails and throughput cost.",
+    "stage135_failure_mode": "Because Stage135 training worsened DFT F RMSE/max despite L2 force projection value, the failure is more likely optimization/distillation/regularization/tail weighting or learned-front conditioning, not pure absence of L2 information."
+  },
+  "jobs": {
+    "projection_64": 685255,
+    "projection_64_elapsed": "00:20:06",
+    "projection_64_exit": "COMPLETED 0:0",
+    "projection_smoke16": 685271,
+    "projection_smoke16_elapsed": "00:00:26",
+    "projection_smoke16_exit": "COMPLETED 0:0"
+  },
+  "schema_version": "rtece_stage136_results_summary.v1",
+  "smoke16_sanity": {
+    "train_mixed16": [
+      {
+        "candidate": "full_l2_reference",
+        "candidate_dim": 330,
+        "ef_combined_rank": 2,
+        "ef_pareto_dominated": true,
+        "energy_degrees_of_freedom": -341,
+        "energy_per_atom_rmse": 7.458406990279849,
+        "energy_underdetermined": true,
+        "force_mae": 0.43352165733406706,
+        "force_max_abs": 13.783940046404014,
+        "force_rmse": 1.0665718685935341,
+        "relative_residual": 9.999848636997329e-09
+      },
+      {
+        "candidate": "drop_quadrupole_cross",
+        "candidate_dim": 327,
+        "ef_combined_rank": 1,
+        "ef_pareto_dominated": false,
+        "energy_degrees_of_freedom": -338,
+        "energy_per_atom_rmse": 4.963617898700668,
+        "energy_underdetermined": true,
+        "force_mae": 0.42725399765604893,
+        "force_max_abs": 13.400608104279373,
+        "force_rmse": 1.0529866698967014,
+        "relative_residual": 0.0022712792876794625
+      },
+      {
+        "candidate": "drop_quadrupole_norm",
+        "candidate_dim": 318,
+        "ef_combined_rank": 4,
+        "ef_pareto_dominated": false,
+        "energy_degrees_of_freedom": -329,
+        "energy_per_atom_rmse": 12.444139852702977,
+        "energy_underdetermined": true,
+        "force_mae": 0.48172620945906447,
+        "force_max_abs": 15.556009405223877,
+        "force_rmse": 1.2255902303011674,
+        "relative_residual": 0.024032777514084794
+      },
+      {
+        "candidate": "stage132_l1_atomic",
+        "candidate_dim": 315,
+        "ef_combined_rank": 3,
+        "ef_pareto_dominated": false,
+        "energy_degrees_of_freedom": -326,
+        "energy_per_atom_rmse": 10.672487595289647,
+        "energy_underdetermined": true,
+        "force_mae": 0.4630003623322074,
+        "force_max_abs": 15.66012121327046,
+        "force_rmse": 1.232801728545706,
+        "relative_residual": 0.02595366870917036
+      }
+    ],
+    "valid_dft16": [
+      {
+        "candidate": "full_l2_reference",
+        "candidate_dim": 330,
+        "ef_combined_rank": 1,
+        "ef_pareto_dominated": false,
+        "energy_degrees_of_freedom": -322,
+        "energy_per_atom_rmse": 0.030019649045995106,
+        "energy_underdetermined": true,
+        "force_mae": 0.0471711340389265,
+        "force_max_abs": 1.2141014472597909,
+        "force_rmse": 0.11847293791646106,
+        "relative_residual": 4.462186503208943e-09
+      },
+      {
+        "candidate": "drop_quadrupole_cross",
+        "candidate_dim": 327,
+        "ef_combined_rank": 2,
+        "ef_pareto_dominated": false,
+        "energy_degrees_of_freedom": -319,
+        "energy_per_atom_rmse": 0.030806879193735957,
+        "energy_underdetermined": true,
+        "force_mae": 0.04768065154432756,
+        "force_max_abs": 1.4181748451967855,
+        "force_rmse": 0.1253027008563842,
+        "relative_residual": 0.0004105923491611978
+      },
+      {
+        "candidate": "drop_quadrupole_norm",
+        "candidate_dim": 318,
+        "ef_combined_rank": 4,
+        "ef_pareto_dominated": false,
+        "energy_degrees_of_freedom": -310,
+        "energy_per_atom_rmse": 0.26079284492583893,
+        "energy_underdetermined": true,
+        "force_mae": 0.04909097328484946,
+        "force_max_abs": 1.989168516974919,
+        "force_rmse": 0.14415456082189407,
+        "relative_residual": 0.008628962802243479
+      },
+      {
+        "candidate": "stage132_l1_atomic",
+        "candidate_dim": 315,
+        "ef_combined_rank": 3,
+        "ef_pareto_dominated": false,
+        "energy_degrees_of_freedom": -307,
+        "energy_per_atom_rmse": 0.3478508253615149,
+        "energy_underdetermined": true,
+        "force_mae": 0.048260127061900325,
+        "force_max_abs": 1.9280467097026184,
+        "force_rmse": 0.14016906250940386,
+        "relative_residual": 0.010236022609728232
+      }
+    ]
+  },
+  "stage": "stage136_l2_projection_diagnostic",
+  "train_mixed64": {
+    "limit_configs": 64,
+    "rows": [
+      {
+        "candidate": "full_l2_reference",
+        "candidate_dim": 330,
+        "ef_combined_rank": 4,
+        "ef_pareto_dominated": false,
+        "energy_degrees_of_freedom": -320,
+        "energy_per_atom_rmse": 228.2509621187597,
+        "energy_underdetermined": true,
+        "force_mae": 0.08996200716568531,
+        "force_max_abs": 4.949949712250075,
+        "force_rmse": 0.2657637834761724,
+        "relative_residual": 5.983896058356579e-09
+      },
+      {
+        "candidate": "drop_quadrupole_cross",
+        "candidate_dim": 327,
+        "ef_combined_rank": 2,
+        "ef_pareto_dominated": true,
+        "energy_degrees_of_freedom": -317,
+        "energy_per_atom_rmse": 139.03479778694864,
+        "energy_underdetermined": true,
+        "force_mae": 0.0917143017628063,
+        "force_max_abs": 4.977899671414364,
+        "force_rmse": 0.2692753202635021,
+        "relative_residual": 0.002590308561728896
+      },
+      {
+        "candidate": "drop_quadrupole_norm",
+        "candidate_dim": 318,
+        "ef_combined_rank": 1,
+        "ef_pareto_dominated": false,
+        "energy_degrees_of_freedom": -308,
+        "energy_per_atom_rmse": 54.734487068085656,
+        "energy_underdetermined": true,
+        "force_mae": 0.09115962845701683,
+        "force_max_abs": 4.876007774017055,
+        "force_rmse": 0.26610543465422315,
+        "relative_residual": 0.029452409412721623
+      },
+      {
+        "candidate": "stage132_l1_atomic",
+        "candidate_dim": 315,
+        "ef_combined_rank": 3,
+        "ef_pareto_dominated": false,
+        "energy_degrees_of_freedom": -305,
+        "energy_per_atom_rmse": 44.065973198421275,
+        "energy_underdetermined": true,
+        "force_mae": 0.0919851548485735,
+        "force_max_abs": 4.960006707841715,
+        "force_rmse": 0.26959927972507447,
+        "relative_residual": 0.032043445219649164
+      }
+    ],
+    "source": "runs/oc20neb_tace_mace/rtece-stage132-broad-teacher-distill/augmented_train_base2048_plus_teacher_rattle512.extxyz"
+  },
+  "valid_dft64": {
+    "limit_configs": 64,
+    "rows": [
+      {
+        "candidate": "full_l2_reference",
+        "candidate_dim": 330,
+        "ef_combined_rank": 2,
+        "ef_pareto_dominated": false,
+        "energy_degrees_of_freedom": -289,
+        "energy_per_atom_rmse": 0.027440107850211164,
+        "energy_underdetermined": true,
+        "force_mae": 0.043805952347480304,
+        "force_max_abs": 1.1282503008944071,
+        "force_rmse": 0.10240285219890331,
+        "relative_residual": 3.5569804219924213e-09
+      },
+      {
+        "candidate": "drop_quadrupole_cross",
+        "candidate_dim": 327,
+        "ef_combined_rank": 4,
+        "ef_pareto_dominated": false,
+        "energy_degrees_of_freedom": -286,
+        "energy_per_atom_rmse": 46.695579850469244,
+        "energy_underdetermined": true,
+        "force_mae": 0.04405644679706267,
+        "force_max_abs": 1.131572859094987,
+        "force_rmse": 0.10288247424195085,
+        "relative_residual": 0.0007394055343579957
+      },
+      {
+        "candidate": "drop_quadrupole_norm",
+        "candidate_dim": 318,
+        "ef_combined_rank": 3,
+        "ef_pareto_dominated": true,
+        "energy_degrees_of_freedom": -277,
+        "energy_per_atom_rmse": 0.018846130030543327,
+        "energy_underdetermined": true,
+        "force_mae": 0.0471824178104987,
+        "force_max_abs": 1.2344113125299567,
+        "force_rmse": 0.11377625953276048,
+        "relative_residual": 0.01062197304389095
+      },
+      {
+        "candidate": "stage132_l1_atomic",
+        "candidate_dim": 315,
+        "ef_combined_rank": 1,
+        "ef_pareto_dominated": false,
+        "energy_degrees_of_freedom": -274,
+        "energy_per_atom_rmse": 0.014676699784282467,
+        "energy_underdetermined": true,
+        "force_mae": 0.047075363829711135,
+        "force_max_abs": 1.2749602636910562,
+        "force_rmse": 0.11249985865498285,
+        "relative_residual": 0.011735247059560491
+      }
+    ],
+    "source": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz"
+  }
+}
