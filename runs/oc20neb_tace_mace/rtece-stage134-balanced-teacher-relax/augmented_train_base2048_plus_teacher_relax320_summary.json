@@ -1,0 +1,26 @@
+{
+  "atoms": 126386,
+  "configs": 2368,
+  "output": "runs/oc20neb_tace_mace/rtece-stage134-balanced-teacher-relax/augmented_train_base2048_plus_teacher_relax320.extxyz",
+  "schema_version": "rtece_concat_extxyz.v1",
+  "sources": [
+    {
+      "atoms": 110386,
+      "configs": 2048,
+      "input_limit": 2048,
+      "label": "base_mixed_train_tw0p75",
+      "output_start_index": 0,
+      "output_stop_index": 2048,
+      "path": "runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz"
+    },
+    {
+      "atoms": 16000,
+      "configs": 320,
+      "input_limit": null,
+      "label": "teacher_relax_trajectory320",
+      "output_start_index": 2048,
+      "output_stop_index": 2368,
+      "path": "runs/oc20neb_tace_mace/rtece-stage134-balanced-teacher-relax/teacher_relax_valid_start0_limit32_copies2_std0p05_steps4.extxyz"
+    }
+  ]
+}

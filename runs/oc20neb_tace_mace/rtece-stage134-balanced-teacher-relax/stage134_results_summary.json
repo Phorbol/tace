@@ -1,0 +1,107 @@
+{
+  "comparison": {
+    "delta_vs_stage132_broad_rattle_atomic": {
+      "cn_rattle_final_rmsd_a": 0.01407073574367225,
+      "dft_e_max_abs_mev_atom": 44.92402918198525,
+      "dft_e_rmse_mev_atom": 43.87874048597672,
+      "dft_f_max_abs_mev_a": 614.4606714947511,
+      "dft_f_rmse_mev_a": -1.33445100645028,
+      "physical_score": -0.15105628830033524,
+      "rattle_max_fmax_ev_a": -0.6127006216011583
+    },
+    "delta_vs_stage133_teacher_relax": {
+      "cn_rattle_final_rmsd_a": 0.004039865306064844,
+      "dft_e_max_abs_mev_atom": -64.23080528738262,
+      "dft_e_rmse_mev_atom": -26.344982884201897,
+      "dft_f_max_abs_mev_a": 356.0774326324463,
+      "dft_f_rmse_mev_a": 0.25396168110869155,
+      "physical_score": 1.166387632979772,
+      "rattle_max_fmax_ev_a": 1.1826182436258996
+    }
+  },
+  "interpretation": {
+    "distillation_error_signal": "The source-weight policy improves E RMSE from stage133 363.6 to 337.3 meV/atom, but F max rises to 2455 meV/A and physical score regresses. The remaining gap is therefore not just source energy/force balance.",
+    "next_priority": "Stop iterating source-weight heuristics on the fixed atomic front. The next TECE-aligned move should be a representation/projection step with clean theory: controlled L_A/cross-radial expansion or low-rank trainable front mixer, coupled to projection diagnostics and the same RMSE/max/physical/throughput gates.",
+    "result": "DFT energy anchoring partially reduces the stage133 energy drift, but it does not recover the stage132 benchmark Pareto point and it worsens force max / rattle indicators relative to stage133."
+  },
+  "jobs": {
+    "elapsed": {
+      "physical": "00:01:25",
+      "prepare": "00:00:37",
+      "train": "00:09:03"
+    },
+    "physical": 685206,
+    "prepare": 685204,
+    "slurm_exit": "all COMPLETED 0:0",
+    "train": 685205
+  },
+  "rows": [
+    {
+      "dft": {
+        "atoms_per_second": 1215641.6477845288,
+        "e_mae_mev_atom": 272.30277818768116,
+        "e_max_abs_mev_atom": 742.2254197840075,
+        "e_rmse_mev_atom": 337.2701136901701,
+        "f_mae_mev_a": 47.76617743153904,
+        "f_max_abs_mev_a": 2454.9999224865724,
+        "f_rmse_mev_a": 107.02007553934365,
+        "num_parameters": 28925
+      },
+      "physical": {
+        "benchmark_gate_pass": false,
+        "cn_rattle_final_rmsd_a": 0.11720393824752197,
+        "dimer_gate_pass": true,
+        "dimer_short_repulsive_fraction": 1.0,
+        "physical_gate_pass": false,
+        "physical_score": 14.147395434891479,
+        "rattle_gate_pass": false,
+        "rattle_max_fmax_ev_a": 9.94588083791836
+      },
+      "teacher": {
+        "e_mae_mev_atom": 257.29579405397624,
+        "e_max_abs_mev_atom": 700.9858972886029,
+        "e_rmse_mev_atom": 321.80297827163736,
+        "f_mae_mev_a": 48.36687704969984,
+        "f_max_abs_mev_a": 2082.6551909051514,
+        "f_rmse_mev_a": 103.98565412555519
+      },
+      "train": {
+        "batch_size": 8,
+        "best_step": 17168,
+        "best_valid_loss": 0.09255275130271912,
+        "early_stopping_patience": 400,
+        "lr_warmup_steps": 500,
+        "max_steps": 20000,
+        "sample_weight_keys": [
+          "energy_weight",
+          "forces_weight"
+        ],
+        "steps": 20000,
+        "valid_batch_size": 16
+      },
+      "variant": "l1_active_nrad12_species24_radial_species8_cross3_h64"
+    }
+  ],
+  "schema_version": "rtece_stage134_results_summary.v1",
+  "source_commit": "f05de3d",
+  "stage": "stage134_balanced_teacher_relax_distill",
+  "weight_policy": {
+    "energy_weight_max": 1.121212121212121,
+    "energy_weight_mean": 1.0,
+    "energy_weight_min": 0.22424242424242424,
+    "force_weight_max": 1.761904761904762,
+    "force_weight_mean": 1.0000000000000002,
+    "force_weight_min": 0.880952380952381,
+    "source_counts": {
+      "base_mixed_train_tw0p75": 2048,
+      "teacher_relax_trajectory320": 320
+    },
+    "source_energy_multipliers": {
+      "base_mixed_train_tw0p75": 1.25,
+      "teacher_relax_trajectory320": 0.25
+    },
+    "source_force_multipliers": {
+      "teacher_relax_trajectory320": 2.0
+    }
+  }
+}
