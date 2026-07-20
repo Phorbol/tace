@@ -1,0 +1,79 @@
+{
+  "auto_candidate_strategies": [
+    "single_delete",
+    "prefix"
+  ],
+  "configs": "runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz",
+  "created_for": "train_side_sobolev_path_ranking_after_stage151_energy_gap",
+  "jobs": [
+    {
+      "job_id": 687449,
+      "output_json": "projection_outputs/stage152_train_limit128_dft_ef_projection.json",
+      "role": "train_limit128_dft_energy_force_projection",
+      "wrapper": "rtece_stage152_dft_ef_no_export.sbatch"
+    },
+    {
+      "job_id": 687450,
+      "output_json": "projection_outputs/stage152_train_limit128_mixed_ef_projection.json",
+      "role": "train_limit128_mixed_energy_force_projection",
+      "wrapper": "rtece_stage152_mixed_ef_no_export.sbatch"
+    },
+    {
+      "job_id": 687451,
+      "output_json": "projection_outputs/stage152_train_limit128_teacher_ef_projection.json",
+      "role": "train_limit128_teacher_energy_force_projection",
+      "wrapper": "rtece_stage152_teacher_ef_no_export.sbatch"
+    },
+    {
+      "job_id": 687452,
+      "output_json": "projection_outputs/stage152_train_limit512_dft_ef_projection.json",
+      "role": "train_limit512_dft_energy_force_projection",
+      "wrapper": "rtece_stage152_dft_ef_limit512_no_export.sbatch"
+    },
+    {
+      "job_id": 687453,
+      "output_json": "projection_outputs/stage152_train_limit512_mixed_ef_projection.json",
+      "role": "train_limit512_mixed_energy_force_projection",
+      "wrapper": "rtece_stage152_mixed_ef_limit512_no_export.sbatch"
+    },
+    {
+      "job_id": 687454,
+      "output_json": "projection_outputs/stage152_train_limit512_teacher_ef_projection.json",
+      "role": "train_limit512_teacher_energy_force_projection",
+      "wrapper": "rtece_stage152_teacher_ef_limit512_no_export.sbatch"
+    }
+  ],
+  "limit_configs": 128,
+  "manual_candidates": [
+    "t2_l0_species_radial",
+    "t2_l1_atomic_cross",
+    "t2_l2_atomic_cross",
+    "t3_l2_cavity_vector",
+    "t3_full_reference"
+  ],
+  "projection_settings": {
+    "atomic_cross_radial_sketch_channels": 3,
+    "cutoff": 5.0,
+    "default_dtype": "float64",
+    "energy_baseline": "element_counts",
+    "energy_eval_offset": 0,
+    "energy_eval_stride": 4,
+    "force_eval_offset": 0,
+    "force_eval_stride": 4,
+    "neighborlist_backend": "matscipy",
+    "num_radial": 12,
+    "species_basis_channels": 24
+  },
+  "reference_path_ids": [
+    "atomic.radial_density",
+    "atomic.species_basis_density",
+    "atomic.vector_norm",
+    "atomic.vector_cross_radial_dot",
+    "atomic.quadrupole_norm",
+    "atomic.quadrupole_cross_radial_frobenius",
+    "edge.cavity.vector_dot",
+    "edge.cavity.quadrupole_frobenius",
+    "edge.direct.radial"
+  ],
+  "stage": "stage152_train_side_ef_active_set"
+}
