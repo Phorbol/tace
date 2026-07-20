@@ -1,0 +1,12 @@
+{
+  "atoms": 110386,
+  "configs": 2048,
+  "dft_energy_key": "dft_energy",
+  "dft_forces_key": "dft_forces",
+  "dft_weight": 1.0,
+  "input": "runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz",
+  "output": "runs/oc20neb_tace_mace/rtece-stage153-dft-only-energy-control/data/dft_only_base2048.extxyz",
+  "target_energy_key": "energy",
+  "target_forces_key": "forces",
+  "teacher_weight": 0.0
+}
