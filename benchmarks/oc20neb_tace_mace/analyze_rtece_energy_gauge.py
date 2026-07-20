@@ -22,6 +22,10 @@ from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import (
     extxyz_index,
     load_atoms_window,
 )
+from benchmarks.oc20neb_tace_mace.relative_energy_metrics import (
+    atoms_group_values as _atoms_group_values,
+    relative_energy_group_metrics,
+)
 from benchmarks.oc20neb_tace_mace.train_rtece_scalar import load_checkpoint
 
 
@@ -200,9 +204,18 @@ def run_energy_gauge_diagnostic(args: argparse.Namespace) -> dict[str, object]:
         )
         corrected_eval_e = apply_energy_calibration(eval_counts, eval_pred_e, calibration)
         metrics = summarize_errors(corrected_eval_e, eval_pred_f, eval_ref_e, eval_ref_f, eval_natoms)
+        eval_groups, eval_images = _atoms_group_values(eval_atoms, args.group_key, args.image_key)
+        relative_metrics = relative_energy_group_metrics(
+            corrected_eval_e,
+            eval_ref_e,
+            eval_natoms,
+            eval_groups,
+            image_indices=eval_images,
+        )
         calibration_payload[mode] = {
             "calibration": calibration,
             "eval_metrics": metrics,
+            "eval_relative_energy_metrics": relative_metrics,
         }
     return {
         "schema_version": "rtece_stage146_energy_gauge.v1",
@@ -211,6 +224,8 @@ def run_energy_gauge_diagnostic(args: argparse.Namespace) -> dict[str, object]:
         "variant": str(args.variant),
         "energy_key": str(args.energy_key),
         "forces_key": str(args.forces_key),
+        "group_key": str(args.group_key),
+        "image_key": str(args.image_key),
         "device": str(args.device),
         "default_dtype": str(args.default_dtype),
         "graph_construction_backend": str(args.graph_construction_backend),
@@ -239,8 +254,9 @@ def write_markdown(payload: Mapping[str, object], path: Path) -> None:
     rows = []
     for mode, item in dict(payload["eval_calibrations"]).items():
         metrics = dict(item["eval_metrics"])
+        relative = dict(item.get("eval_relative_energy_metrics") or {})
         rows.append(
-            f"| {mode} | {metrics['rmse_e_mev_atom']:.3f} | {metrics['mae_e_mev_atom']:.3f} | {metrics['max_abs_e_mev_atom']:.3f} | {metrics['bias_e_mev_atom']:.3f} | {metrics['rmse_f_mev_a']:.3f} | {metrics['mae_f_mev_a']:.3f} |"
+            f"| {mode} | {metrics['rmse_e_mev_atom']:.3f} | {metrics['mae_e_mev_atom']:.3f} | {metrics['max_abs_e_mev_atom']:.3f} | {metrics['bias_e_mev_atom']:.3f} | {metrics['rmse_f_mev_a']:.3f} | {metrics['mae_f_mev_a']:.3f} | {float(relative.get('relative_image_rmse_mev_atom', 0.0)):.3f} | {float(relative.get('barrier_rmse_mev_atom', 0.0)):.3f} |"
         )
     text = "\n".join(
         [
@@ -253,8 +269,8 @@ def write_markdown(payload: Mapping[str, object], path: Path) -> None:
             f"- evaluation: `{dict(payload['eval_window'])['extxyz_index']}`",
             f"- model energy reference: per-element={bool(dict(payload['model_atomic_energies']))}, global_shift={payload['model_energy_per_atom_shift']}",
             "",
-            "| calibration | E RMSE meV/atom | E MAE meV/atom | E max meV/atom | E bias meV/atom | F RMSE meV/A | F MAE meV/A |",
-            "|---|---:|---:|---:|---:|---:|---:|",
+            "| calibration | E RMSE meV/atom | E MAE meV/atom | E max meV/atom | E bias meV/atom | F RMSE meV/A | F MAE meV/A | relative image RMSE meV/atom | barrier RMSE meV/atom |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
             *rows,
             "",
         ]
@@ -272,6 +288,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--default-dtype", choices=("float32", "float64"), default="float32")
     parser.add_argument("--energy-key", default="energy")
     parser.add_argument("--forces-key", default="forces")
+    parser.add_argument("--group-key", default="case_id")
+    parser.add_argument("--image-key", default="source_frame")
     parser.add_argument("--calib-start", type=int, default=0)
     parser.add_argument("--calib-limit", type=int, default=128)
     parser.add_argument("--eval-start", type=int, default=128)

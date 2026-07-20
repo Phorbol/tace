@@ -5564,6 +5564,32 @@ def test_prediction_error_payload_summarizes_available_predictions():
     assert payload["mae_f_mev_a"] == 0.0
 
 
+
+
+def test_prediction_error_payload_includes_relative_energy_metrics_when_groups_are_given():
+    import numpy as np
+    from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import prediction_error_payload
+
+    ref_e = np.array([0.0, 1.0, 3.0])
+    pred_e = np.array([5.0, 6.2, 8.0])
+    ref_f = np.zeros((3, 3))
+    pred_f = np.zeros((3, 3))
+    natoms = np.array([2.0, 2.0, 2.0])
+    outputs = [{"energy": pred_e.copy(), "forces": pred_f.copy()}]
+
+    payload = prediction_error_payload(
+        outputs,
+        ref_e,
+        ref_f,
+        natoms,
+        group_ids=["path-a", "path-a", "path-a"],
+        image_indices=[0, 1, 2],
+    )
+
+    assert payload["relative_energy_errors_available"] is True
+    assert payload["relative_image_rmse_mev_atom"] == pytest.approx((10000.0 / 3) ** 0.5)
+    assert payload["barrier_rmse_mev_atom"] == pytest.approx(0.0)
+
 def test_benchmark_error_summary_reports_signed_energy_bias_and_absolute_max_errors():
     import numpy as np
     from benchmarks.oc20neb_tace_mace.benchmark_models import summarize_errors
@@ -9303,4 +9329,39 @@ def test_stage146_energy_calibration_keeps_global_shift_as_separate_control():
     assert calibration["kind"] == "global_total_energy_shift"
     assert calibration["shift_eV"] == pytest.approx(1.5)
     assert apply_energy_calibration([{1: 1}], torch.tensor([10.0], dtype=torch.float64).numpy(), calibration) == pytest.approx([11.5])
+
+def test_stage147_relative_energy_metrics_remove_group_endpoint_gauge():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_energy_gauge import relative_energy_group_metrics
+
+    ref_e = torch.tensor([0.0, 1.0, 3.0, 10.0, 12.0], dtype=torch.float64).numpy()
+    pred_e = torch.tensor([5.0, 6.2, 8.0, -2.0, 0.0], dtype=torch.float64).numpy()
+    natoms = torch.tensor([2, 2, 2, 4, 4], dtype=torch.float64).numpy()
+    groups = ["path-a", "path-a", "path-a", "path-b", "path-b"]
+    images = [0, 1, 2, 0, 1]
+
+    metrics = relative_energy_group_metrics(pred_e, ref_e, natoms, groups, image_indices=images)
+
+    assert metrics["num_groups"] == 2
+    assert metrics["num_images"] == 5
+    # path-a relative errors per atom: [0, 0.1, 0], path-b: [0, 0]
+    assert metrics["relative_image_mae_mev_atom"] == pytest.approx(20.0)
+    assert metrics["relative_image_rmse_mev_atom"] == pytest.approx((2000.0) ** 0.5)
+    assert metrics["relative_image_max_abs_mev_atom"] == pytest.approx(100.0)
+
+
+def test_stage147_relative_energy_metrics_report_barrier_errors_per_group():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_energy_gauge import relative_energy_group_metrics
+
+    ref_e = torch.tensor([0.0, 4.0, 1.0, 10.0, 15.0, 11.0], dtype=torch.float64).numpy()
+    pred_e = torch.tensor([0.0, 3.0, 1.0, 10.0, 18.0, 11.0], dtype=torch.float64).numpy()
+    natoms = torch.tensor([2, 2, 2, 4, 4, 4], dtype=torch.float64).numpy()
+    groups = ["path-a", "path-a", "path-a", "path-b", "path-b", "path-b"]
+    images = [0, 1, 2, 0, 1, 2]
+
+    metrics = relative_energy_group_metrics(pred_e, ref_e, natoms, groups, image_indices=images)
+
+    # Barrier errors: path-a = -0.5 eV/atom, path-b = +0.75 eV/atom.
+    assert metrics["barrier_mae_mev_atom"] == pytest.approx(625.0)
+    assert metrics["barrier_rmse_mev_atom"] == pytest.approx(((500.0**2 + 750.0**2) / 2) ** 0.5)
+    assert metrics["barrier_max_abs_mev_atom"] == pytest.approx(750.0)
 

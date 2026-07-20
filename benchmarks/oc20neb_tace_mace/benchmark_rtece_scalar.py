@@ -20,6 +20,10 @@ from benchmarks.oc20neb_tace_mace.benchmark_models import (
     reference_arrays,
     summarize_errors,
 )
+from benchmarks.oc20neb_tace_mace.relative_energy_metrics import (
+    atoms_group_values,
+    relative_energy_group_metrics,
+)
 from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
     RTECEGraph,
     RTECEScalarConfig,
@@ -921,10 +925,19 @@ def build_atom_graph(
     raise ValueError(f"unknown graph construction backend: {graph_construction_backend}")
 
 
-def prediction_error_payload(first_outputs: list[dict[str, np.ndarray]], ref_e, ref_f, natoms) -> dict[str, object]:
+def prediction_error_payload(
+    first_outputs: list[dict[str, np.ndarray]],
+    ref_e,
+    ref_f,
+    natoms,
+    *,
+    group_ids: list[str] | None = None,
+    image_indices: list[float] | None = None,
+) -> dict[str, object]:
     if not first_outputs:
         return {
             "prediction_errors_available": False,
+            "relative_energy_errors_available": False,
             "mae_e_mev_atom": None,
             "rmse_e_mev_atom": None,
             "max_abs_e_mev_atom": None,
@@ -934,10 +947,22 @@ def prediction_error_payload(first_outputs: list[dict[str, np.ndarray]], ref_e, 
         }
     pred_e = np.concatenate([item["energy"].reshape(-1) for item in first_outputs], axis=0)
     pred_f = np.concatenate([item["forces"].reshape(-1, 3) for item in first_outputs], axis=0)
-    return {
+    payload: dict[str, object] = {
         "prediction_errors_available": True,
+        "relative_energy_errors_available": False,
         **summarize_errors(pred_e, pred_f, ref_e, ref_f, natoms),
     }
+    if group_ids is not None:
+        relative = relative_energy_group_metrics(
+            pred_e,
+            ref_e,
+            natoms,
+            group_ids,
+            image_indices=image_indices,
+        )
+        payload.update(relative)
+        payload["relative_energy_errors_available"] = True
+    return payload
 
 
 def load_atoms_window(configs: Path, *, start_config: int, limit_configs: int | None):
@@ -1197,7 +1222,15 @@ def main() -> None:
         if pass_idx == 0:
             first_outputs = outputs
 
-    error_payload = prediction_error_payload(first_outputs, ref_e, ref_f, natoms)
+    group_ids, image_indices = atoms_group_values(atoms_list, "case_id", "source_frame")
+    error_payload = prediction_error_payload(
+        first_outputs,
+        ref_e,
+        ref_f,
+        natoms,
+        group_ids=group_ids,
+        image_indices=image_indices,
+    )
     seconds_per_pass = float(np.mean(pass_times))
     atoms = int(natoms.sum())
     force_steps_per_pass = int(args.trajectory_replay_steps) if int(args.trajectory_replay_steps) > 0 else 1
