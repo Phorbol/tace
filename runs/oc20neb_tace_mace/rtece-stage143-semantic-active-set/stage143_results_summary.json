@@ -1,0 +1,162 @@
+{
+  "commits": {
+    "plan": "2618487",
+    "projection_sizing_fix": "2e55eb1"
+  },
+  "force_projection_status": "deferred_force_descriptor_jacobian_cost",
+  "interpretation": {
+    "descriptor_result": "The semantic path lattice gives a clean monotonic descriptor-residual ladder: L0 species/radial is lossy, L1 recovers most descriptor variance, L2 atomic reduces residual further, and the first cavity edge-relational path cuts the remaining residual again.",
+    "energy_result": "Energy-only linear label projection is not decisive for training accuracy; it is now determined, but several compressed candidates have similar held-out energy residuals.",
+    "next_priority": "Train and physically triage one minimal T3 edge-relational row, preferably t3_l2_cavity_vector, against the Stage140/141 L2 atomic incumbent before adding the full cavity+direct supernet."
+  },
+  "schema_version": "rtece_stage143_results_summary.v1",
+  "slurm_jobs": [
+    {
+      "elapsed": "00:00:12",
+      "exit_code": "0:0",
+      "job_id": 685659,
+      "role": "projection_limit128",
+      "state": "COMPLETED",
+      "status": "diagnostic_superseded_underdetermined"
+    },
+    {
+      "elapsed": "00:00:13",
+      "exit_code": "0:0",
+      "job_id": 685668,
+      "role": "projection_limit512",
+      "state": "COMPLETED",
+      "status": "primary"
+    }
+  ],
+  "stage": "stage143_semantic_active_set",
+  "train_projection": {
+    "configs": 512,
+    "rows": [
+      {
+        "candidate": "t3_l2_cavity_vector_quadrupole_direct",
+        "descriptor_dim_reduction": 0,
+        "energy_degrees_of_freedom": 12,
+        "energy_per_atom_max_abs_ev_atom": 0.4427403163334687,
+        "energy_per_atom_rmse_ev_atom": 0.11652563414648756,
+        "energy_underdetermined": false,
+        "relative_descriptor_residual": 3.044532809869436e-08,
+        "relative_energy_residual": 0.025006444151317468,
+        "source_dim": 334,
+        "target_dim": 334
+      },
+      {
+        "candidate": "t3_l2_cavity_vector",
+        "descriptor_dim_reduction": 3,
+        "energy_degrees_of_freedom": 15,
+        "energy_per_atom_max_abs_ev_atom": 0.44539517903398257,
+        "energy_per_atom_rmse_ev_atom": 0.12848889334752123,
+        "energy_underdetermined": false,
+        "relative_descriptor_residual": 0.003258551319368058,
+        "relative_energy_residual": 0.02914785723456533,
+        "source_dim": 331,
+        "target_dim": 334
+      },
+      {
+        "candidate": "t2_l2_atomic_cross",
+        "descriptor_dim_reduction": 4,
+        "energy_degrees_of_freedom": 16,
+        "energy_per_atom_max_abs_ev_atom": 0.4833482401897189,
+        "energy_per_atom_rmse_ev_atom": 0.12245948745260579,
+        "energy_underdetermined": false,
+        "relative_descriptor_residual": 0.006123403652604325,
+        "relative_energy_residual": 0.027102672388880717,
+        "source_dim": 330,
+        "target_dim": 334
+      },
+      {
+        "candidate": "t2_l1_atomic_cross",
+        "descriptor_dim_reduction": 19,
+        "energy_degrees_of_freedom": 31,
+        "energy_per_atom_max_abs_ev_atom": 0.5263291771387597,
+        "energy_per_atom_rmse_ev_atom": 0.14120364394529308,
+        "energy_underdetermined": false,
+        "relative_descriptor_residual": 0.04173891562752393,
+        "relative_energy_residual": 0.02962899471720978,
+        "source_dim": 315,
+        "target_dim": 334
+      },
+      {
+        "candidate": "t2_l0_species_radial",
+        "descriptor_dim_reduction": 34,
+        "energy_degrees_of_freedom": 46,
+        "energy_per_atom_max_abs_ev_atom": 0.3915243819978718,
+        "energy_per_atom_rmse_ev_atom": 0.11862045619206905,
+        "energy_underdetermined": false,
+        "relative_descriptor_residual": 0.1178029180548151,
+        "relative_energy_residual": 0.025451700656725224,
+        "source_dim": 300,
+        "target_dim": 334
+      }
+    ]
+  },
+  "valid_projection": {
+    "configs": 512,
+    "rows": [
+      {
+        "candidate": "t3_l2_cavity_vector_quadrupole_direct",
+        "descriptor_dim_reduction": 0,
+        "energy_degrees_of_freedom": 30,
+        "energy_per_atom_max_abs_ev_atom": 0.051868419841134994,
+        "energy_per_atom_rmse_ev_atom": 0.006670472087761459,
+        "energy_underdetermined": false,
+        "relative_descriptor_residual": 4.412277911203801e-09,
+        "relative_energy_residual": 0.0010183078362725057,
+        "source_dim": 334,
+        "target_dim": 334
+      },
+      {
+        "candidate": "t3_l2_cavity_vector",
+        "descriptor_dim_reduction": 3,
+        "energy_degrees_of_freedom": 33,
+        "energy_per_atom_max_abs_ev_atom": 0.06754007879884713,
+        "energy_per_atom_rmse_ev_atom": 0.009596317520070593,
+        "energy_underdetermined": false,
+        "relative_descriptor_residual": 0.001722717051889333,
+        "relative_energy_residual": 0.002045908189570249,
+        "source_dim": 331,
+        "target_dim": 334
+      },
+      {
+        "candidate": "t2_l2_atomic_cross",
+        "descriptor_dim_reduction": 4,
+        "energy_degrees_of_freedom": 34,
+        "energy_per_atom_max_abs_ev_atom": 0.05339930950625028,
+        "energy_per_atom_rmse_ev_atom": 0.007129299287348894,
+        "energy_underdetermined": false,
+        "relative_descriptor_residual": 0.00300329423559355,
+        "relative_energy_residual": 0.0010734541546507646,
+        "source_dim": 330,
+        "target_dim": 334
+      },
+      {
+        "candidate": "t2_l1_atomic_cross",
+        "descriptor_dim_reduction": 19,
+        "energy_degrees_of_freedom": 49,
+        "energy_per_atom_max_abs_ev_atom": 0.05036626931662947,
+        "energy_per_atom_rmse_ev_atom": 0.007718723658290616,
+        "energy_underdetermined": false,
+        "relative_descriptor_residual": 0.022363636123158108,
+        "relative_energy_residual": 0.0011595303300212074,
+        "source_dim": 315,
+        "target_dim": 334
+      },
+      {
+        "candidate": "t2_l0_species_radial",
+        "descriptor_dim_reduction": 34,
+        "energy_degrees_of_freedom": 64,
+        "energy_per_atom_max_abs_ev_atom": 0.03634249787357711,
+        "energy_per_atom_rmse_ev_atom": 0.007533354576863057,
+        "energy_underdetermined": false,
+        "relative_descriptor_residual": 0.10040922857672749,
+        "relative_energy_residual": 0.0012927226181024438,
+        "source_dim": 300,
+        "target_dim": 334
+      }
+    ]
+  }
+}
