@@ -1,0 +1,68 @@
+{
+  "auto_candidate_strategies": [
+    "single_delete",
+    "prefix"
+  ],
+  "created_for": "diagnose_stage149_absolute_energy_mae_rmse",
+  "jobs": [
+    {
+      "job_id": 687445,
+      "output_json": "projection_outputs/stage151_mixed_train_limit1024_energy_projection.json",
+      "role": "mixed_train_limit1024_energy_projection",
+      "wrapper": "rtece_stage151_mixed_energy_no_export.sbatch"
+    },
+    {
+      "job_id": 687446,
+      "output_json": "projection_outputs/stage151_valid_limit128_ef_projection.json",
+      "role": "valid_limit128_energy_force_projection_smoke",
+      "wrapper": "rtece_stage151_valid_ef_smoke_no_export.sbatch"
+    },
+    {
+      "job_id": 687447,
+      "output_json": "projection_outputs/stage151_valid_limit1024_energy_projection.json",
+      "role": "valid_limit1024_energy_projection",
+      "wrapper": "rtece_stage151_valid_energy_no_export.sbatch"
+    },
+    {
+      "job_id": 687448,
+      "output_json": [
+        "projection_outputs/stage151_mixed_train_limit1024_dft_energy_projection.json",
+        "projection_outputs/stage151_mixed_train_limit1024_teacher_energy_projection.json"
+      ],
+      "role": "mixed_train_limit1024_dft_vs_teacher_energy_projection",
+      "wrapper": "rtece_stage151_mixed_label_ablation_no_export.sbatch"
+    }
+  ],
+  "manual_candidates": [
+    "t2_l0_species_radial",
+    "t2_l1_atomic_cross",
+    "t2_l2_atomic_cross",
+    "t3_l2_cavity_vector",
+    "t3_full_reference"
+  ],
+  "mixed_train_configs": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/weighted_train_base2048_plus_teacher_relax640_forceonly_eanchor.extxyz",
+  "projection_settings": {
+    "atomic_cross_radial_sketch_channels": 3,
+    "cutoff": 5.0,
+    "default_dtype": "float64",
+    "energy_baseline": "element_counts",
+    "energy_eval_offset": 0,
+    "energy_eval_stride": 4,
+    "neighborlist_backend": "matscipy",
+    "num_radial": 12,
+    "species_basis_channels": 24
+  },
+  "reference_path_ids": [
+    "atomic.radial_density",
+    "atomic.species_basis_density",
+    "atomic.vector_norm",
+    "atomic.vector_cross_radial_dot",
+    "atomic.quadrupole_norm",
+    "atomic.quadrupole_cross_radial_frobenius",
+    "edge.cavity.vector_dot",
+    "edge.cavity.quadrupole_frobenius",
+    "edge.direct.radial"
+  ],
+  "stage": "stage151_dft_vs_mixed_projection",
+  "valid_configs": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz"
+}
