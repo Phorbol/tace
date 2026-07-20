@@ -20,6 +20,15 @@ if str(REPO_ROOT) not in sys.path:
 import numpy as np
 
 from benchmarks.oc20neb_tace_mace.benchmark_models import reference_arrays, summarize_errors
+from benchmarks.oc20neb_tace_mace.relative_energy_metrics import atoms_group_values, relative_energy_group_metrics
+
+
+def _flatten_relative_energy_metrics(metrics: dict[str, object]) -> dict[str, object]:
+    flattened = dict(metrics)
+    schema = flattened.pop("schema_version", None)
+    if schema is not None:
+        flattened["relative_energy_metric_schema_version"] = schema
+    return flattened
 
 
 def _load_atoms(configs: Path, *, start_config: int, limit_configs: int):
@@ -196,6 +205,14 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     else:
         raise ValueError(f"unsupported engine {args.engine!r}")
     metrics = summarize_errors(pred_e, pred_f, ref_e, ref_f, natoms)
+    group_ids, image_indices = atoms_group_values(atoms_list, "case_id", "source_frame")
+    relative_metrics = relative_energy_group_metrics(
+        pred_e,
+        ref_e,
+        natoms,
+        group_ids,
+        image_indices=image_indices,
+    )
     mean_time = float(np.mean(pass_times)) if pass_times else None
     payload = {
         "schema_version": "community_baseline_dft_benchmark.v1",
@@ -213,7 +230,9 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         "pass_times_s": [float(value) for value in pass_times],
         "mean_time_s": mean_time,
         "atoms_per_second": float(total_atoms / mean_time) if mean_time and mean_time > 0 else None,
+        "relative_energy_errors_available": True,
         **metrics,
+        **_flatten_relative_energy_metrics(relative_metrics),
         **metadata,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

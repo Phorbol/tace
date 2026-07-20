@@ -34,6 +34,14 @@ from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
 from benchmarks.oc20neb_tace_mace.train_rtece_scalar import atoms_to_graph, atoms_to_rtece_graph, load_checkpoint
 
 
+def _flatten_relative_energy_metrics(metrics: dict[str, object]) -> dict[str, object]:
+    flattened = dict(metrics)
+    schema = flattened.pop("schema_version", None)
+    if schema is not None:
+        flattened["relative_energy_metric_schema_version"] = schema
+    return flattened
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Benchmark a scalar-sketched rTECE prototype.")
     parser.add_argument("--model", type=Path, required=True)
@@ -960,7 +968,7 @@ def prediction_error_payload(
             group_ids,
             image_indices=image_indices,
         )
-        payload.update(relative)
+        payload.update(_flatten_relative_energy_metrics(relative))
         payload["relative_energy_errors_available"] = True
     return payload
 

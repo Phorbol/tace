@@ -62,6 +62,13 @@ def summarize_stage145(manifest: Mapping[str, Any], output_root: str | Path) -> 
                 "dft_f_max_mev_a": _metric(dft, "max_abs_f_mev_a"),
                 "dft_e_max_mev_atom": _metric(dft, "max_abs_e_mev_atom"),
                 "dft_e_bias_mev_atom": _metric(dft, "bias_e_mev_atom"),
+                "dft_relative_energy_errors_available": bool(dft.get("relative_energy_errors_available")) if dft else False,
+                "dft_relative_image_rmse_mev_atom": _metric(dft, "relative_image_rmse_mev_atom"),
+                "dft_relative_image_mae_mev_atom": _metric(dft, "relative_image_mae_mev_atom"),
+                "dft_relative_image_max_mev_atom": _metric(dft, "relative_image_max_abs_mev_atom"),
+                "dft_barrier_rmse_mev_atom": _metric(dft, "barrier_rmse_mev_atom"),
+                "dft_barrier_mae_mev_atom": _metric(dft, "barrier_mae_mev_atom"),
+                "dft_barrier_max_mev_atom": _metric(dft, "barrier_max_abs_mev_atom"),
                 "atoms_per_second": _metric(dft, "atoms_per_second") or _metric(dft, "atoms_per_s"),
             }
         )
@@ -89,20 +96,22 @@ def render_stage145_markdown(summary: Mapping[str, Any]) -> str:
     lines = [
         "# Stage145 Community Baselines Summary",
         "",
-        "Primary ranking metric: DFT force RMSE.",
+        "Primary ranking metric: DFT force RMSE; relative image/barrier RMSE is reported for NEB PES shape.",
         "",
-        "| row | engine | conversion | training | DFT F RMSE | DFT E RMSE | atoms/s | physical |",
-        "|---|---|---|---|---:|---:|---:|---|",
+        "| row | engine | conversion | training | DFT F RMSE | DFT E RMSE | rel image RMSE | barrier RMSE | atoms/s | physical |",
+        "|---|---|---|---|---:|---:|---:|---:|---:|---|",
     ]
     for row in summary.get("rows", []):
         lines.append(
-            "| {name} | {engine} | {conversion_status} | {training_status} | {f_rmse} | {e_rmse} | {atoms_s} | {physical_status} |".format(
+            "| {name} | {engine} | {conversion_status} | {training_status} | {f_rmse} | {e_rmse} | {rel_rmse} | {barrier_rmse} | {atoms_s} | {physical_status} |".format(
                 name=row["name"],
                 engine=row["engine"],
                 conversion_status=row["conversion_status"],
                 training_status=row.get("training_status", "missing"),
                 f_rmse=_fmt(row.get("dft_f_rmse_mev_a")),
                 e_rmse=_fmt(row.get("dft_e_rmse_mev_atom")),
+                rel_rmse=_fmt(row.get("dft_relative_image_rmse_mev_atom")),
+                barrier_rmse=_fmt(row.get("dft_barrier_rmse_mev_atom")),
                 atoms_s=_fmt(row.get("atoms_per_second")),
                 physical_status=row["physical_status"],
             )

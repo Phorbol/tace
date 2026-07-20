@@ -7903,9 +7903,106 @@ def test_stage145_summary_keeps_rmse_first_and_missing_outputs_explicit(tmp_path
 
     markdown = render_stage145_markdown(summary)
     assert "Primary ranking metric: DFT force RMSE" in markdown
-    assert "| row | engine | conversion | training | DFT F RMSE | DFT E RMSE | atoms/s | physical |" in markdown
+    assert "| row | engine | conversion | training | DFT F RMSE | DFT E RMSE | rel image RMSE | barrier RMSE | atoms/s | physical |" in markdown
     assert "deepmd_dpa_like_mixed_smoke" in markdown
 
+
+
+
+def test_stage145_summary_preserves_relative_neb_energy_metrics(tmp_path):
+    import json
+
+    from benchmarks.oc20neb_tace_mace.summarize_community_baselines_stage145 import (
+        render_stage145_markdown,
+        summarize_stage145,
+    )
+
+    train_dir = tmp_path / "nep"
+    train_dir.mkdir()
+    (train_dir / "conversion_summary.json").write_text(json.dumps({"engine": "nep", "num_configs": 4}))
+    (train_dir / "nep4_mixed_smoke_dft_benchmark.json").write_text(
+        json.dumps(
+            {
+                "status": "completed",
+                "rmse_f_mev_a": 111.0,
+                "rmse_e_mev_atom": 222.0,
+                "relative_energy_errors_available": True,
+                "relative_image_rmse_mev_atom": 8.5,
+                "barrier_rmse_mev_atom": 19.25,
+                "atoms_per_second": 12345.0,
+            }
+        )
+    )
+    manifest = {
+        "schema_version": "community_baselines_stage145.v1",
+        "rows": [{"name": "nep4_mixed_smoke", "engine": "nep", "train_dir": str(train_dir)}],
+    }
+
+    summary = summarize_stage145(manifest, tmp_path)
+    row = summary["rows"][0]
+
+    assert row["dft_relative_image_rmse_mev_atom"] == pytest.approx(8.5)
+    assert row["dft_barrier_rmse_mev_atom"] == pytest.approx(19.25)
+    markdown = render_stage145_markdown(summary)
+    assert "rel image RMSE" in markdown
+    assert "barrier RMSE" in markdown
+    assert "8.500" in markdown
+    assert "19.250" in markdown
+
+
+
+def test_stage145_community_benchmark_emits_relative_energy_metrics(tmp_path, monkeypatch):
+    import argparse
+    import json
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+
+    from benchmarks.oc20neb_tace_mace import benchmark_stage145_community as bench
+
+    configs = tmp_path / "valid.extxyz"
+    frames = []
+    for image, energy in enumerate([0.0, 1.0, 3.0]):
+        atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.7 + 0.01 * image, 0.0, 0.0]])
+        atoms.info["energy"] = energy
+        atoms.info["case_id"] = "path-a"
+        atoms.info["source_frame"] = image
+        atoms.arrays["forces"] = np.zeros((2, 3), dtype=np.float64)
+        frames.append(atoms)
+    ase.io.write(str(configs), frames, format="extxyz")
+
+    def fake_deepmd_ase(**kwargs):
+        pred_e = np.array([5.0, 6.2, 8.0], dtype=np.float64)
+        pred_f = np.zeros((6, 3), dtype=np.float64)
+        return pred_e, pred_f, [0.01], {"engine_protocol": "fake_deepmd"}
+
+    monkeypatch.setattr(bench, "run_deepmd_ase", fake_deepmd_ase)
+    output = tmp_path / "benchmark.json"
+    args = argparse.Namespace(
+        engine="deepmd",
+        model_artifact=tmp_path / "model.pb",
+        configs=configs,
+        output=output,
+        row_name="deepmd_fake",
+        energy_key="energy",
+        forces_key="forces",
+        start_config=0,
+        limit_configs=3,
+        warmup_passes=0,
+        measure_passes=1,
+        device="cpu",
+    )
+
+    payload = bench.run_benchmark(args)
+
+    assert payload["schema_version"] == "community_baseline_dft_benchmark.v1"
+    assert payload["relative_energy_metric_schema_version"] == "rtece_relative_neb_energy_metrics.v1"
+    assert payload["relative_energy_errors_available"] is True
+    assert payload["relative_image_rmse_mev_atom"] == pytest.approx((10000.0 / 3) ** 0.5)
+    assert payload["barrier_rmse_mev_atom"] == pytest.approx(0.0)
+    saved = json.loads(output.read_text())
+    assert saved["schema_version"] == "community_baseline_dft_benchmark.v1"
+    assert saved["relative_energy_errors_available"] is True
 
 def test_stage145_training_status_collects_deepmd_and_nep_progress(tmp_path):
     import json
