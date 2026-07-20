@@ -7765,6 +7765,16 @@ def test_stage145_summary_keeps_rmse_first_and_missing_outputs_explicit(tmp_path
     (tmp_path / "nep" / "conversion_summary.json").write_text(
         json.dumps({"engine": "nep", "num_configs": 2, "type_map": ["C", "N"]})
     )
+    (tmp_path / "stage145_training_status.json").write_text(
+        json.dumps(
+            {
+                "rows": [
+                    {"name": "nep4_mixed_smoke", "training_status": "running", "latest_step": 200},
+                    {"name": "deepmd_dpa_like_mixed_smoke", "training_status": "completed", "latest_step": 20},
+                ]
+            }
+        )
+    )
 
     summary = summarize_stage145(manifest, tmp_path)
 
@@ -7774,10 +7784,64 @@ def test_stage145_summary_keeps_rmse_first_and_missing_outputs_explicit(tmp_path
     assert rows["nep4_mixed_smoke"]["conversion_status"] == "found"
     assert rows["deepmd_dpa_like_mixed_smoke"]["conversion_status"] == "missing"
     assert rows["deepmd_dpa_like_mixed_smoke"]["dft_benchmark_status"] == "missing"
+    assert rows["nep4_mixed_smoke"]["training_status"] == "running"
+    assert rows["deepmd_dpa_like_mixed_smoke"]["training_status"] == "completed"
 
     markdown = render_stage145_markdown(summary)
     assert "Primary ranking metric: DFT force RMSE" in markdown
-    assert "| row | engine | conversion | DFT F RMSE | DFT E RMSE | atoms/s | physical |" in markdown
+    assert "| row | engine | conversion | training | DFT F RMSE | DFT E RMSE | atoms/s | physical |" in markdown
+    assert "deepmd_dpa_like_mixed_smoke" in markdown
+
+
+def test_stage145_training_status_collects_deepmd_and_nep_progress(tmp_path):
+    import json
+
+    from benchmarks.oc20neb_tace_mace.collect_community_baselines_stage145 import (
+        collect_stage145_training_status,
+        render_training_status_markdown,
+    )
+
+    nep_dir = tmp_path / "nep"
+    dp_dir = tmp_path / "dp"
+    nep_dir.mkdir()
+    dp_dir.mkdir()
+    (nep_dir / "loss.out").write_text(
+        "100 0.7 0.03 0.04 0.20 0.50 0 0 0 0\n"
+        "200 0.6 0.04 0.05 0.18 0.40 0 0 0 0\n"
+    )
+    (dp_dir / "lcurve.out").write_text(
+        "# step rmse_val rmse_trn rmse_e_val rmse_e_trn rmse_f_val rmse_f_trn lr\n"
+        "1 1.0 2.0 0.3 0.4 0.5 0.6 1.0e-3\n"
+        "20 0.2 0.3 0.04 0.05 0.06 0.07 1.0e-8\n"
+    )
+    (dp_dir / "frozen_model.pth").write_text("fake")
+
+    manifest = {
+        "rows": [
+            {"name": "nep4_mixed_smoke", "engine": "nep", "train_dir": str(nep_dir), "generation": 20000},
+            {"name": "deepmd_dpa_like_mixed_smoke", "engine": "deepmd", "train_dir": str(dp_dir), "stop_batch": 20},
+        ]
+    }
+
+    status = collect_stage145_training_status(
+        manifest,
+        tmp_path,
+        job_states={
+            "nep4_mixed_smoke": {"state": "RUNNING", "job_id": "1"},
+            "deepmd_dpa_like_mixed_smoke": {"state": "COMPLETED", "job_id": "2"},
+        },
+    )
+
+    rows = {row["name"]: row for row in status["rows"]}
+    assert rows["nep4_mixed_smoke"]["training_status"] == "running"
+    assert rows["nep4_mixed_smoke"]["latest_step"] == 200
+    assert rows["nep4_mixed_smoke"]["latest_rmse_f_train"] == 0.40
+    assert rows["deepmd_dpa_like_mixed_smoke"]["training_status"] == "completed"
+    assert rows["deepmd_dpa_like_mixed_smoke"]["latest_step"] == 20
+    assert rows["deepmd_dpa_like_mixed_smoke"]["latest_rmse_f_val"] == 0.06
+    assert (tmp_path / "stage145_training_status.json").exists()
+    markdown = render_training_status_markdown(status)
+    assert "| row | engine | training | job | latest step | F RMSE val | F RMSE train |" in markdown
     assert "deepmd_dpa_like_mixed_smoke" in markdown
 
 

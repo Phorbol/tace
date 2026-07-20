@@ -22,6 +22,12 @@ def _metric(payload: dict[str, Any] | None, key: str) -> float | None:
 
 def summarize_stage145(manifest: Mapping[str, Any], output_root: str | Path) -> dict[str, Any]:
     root = Path(output_root)
+    training_status = _read_json(root / "stage145_training_status.json") or {}
+    training_by_name = {
+        str(row["name"]): row
+        for row in training_status.get("rows", [])
+        if isinstance(row, Mapping) and "name" in row
+    }
     rows = []
     for row in manifest.get("rows", []):
         train_dir = Path(row["train_dir"])
@@ -29,12 +35,20 @@ def summarize_stage145(manifest: Mapping[str, Any], output_root: str | Path) -> 
         conversion = _read_json(train_dir / "conversion_summary.json")
         dft = _read_json(train_dir / f"{row_name}_dft_benchmark.json")
         physical = _read_json(train_dir / f"{row_name}_physical_pareto.json")
+        training = training_by_name.get(str(row_name), {})
         rows.append(
             {
                 "name": row["name"],
                 "engine": row["engine"],
                 "descriptor_label": row.get("descriptor_label"),
                 "conversion_status": "found" if conversion else "missing",
+                "training_status": training.get("training_status", "missing"),
+                "latest_training_step": training.get("latest_step"),
+                "training_target_step": training.get("target_step"),
+                "training_f_rmse_val": training.get("latest_rmse_f_val"),
+                "training_f_rmse_train": training.get("latest_rmse_f_train"),
+                "training_e_rmse_val": training.get("latest_rmse_e_val"),
+                "training_e_rmse_train": training.get("latest_rmse_e_train"),
                 "dft_benchmark_status": "found" if dft else "missing",
                 "physical_status": "found" if physical else "missing",
                 "num_configs": conversion.get("num_configs") if conversion else None,
@@ -77,15 +91,16 @@ def render_stage145_markdown(summary: Mapping[str, Any]) -> str:
         "",
         "Primary ranking metric: DFT force RMSE.",
         "",
-        "| row | engine | conversion | DFT F RMSE | DFT E RMSE | atoms/s | physical |",
-        "|---|---|---|---:|---:|---:|---|",
+        "| row | engine | conversion | training | DFT F RMSE | DFT E RMSE | atoms/s | physical |",
+        "|---|---|---|---|---:|---:|---:|---|",
     ]
     for row in summary.get("rows", []):
         lines.append(
-            "| {name} | {engine} | {conversion_status} | {f_rmse} | {e_rmse} | {atoms_s} | {physical_status} |".format(
+            "| {name} | {engine} | {conversion_status} | {training_status} | {f_rmse} | {e_rmse} | {atoms_s} | {physical_status} |".format(
                 name=row["name"],
                 engine=row["engine"],
                 conversion_status=row["conversion_status"],
+                training_status=row.get("training_status", "missing"),
                 f_rmse=_fmt(row.get("dft_f_rmse_mev_a")),
                 e_rmse=_fmt(row.get("dft_e_rmse_mev_atom")),
                 atoms_s=_fmt(row.get("atoms_per_second")),

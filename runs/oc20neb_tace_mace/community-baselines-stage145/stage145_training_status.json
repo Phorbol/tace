@@ -1,0 +1,42 @@
+{
+  "rows": [
+    {
+      "engine": "nep",
+      "job_state": {},
+      "latest_l1reg_loss": 0.075,
+      "latest_l2reg_loss": 0.09522,
+      "latest_rmse_e_train": 0.0945,
+      "latest_rmse_e_val": 0.0,
+      "latest_rmse_f_train": 0.3064,
+      "latest_rmse_f_val": 0.0,
+      "latest_rmse_v_train": 0.0,
+      "latest_rmse_v_val": 0.0,
+      "latest_step": 3300,
+      "latest_total_loss": 0.57112,
+      "model_artifact_present": true,
+      "name": "nep4_mixed_smoke",
+      "target_step": 20000,
+      "training_curve": "runs/oc20neb_tace_mace/community-baselines-stage145/nep4_mixed_smoke/loss.out",
+      "training_status": "running"
+    },
+    {
+      "engine": "deepmd",
+      "job_state": {},
+      "latest_lr": 1.8e-07,
+      "latest_rmse_e_train": 0.119,
+      "latest_rmse_e_val": 0.0124,
+      "latest_rmse_f_train": 0.276,
+      "latest_rmse_f_val": 0.173,
+      "latest_rmse_trn": 1.09,
+      "latest_rmse_val": 0.208,
+      "latest_step": 20000,
+      "model_artifact_present": true,
+      "name": "deepmd_dpa_like_mixed_smoke",
+      "target_step": 20000,
+      "training_curve": "runs/oc20neb_tace_mace/community-baselines-stage145/deepmd_dpa_like_mixed_smoke/lcurve.out",
+      "training_status": "completed"
+    }
+  ],
+  "schema_version": "community_baselines_stage145_training_status.v1",
+  "stage": "community_baselines_stage145"
+}
