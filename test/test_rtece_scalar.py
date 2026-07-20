@@ -7292,6 +7292,77 @@ def test_rtece_stage134_balanced_teacher_relax_manifest_materializes_weighted_at
     assert "edge.cavity.vector_dot" not in train_text
 
 
+def test_rtece_stage136_l2_projection_diagnostic_manifest_materializes_no_export_wrapper(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage136_l2_projection_diagnostic import (
+        audit_stage136_manifest,
+        make_stage136_manifest,
+        materialize_stage136,
+    )
+
+    payload = make_stage136_manifest(
+        output_root=tmp_path / "stage136",
+        train_configs="stage132_train.extxyz",
+        valid_configs="dft_valid.extxyz",
+        limit_configs=64,
+        energy_eval_stride=4,
+        force_eval_stride=4,
+    )
+
+    assert payload["schema_version"] == "rtece_stage136_l2_projection_diagnostic.v1"
+    assert payload["stage"] == "stage136_l2_projection_diagnostic"
+    assert payload["diagnostic_semantics"] == "stage135_l2_reference_vs_stage132_l1_projection_residual"
+    assert payload["reference_path_ids"] == [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius",
+    ]
+    assert [candidate["name"] for candidate in payload["candidates"]] == [
+        "full_l2_reference",
+        "stage132_l1_atomic",
+        "drop_quadrupole_cross",
+        "drop_quadrupole_norm",
+    ]
+    l1 = next(candidate for candidate in payload["candidates"] if candidate["name"] == "stage132_l1_atomic")
+    assert "atomic.quadrupole_norm" not in l1["path_ids"]
+    assert "atomic.quadrupole_cross_radial_frobenius" not in l1["path_ids"]
+    assert payload["num_radial"] == 12
+    assert payload["species_basis_channels"] == 24
+    assert payload["atomic_cross_radial_sketch_channels"] == 3
+    assert payload["limit_configs"] == 64
+    assert payload["energy_target_key"] == "energy"
+    assert payload["force_target_key"] == "forces"
+    assert "projection error" in payload["comparison_question"]
+    assert "Stage135" in payload["comparison_question"]
+
+    audit = audit_stage136_manifest(payload)
+    assert audit["contract_pass"] is True
+    assert audit["failed_checks"] == []
+
+    materialized = materialize_stage136(payload)
+    wrapper = Path(materialized["wrapper"])
+    text = wrapper.read_text()
+    assert "--export" not in text
+    assert "--mem" not in text
+    assert "--cpus-per-task" not in text
+    assert "analyze_rtece_projection_error.py" in text
+    assert "TRAIN_CONFIGS=stage132_train.extxyz" in text
+    assert "VALID_CONFIGS=dft_valid.extxyz" in text
+    assert "LIMIT_CONFIGS=64" in text
+    assert "--reference-path-ids" in text
+    assert "atomic.quadrupole_norm" in text
+    assert "atomic.quadrupole_cross_radial_frobenius" in text
+    assert "--candidate stage132_l1_atomic:atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot" in text
+    assert "--energy-target-key energy" in text
+    assert "--force-target-key forces" in text
+    assert "--energy-eval-stride 4" in text
+    assert "--force-eval-stride 4" in text
+
+
 def test_rtece_stage135_l2_atomic_projection_manifest_materializes_no_export_row(tmp_path):
     from pathlib import Path
 

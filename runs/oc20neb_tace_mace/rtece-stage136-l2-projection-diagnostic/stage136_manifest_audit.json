@@ -1,0 +1,34 @@
+{
+  "checked": {
+    "candidate_names": [
+      "full_l2_reference",
+      "stage132_l1_atomic",
+      "drop_quadrupole_cross",
+      "drop_quadrupole_norm"
+    ],
+    "limit_configs": 64,
+    "reference_path_ids": [
+      "atomic.radial_density",
+      "atomic.species_basis_density",
+      "atomic.vector_norm",
+      "atomic.vector_cross_radial_dot",
+      "atomic.quadrupole_norm",
+      "atomic.quadrupole_cross_radial_frobenius"
+    ]
+  },
+  "checks": {
+    "artifacts": true,
+    "candidate_set": true,
+    "contains_stage132_l1_candidate": true,
+    "current_active_row_ranks": true,
+    "diagnostic_semantics": true,
+    "ef_targets": true,
+    "heldout_split": true,
+    "reference_is_l2_atomic": true,
+    "schema_version": true,
+    "stage": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "schema_version": "rtece_stage136_manifest_audit.v1"
+}
