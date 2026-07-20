@@ -114,6 +114,35 @@ def test_fit_atomic_energies_respects_energy_sample_weights():
 
     assert atomic_energies[1] == pytest.approx(2.0)
 
+
+def test_rtece_forward_can_skip_force_autograd_for_energy_only_diagnostics():
+    config = build_rtece_config_from_path_ids(
+        "energy_only",
+        ("atomic.radial_density", "atomic.vector_norm", "edge.direct.radial"),
+        cutoff=2.0,
+        num_radial=4,
+        hidden_channels=(8,),
+        moment_l_max=1,
+    )
+    model = RTECEScalarModel(config).double().eval()
+    graph = RTECEGraph(
+        z=torch.tensor([6, 8, 1], dtype=torch.long),
+        pos=torch.tensor(
+            [[0.0, 0.0, 0.0], [0.7, 0.2, 0.1], [-0.3, 0.6, -0.2]],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    with_forces = model(graph)
+    energy_only = model(graph, compute_forces=False)
+
+    assert set(energy_only) == {"energy", "atomic_energy"}
+    assert torch.allclose(energy_only["energy"], with_forces["energy"], atol=1e-12, rtol=1e-12)
+    assert torch.allclose(energy_only["atomic_energy"], with_forces["atomic_energy"], atol=1e-12, rtol=1e-12)
+
+
 def test_rtece_route_contract_classifies_semantic_and_runtime_degradation():
     pair = rtece_route_contract(
         RTECEScalarConfig(variant="rtece_pair"),

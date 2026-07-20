@@ -51,6 +51,20 @@ def _design_matrix(
     return np.asarray([[float(row.get(int(z), 0.0)) for z in elements] for row in rows], dtype=np.float64)
 
 
+def energy_force_error_summary(
+    pred_e: np.ndarray,
+    pred_f: np.ndarray | None,
+    ref_e: np.ndarray,
+    ref_f: np.ndarray,
+    natoms: np.ndarray,
+) -> dict[str, float]:
+    if pred_f is None:
+        metrics = _energy_summary(pred_e, ref_e, natoms)
+        metrics.update({"mae_f_mev_a": math.nan, "rmse_f_mev_a": math.nan, "max_abs_f_mev_a": math.nan})
+        return metrics
+    return summarize_errors(pred_e, pred_f, ref_e, ref_f, natoms)
+
+
 def _energy_summary(pred_e: np.ndarray, ref_e: np.ndarray, natoms: np.ndarray) -> dict[str, float]:
     signed = (np.asarray(pred_e, dtype=np.float64).reshape(-1) - np.asarray(ref_e, dtype=np.float64).reshape(-1)) / np.asarray(natoms, dtype=np.float64).reshape(-1) * 1000.0
     abs_err = np.abs(signed)
@@ -142,7 +156,8 @@ def _predict_rtece(
     dtype_name: str,
     graph_construction_backend: str,
     force_mode_request: str,
-) -> tuple[np.ndarray, np.ndarray, object]:
+    energy_only: bool = False,
+) -> tuple[np.ndarray, np.ndarray | None, object]:
     dtype = torch.float64 if dtype_name == "float64" else torch.float32
     requested = torch.device(device_name)
     device = requested if requested.type == "cpu" or torch.cuda.is_available() else torch.device("cpu")
@@ -163,10 +178,12 @@ def _predict_rtece(
             device=device,
             dtype=dtype,
         )
-        out = model(graph)
+        out = model(graph, compute_forces=not energy_only)
         pred_e.append(out["energy"].detach().cpu().numpy().reshape(-1))
-        pred_f.append(out["forces"].detach().cpu().numpy().reshape(-1, 3))
-    return np.concatenate(pred_e, axis=0), np.concatenate(pred_f, axis=0), config
+        if "forces" in out:
+            pred_f.append(out["forces"].detach().cpu().numpy().reshape(-1, 3))
+    forces = np.concatenate(pred_f, axis=0) if pred_f else None
+    return np.concatenate(pred_e, axis=0), forces, config
 
 
 def run_energy_gauge_diagnostic(args: argparse.Namespace) -> dict[str, object]:
@@ -181,6 +198,7 @@ def run_energy_gauge_diagnostic(args: argparse.Namespace) -> dict[str, object]:
         dtype_name=args.default_dtype,
         graph_construction_backend=args.graph_construction_backend,
         force_mode_request=args.force_mode,
+        energy_only=bool(args.energy_only),
     )
     eval_pred_e, eval_pred_f, _ = _predict_rtece(
         model_path=args.model,
@@ -189,6 +207,7 @@ def run_energy_gauge_diagnostic(args: argparse.Namespace) -> dict[str, object]:
         dtype_name=args.default_dtype,
         graph_construction_backend=args.graph_construction_backend,
         force_mode_request=args.force_mode,
+        energy_only=bool(args.energy_only),
     )
     calib_counts = [composition_counts_from_atoms(atoms) for atoms in calib_atoms]
     eval_counts = [composition_counts_from_atoms(atoms) for atoms in eval_atoms]
@@ -204,7 +223,7 @@ def run_energy_gauge_diagnostic(args: argparse.Namespace) -> dict[str, object]:
             ridge=float(args.ridge),
         )
         corrected_eval_e = apply_energy_calibration(eval_counts, eval_pred_e, calibration)
-        metrics = summarize_errors(corrected_eval_e, eval_pred_f, eval_ref_e, eval_ref_f, eval_natoms)
+        metrics = energy_force_error_summary(corrected_eval_e, eval_pred_f, eval_ref_e, eval_ref_f, eval_natoms)
         eval_groups, eval_images = _atoms_group_values(eval_atoms, args.group_key, args.image_key)
         relative_metrics = relative_energy_group_metrics(
             corrected_eval_e,
@@ -239,6 +258,7 @@ def run_energy_gauge_diagnostic(args: argparse.Namespace) -> dict[str, object]:
         "default_dtype": str(args.default_dtype),
         "graph_construction_backend": str(args.graph_construction_backend),
         "force_mode": str(args.force_mode),
+        "energy_only": bool(args.energy_only),
         "model_atomic_energies": {str(k): float(v) for k, v in (config.atomic_energies or {}).items()},
         "model_energy_per_atom_shift": float(config.energy_per_atom_shift),
         "calibration_window": {
@@ -254,7 +274,7 @@ def run_energy_gauge_diagnostic(args: argparse.Namespace) -> dict[str, object]:
             "configs": len(eval_atoms),
         },
         "elements_z": elements,
-        "calibration_metrics_before_fit": summarize_errors(calib_pred_e, calib_pred_f, calib_ref_e, calib_ref_f, calib_natoms),
+        "calibration_metrics_before_fit": energy_force_error_summary(calib_pred_e, calib_pred_f, calib_ref_e, calib_ref_f, calib_natoms),
         "eval_calibrations": calibration_payload,
     }
 
@@ -278,6 +298,7 @@ def write_markdown(payload: Mapping[str, object], path: Path) -> None:
             f"- calibration: `{dict(payload['calibration_window'])['extxyz_index']}`",
             f"- evaluation: `{dict(payload['eval_window'])['extxyz_index']}`",
             f"- model energy reference: per-element={bool(dict(payload['model_atomic_energies']))}, global_shift={payload['model_energy_per_atom_shift']}",
+            f"- energy_only: {bool(payload.get('energy_only', False))}",
             "",
             "| calibration | E RMSE meV/atom | E MAE meV/atom | E max meV/atom | E bias meV/atom | F RMSE meV/A | F MAE meV/A | relative image RMSE meV/atom | barrier RMSE meV/atom | group mean-offset RMSE meV/atom | first image-anchor RMSE meV/atom |",
             "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
@@ -306,6 +327,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--eval-limit", type=int, default=256)
     parser.add_argument("--ridge", type=float, default=1.0e-8)
     parser.add_argument("--force-mode", choices=("autograd",), default="autograd")
+    parser.add_argument("--energy-only", action="store_true", help="Skip force autograd and report NaN force metrics for faster energy-gauge diagnostics.")
     parser.add_argument("--graph-construction-backend", choices=("ase_neighborlist", "matscipy_neighborlist", "torch_radius_nopbc"), default="matscipy_neighborlist")
     return parser.parse_args()
 

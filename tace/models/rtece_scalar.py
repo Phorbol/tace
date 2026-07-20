@@ -2607,9 +2607,9 @@ class RTECEScalarModel(torch.nn.Module):
             return None
         return self.species_basis_embedding.weight
 
-    def forward(self, graph: RTECEGraph) -> dict[str, torch.Tensor]:
+    def forward(self, graph: RTECEGraph, *, compute_forces: bool = True) -> dict[str, torch.Tensor]:
         pos = graph.pos
-        if not pos.requires_grad:
+        if compute_forces and not pos.requires_grad:
             pos = pos.detach().clone().requires_grad_(True)
             graph = RTECEGraph(
                 z=graph.z,
@@ -2638,13 +2638,17 @@ class RTECEScalarModel(torch.nn.Module):
         energy = scatter_sum(atomic_energy[:, None], graph.batch, num_graphs).squeeze(-1)
         energy = add_atomic_reference_energy(energy, graph, self.config)
         energy = add_short_range_repulsive_energy(energy, graph, self.config)
+        output = {"energy": energy, "atomic_energy": atomic_energy}
+        if not compute_forces:
+            return output
         forces = -torch.autograd.grad(
             energy.sum(),
             pos,
             create_graph=self.training,
             retain_graph=True,
         )[0]
-        return {"energy": energy, "atomic_energy": atomic_energy, "forces": forces}
+        output["forces"] = forces
+        return output
 
 
 __all__ = [

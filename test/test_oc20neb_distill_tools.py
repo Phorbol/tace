@@ -21,6 +21,24 @@ def load_module(name: str, relative_path: str):
     return module
 
 
+
+def test_energy_gauge_summary_supports_energy_only_force_metrics():
+    gauge = load_module("analyze_rtece_energy_gauge", "analyze_rtece_energy_gauge.py")
+
+    metrics = gauge.energy_force_error_summary(
+        pred_e=np.array([-1.0, -2.1]),
+        pred_f=None,
+        ref_e=np.array([-1.1, -2.0]),
+        ref_f=np.zeros((2, 3)),
+        natoms=np.array([2.0, 4.0]),
+    )
+
+    assert metrics["rmse_e_mev_atom"] == pytest.approx(((50.0**2 + 25.0**2) / 2.0) ** 0.5)
+    assert metrics["mae_e_mev_atom"] == pytest.approx(37.5)
+    assert np.isnan(metrics["rmse_f_mev_a"])
+    assert np.isnan(metrics["mae_f_mev_a"])
+    assert np.isnan(metrics["max_abs_f_mev_a"])
+
 def test_copy_atoms_with_teacher_labels_preserves_reference_labels():
     distill = load_module("distill_tace_labels", "distill_tace_labels.py")
     atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]])
