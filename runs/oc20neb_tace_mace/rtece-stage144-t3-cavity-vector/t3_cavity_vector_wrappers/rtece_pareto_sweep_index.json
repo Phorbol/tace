@@ -1,0 +1,62 @@
+{
+  "review_basis": [
+    "TECE_design_space: angular bandwidth / radial rank / sparse scalar path density",
+    "rTECE_review: cavity relational paths, E0/ZBL physical prior, production training/inference"
+  ],
+  "row_set": "stage144-t3-cavity-vector",
+  "rows": [
+    {
+      "atomic_cross_radial_projection": "learnable",
+      "atomic_cross_radial_sketch_channels": 3,
+      "descriptor_bottleneck_dim": 0,
+      "descriptor_conditioner": "residual_mlp",
+      "descriptor_conditioner_hidden_channels": 32,
+      "hidden_channels": "64,64",
+      "learnable_radial_mixing": true,
+      "moment_l_max": 2,
+      "name": "t3_l2_cavity_vector_cond32_h64",
+      "num_parameters_estimate": 51496,
+      "num_radial": 12,
+      "radial_edge_sketch_channels": 0,
+      "radial_species_adapter_channels": 8,
+      "radial_species_adapter_scope": "all",
+      "readout_parameters_estimate": 25537,
+      "representation_parameters_estimate": 25959,
+      "review_basis": "Stage143 descriptor projection showed that edge.cavity.vector_dot reduces the remaining L2 atomic descriptor residual. Stage144 isolates that single edge-relational scalar path against the fixed Stage140/141 L2 conditioned atomic anchor before adding cavity quadrupole or direct radial edge paths.",
+      "sbatch_command": [
+        "sbatch",
+        "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/t3_cavity_vector_wrappers/t3_l2_cavity_vector_cond32_h64/rtece_scalar_matrix_no_export.sbatch"
+      ],
+      "scalar_path_ids": "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot,atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius,edge.cavity.vector_dot",
+      "short_range_repulsion_potential": "zbl",
+      "species_basis_channels": 24,
+      "species_basis_mode": "learnable_embedding",
+      "stage143_active_set_source": "runs/oc20neb_tace_mace/rtece-stage143-semantic-active-set/stage143_results_summary.json",
+      "stage144_isolated_increment": "edge.cavity.vector_dot",
+      "stage_basis": "stage144_minimal_t3_cavity_vector",
+      "tece_axes": [
+        "angular_bandwidth_l_max",
+        "scalar_path_density",
+        "radial_rank",
+        "scalar_head_capacity",
+        "trainable_feature_extractor",
+        "trainable_edge_species_radial_basis",
+        "trainable_species_basis",
+        "short_range_physical_prior",
+        "stage144_t3_cavity_vector",
+        "stage143_active_set_guided",
+        "minimal_edge_relational_scalar_increment",
+        "cavity_vector_total_m0_sketch",
+        "fixed_stage140_141_l2_conditioned_anchor",
+        "front_representation_capacity_not_wider_head"
+      ],
+      "tece_tier": "T3_rtece_edge_relational_minimal",
+      "train_variant": "t3_l2_cavity_vector_cond32_h64",
+      "use_short_range_repulsion": true,
+      "variant": "t3_l2_cavity_vector_cond32_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/t3_cavity_vector_wrappers/t3_l2_cavity_vector_cond32_h64/rtece_scalar_matrix_no_export.sbatch"
+    }
+  ],
+  "run_root": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/t3_cavity_vector_runs",
+  "schema_version": "rtece_pareto_sweep.v1"
+}

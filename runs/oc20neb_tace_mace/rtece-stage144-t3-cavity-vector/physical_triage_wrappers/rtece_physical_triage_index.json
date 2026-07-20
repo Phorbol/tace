@@ -1,0 +1,39 @@
+{
+  "cases": [
+    {
+      "checkpoint": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/t3_cavity_vector_runs/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64/rtece_scalar_best.pt",
+      "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/t3_cavity_vector_runs/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64_dft_benchmark.json",
+      "dimer_json": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/physical_triage/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64_dimer.json",
+      "physical_pareto_json": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/physical_triage/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64_physical_pareto.json",
+      "rattle_json": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/physical_triage/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64_rattle.json",
+      "run_dir": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/physical_triage/t3_l2_cavity_vector_cond32_h64",
+      "selection_basis": "Stage144 minimal T3 edge.cavity.vector_dot increment from Stage143 semantic active set",
+      "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/t3_cavity_vector_runs/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64_teacher_benchmark.json",
+      "variant": "t3_l2_cavity_vector_cond32_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/physical_triage_wrappers/t3_l2_cavity_vector_cond32_h64/rtece_physical_triage_no_export.sbatch"
+    }
+  ],
+  "configs": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "design_basis": "Evaluate whether the minimal Stage143-selected edge.cavity.vector_dot T3 rTECE increment improves DFT RMSE/max tails or dimer/rattle physical probes before paying for cavity quadrupole/direct edge paths.",
+  "dimer_num_points": 24,
+  "dimer_pairs": [
+    "C-N",
+    "C-O",
+    "C-H",
+    "N-H",
+    "O-H",
+    "C-C",
+    "N-N"
+  ],
+  "job_name": "rtece-phys144",
+  "max_focus_rattle_rmsd_a": 0.35,
+  "rattle_focus_label": "C_or_N",
+  "rattle_limit_configs": 8,
+  "rattle_max_steps": 10,
+  "rattle_start_config": 58,
+  "run_root": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/physical_triage",
+  "schema_version": "rtece_physical_triage.v1",
+  "source": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/stage144_plan.md",
+  "stage": "stage144_physical_triage",
+  "stage127_source": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/stage144_plan.md"
+}

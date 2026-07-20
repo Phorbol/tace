@@ -7499,6 +7499,85 @@ def test_rtece_stage143_semantic_active_set_manifest_materializes_projection_wra
     assert "ATOMIC_CROSS_RADIAL_SKETCH_CHANNELS=3" in wrapper_text
 
 
+def test_rtece_stage144_t3_cavity_vector_manifest_materializes_minimal_edge_row(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage144_t3_cavity_vector import (
+        audit_stage144_manifest,
+        make_stage144_manifest,
+        materialize_stage144,
+    )
+
+    payload = make_stage144_manifest(
+        output_root=tmp_path / "stage144",
+        train_file="stage142_weighted.extxyz",
+        train_valid_file="train_valid.extxyz",
+        dft_valid_file="dft_valid.extxyz",
+        teacher_valid_file="teacher_valid.extxyz",
+        valid_limit_configs=256,
+        bench_limit_configs=1024,
+        max_steps=20000,
+        lr_warmup_steps=500,
+        early_stopping_patience=400,
+    )
+
+    assert payload["schema_version"] == "rtece_stage144_t3_cavity_vector.v1"
+    assert payload["stage"] == "stage144_t3_cavity_vector"
+    assert payload["row_set"] == "stage144-t3-cavity-vector"
+    assert payload["distillation_semantics"] == "stage143_active_set_guided_minimal_t3_edge_relational_training"
+    assert payload["train_file"] == "stage142_weighted.extxyz"
+    assert "one edge.cavity.vector_dot" in payload["comparison_question"]
+    assert "architecture increment" in payload["comparison_question"]
+    assert payload["stage143_active_set_source"].endswith("stage143_results_summary.json")
+    assert [row["variant"] for row in payload["rows"]] == [
+        "t3_l2_cavity_vector_cond32_h64",
+    ]
+
+    row = payload["rows"][0]
+    path_ids = tuple(part.strip() for part in row["scalar_path_ids"].split(",") if part.strip())
+    assert row["moment_l_max"] == 2
+    assert row["hidden_channels"] == "64,64"
+    assert row["num_radial"] == 12
+    assert row["species_basis_channels"] == 24
+    assert row["species_basis_mode"] == "learnable_embedding"
+    assert row["radial_species_adapter_channels"] == 8
+    assert row["atomic_cross_radial_sketch_channels"] == 3
+    assert row["atomic_cross_radial_projection"] == "learnable"
+    assert row["descriptor_conditioner"] == "residual_mlp"
+    assert row["descriptor_conditioner_hidden_channels"] == 32
+    assert row["descriptor_bottleneck_dim"] == 0
+    assert row["short_range_repulsion_potential"] == "zbl"
+    assert "edge.cavity.vector_dot" in path_ids
+    assert "edge.cavity.quadrupole_frobenius" not in path_ids
+    assert "edge.direct.radial" not in path_ids
+    assert row["tece_tier"] == "T3_rtece_edge_relational_minimal"
+    assert row["stage144_isolated_increment"] == "edge.cavity.vector_dot"
+
+    audit = audit_stage144_manifest(payload)
+    assert audit["contract_pass"] is True
+    assert audit["failed_checks"] == []
+
+    materialized = materialize_stage144(payload)
+    assert len(materialized["train_wrappers"]) == 1
+    assert len(materialized["physical_wrappers"]) == 1
+    train_text = Path(materialized["train_wrappers"][0]).read_text()
+    physical_text = Path(materialized["physical_wrappers"][0]).read_text()
+    combined = train_text + "\n" + physical_text + "\n" + Path(materialized["artifacts"]["stage_plan"]).read_text()
+    assert "--export" not in combined
+    assert "--mem" not in combined
+    assert "--cpus-per-task" not in combined
+    assert "TRAIN_FILE=stage142_weighted.extxyz" in train_text
+    assert "MAX_STEPS=20000" in train_text
+    assert "LR_WARMUP_STEPS=500" in train_text
+    assert "EARLY_STOPPING_PATIENCE=400" in train_text
+    assert "MOMENT_L_MAX=2" in train_text
+    assert "SCALAR_PATH_IDS=atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot,atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius,edge.cavity.vector_dot" in train_text
+    assert "DESCRIPTOR_CONDITIONER=residual_mlp" in train_text
+    assert "DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS=32" in train_text
+    assert "rattle_relax_rtece.py" in physical_text
+    assert "dimer_scan_rtece.py" in physical_text
+
+
 def test_rtece_stage136_l2_projection_diagnostic_manifest_materializes_no_export_wrapper(tmp_path):
     from pathlib import Path
 
