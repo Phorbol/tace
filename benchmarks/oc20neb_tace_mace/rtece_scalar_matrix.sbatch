@@ -41,6 +41,9 @@ ENERGY_WEIGHT=${ENERGY_WEIGHT:-1.0}
 FORCE_WEIGHT=${FORCE_WEIGHT:-10.0}
 FORCE_FOCUS_ELEMENTS=${FORCE_FOCUS_ELEMENTS:-}
 FORCE_FOCUS_WEIGHT=${FORCE_FOCUS_WEIGHT:-1.0}
+RELATIVE_ENERGY_WEIGHT=${RELATIVE_ENERGY_WEIGHT:-0.0}
+RELATIVE_ENERGY_GROUP_KEY=${RELATIVE_ENERGY_GROUP_KEY:-case_id}
+RELATIVE_ENERGY_IMAGE_KEY=${RELATIVE_ENERGY_IMAGE_KEY:-source_frame}
 USE_SHORT_RANGE_REPULSION=${USE_SHORT_RANGE_REPULSION:-0}
 SHORT_RANGE_REPULSION_POTENTIAL=${SHORT_RANGE_REPULSION_POTENTIAL:-softplus_overlap}
 LEARNABLE_RADIAL_MIXING=${LEARNABLE_RADIAL_MIXING:-0}
@@ -95,6 +98,9 @@ echo "energy_weight=${ENERGY_WEIGHT}"
 echo "force_weight=${FORCE_WEIGHT}"
 echo "force_focus_elements=${FORCE_FOCUS_ELEMENTS}"
 echo "force_focus_weight=${FORCE_FOCUS_WEIGHT}"
+echo "relative_energy_weight=${RELATIVE_ENERGY_WEIGHT}"
+echo "relative_energy_group_key=${RELATIVE_ENERGY_GROUP_KEY}"
+echo "relative_energy_image_key=${RELATIVE_ENERGY_IMAGE_KEY}"
 echo "use_short_range_repulsion=${USE_SHORT_RANGE_REPULSION}"
 echo "short_range_repulsion_potential=${SHORT_RANGE_REPULSION_POTENTIAL}"
 echo "learnable_radial_mixing=${LEARNABLE_RADIAL_MIXING}"
@@ -227,6 +233,9 @@ for variant in "${variant_args[@]}"; do
     --energy-weight "${ENERGY_WEIGHT}" \
     --force-weight "${FORCE_WEIGHT}" \
     "${force_focus_args[@]}" \
+    --relative-energy-weight "${RELATIVE_ENERGY_WEIGHT}" \
+    --relative-energy-group-key "${RELATIVE_ENERGY_GROUP_KEY}" \
+    --relative-energy-image-key "${RELATIVE_ENERGY_IMAGE_KEY}" \
     --device cuda \
     --default-dtype "${DEFAULT_DTYPE}" \
     --eval-interval "${EVAL_INTERVAL}" \

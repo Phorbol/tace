@@ -1,0 +1,47 @@
+{
+  "batch_size": 32,
+  "coverage_diagnostic": {
+    "groups": 200,
+    "multi_image_groups": 196,
+    "random_batch_size_32_extra_images_per_batch_mean": 4.15,
+    "random_batch_size_32_useful_batch_fraction_mean": 0.99375,
+    "train_configs": 2048
+  },
+  "design_basis": "Test document-grounded separation of absolute energy gauge from NEB relative/path energy under the same Stage155 direct T3 architecture, using batch_size=32 for path coverage.",
+  "rows": [
+    {
+      "relative_energy_weight": 0.0,
+      "run_dir": "runs/oc20neb_tace_mace/rtece-stage157-relative-neb-loss/relative_loss_runs/stage157_direct_b32_rel0_mixed2048",
+      "variant": "stage157_direct_b32_rel0_mixed2048",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage157-relative-neb-loss/wrappers/stage157_direct_b32_rel0_mixed2048/rtece_scalar_matrix_no_export.sbatch"
+    },
+    {
+      "relative_energy_weight": 0.25,
+      "run_dir": "runs/oc20neb_tace_mace/rtece-stage157-relative-neb-loss/relative_loss_runs/stage157_direct_b32_rel0p25_mixed2048",
+      "variant": "stage157_direct_b32_rel0p25_mixed2048",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage157-relative-neb-loss/wrappers/stage157_direct_b32_rel0p25_mixed2048/rtece_scalar_matrix_no_export.sbatch"
+    },
+    {
+      "relative_energy_weight": 1.0,
+      "run_dir": "runs/oc20neb_tace_mace/rtece-stage157-relative-neb-loss/relative_loss_runs/stage157_direct_b32_rel1p0_mixed2048",
+      "variant": "stage157_direct_b32_rel1p0_mixed2048",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage157-relative-neb-loss/wrappers/stage157_direct_b32_rel1p0_mixed2048/rtece_scalar_matrix_no_export.sbatch"
+    }
+  ],
+  "scalar_path_ids": [
+    "atomic.radial_density",
+    "atomic.species_basis_density",
+    "atomic.vector_norm",
+    "atomic.vector_cross_radial_dot",
+    "atomic.quadrupole_norm",
+    "atomic.quadrupole_cross_radial_frobenius",
+    "edge.cavity.vector_dot",
+    "edge.direct.radial"
+  ],
+  "schema_version": "rtece_stage157_relative_neb_loss.v1",
+  "source_stage": "stage155_direct_edge_relational_pareto_point",
+  "stage": "stage157_relative_neb_loss",
+  "teacher_valid_file": "runs/oc20neb_tace_mace/tece-distill-20260717/teacher_valid.extxyz",
+  "train_file": "runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz",
+  "valid_file": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz"
+}

@@ -109,6 +109,59 @@ def predict(
     return out
 
 
+def relative_energy_group_loss(
+    pred_energy: torch.Tensor,
+    ref_energy: torch.Tensor,
+    natoms: torch.Tensor,
+    *,
+    group_ids: tuple[object, ...] | list[object],
+    image_indices: torch.Tensor | tuple[float, ...] | list[float] | None = None,
+) -> torch.Tensor:
+    pred = pred_energy.reshape(-1)
+    ref = ref_energy.reshape(-1).to(device=pred.device, dtype=pred.dtype)
+    atoms = natoms.reshape(-1).to(device=pred.device, dtype=pred.dtype).clamp_min(1)
+    if not (pred.numel() == ref.numel() == atoms.numel()):
+        raise ValueError(
+            "pred_energy, ref_energy, and natoms must have one value per configuration; "
+            f"got {pred.numel()}, {ref.numel()}, {atoms.numel()}"
+        )
+    if len(group_ids) != pred.numel():
+        raise ValueError(
+            "relative group ids must have one value per configuration; "
+            f"got {len(group_ids)} ids for {pred.numel()} energies"
+        )
+    if image_indices is None:
+        image_values = torch.arange(pred.numel(), device=pred.device, dtype=pred.dtype)
+    else:
+        image_values = torch.as_tensor(image_indices, device=pred.device, dtype=pred.dtype).reshape(-1)
+        if image_values.numel() != pred.numel():
+            raise ValueError(
+                "relative image indices must have one value per configuration; "
+                f"got {image_values.numel()} indices for {pred.numel()} energies"
+            )
+
+    by_group: dict[str, list[int]] = {}
+    for idx, group in enumerate(group_ids):
+        by_group.setdefault(str(group), []).append(idx)
+
+    terms: list[torch.Tensor] = []
+    for indices in by_group.values():
+        if len(indices) < 2:
+            continue
+        ordered = sorted(indices, key=lambda i: (float(image_values[i].detach().cpu()), i))
+        idx = torch.tensor(ordered, device=pred.device, dtype=torch.long)
+        p = pred.index_select(0, idx)
+        r = ref.index_select(0, idx)
+        n = atoms.index_select(0, idx)
+        pred_endpoint = torch.minimum(p[0], p[-1])
+        ref_endpoint = torch.minimum(r[0], r[-1])
+        rel_error = ((p - pred_endpoint) - (r - ref_endpoint)) / n
+        terms.append(rel_error.square())
+    if not terms:
+        return pred.new_zeros(())
+    return torch.cat(terms).mean()
+
+
 def loss_for_batch(
     model: RTECEScalarModel,
     graph: RTECEGraph,
@@ -121,6 +174,9 @@ def loss_for_batch(
     force_focus_weight: float = 1.0,
     energy_sample_weights: torch.Tensor | None = None,
     force_sample_weights: torch.Tensor | None = None,
+    relative_energy_weight: float = 0.0,
+    relative_group_ids: tuple[object, ...] | list[object] | None = None,
+    relative_image_indices: torch.Tensor | tuple[float, ...] | list[float] | None = None,
 ) -> torch.Tensor:
     out = model(graph)
     num_configs = int(ref_energy.numel())
@@ -156,7 +212,18 @@ def loss_for_batch(
         atom_weights = atom_weights / atom_weights.mean().clamp_min(torch.finfo(atom_weights.dtype).tiny)
         force_sq = force_sq * atom_weights.view(-1, 1)
     f_loss = force_sq.mean()
-    return float(energy_weight) * e_loss + float(force_weight) * f_loss
+    rel_loss = out["energy"].new_zeros(())
+    if float(relative_energy_weight) != 0.0:
+        if relative_group_ids is None:
+            raise ValueError("relative_group_ids are required when relative_energy_weight is nonzero")
+        rel_loss = relative_energy_group_loss(
+            out["energy"],
+            ref_energy,
+            natoms,
+            group_ids=relative_group_ids,
+            image_indices=relative_image_indices,
+        )
+    return float(energy_weight) * e_loss + float(force_weight) * f_loss + float(relative_energy_weight) * rel_loss
 
 
 def evaluate_loss(
@@ -286,6 +353,7 @@ __all__ = [
     "save_checkpoint",
     "load_checkpoint",
     "predict",
+    "relative_energy_group_loss",
     "loss_for_batch",
     "evaluate_loss",
     "train_steps",

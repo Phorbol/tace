@@ -45,6 +45,9 @@ def write_rtece_matrix_wrapper(
     force_weight: float | None = None,
     force_focus_elements: str | None = None,
     force_focus_weight: float | None = None,
+    relative_energy_weight: float | None = None,
+    relative_energy_group_key: str | None = None,
+    relative_energy_image_key: str | None = None,
     use_short_range_repulsion: bool | None = None,
     short_range_repulsion_potential: str | None = None,
     learnable_radial_mixing: bool | None = None,
@@ -102,6 +105,9 @@ def write_rtece_matrix_wrapper(
         _shell_assign("FORCE_WEIGHT", force_weight),
         _shell_assign("FORCE_FOCUS_ELEMENTS", force_focus_elements),
         _shell_assign("FORCE_FOCUS_WEIGHT", force_focus_weight),
+        _shell_assign("RELATIVE_ENERGY_WEIGHT", relative_energy_weight),
+        _shell_assign("RELATIVE_ENERGY_GROUP_KEY", relative_energy_group_key),
+        _shell_assign("RELATIVE_ENERGY_IMAGE_KEY", relative_energy_image_key),
         _shell_assign(
             "USE_SHORT_RANGE_REPULSION",
             1 if use_short_range_repulsion else (0 if use_short_range_repulsion is False else None),
@@ -188,6 +194,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force-weight", type=float, default=None)
     parser.add_argument("--force-focus-elements", default=None)
     parser.add_argument("--force-focus-weight", type=float, default=None)
+    parser.add_argument("--relative-energy-weight", type=float, default=None)
+    parser.add_argument("--relative-energy-group-key", default=None)
+    parser.add_argument("--relative-energy-image-key", default=None)
     parser.add_argument("--use-short-range-repulsion", action="store_true")
     parser.add_argument("--short-range-repulsion-potential", choices=("softplus_overlap", "zbl"), default=None)
     parser.add_argument("--learnable-radial-mixing", action="store_true")
@@ -247,6 +256,9 @@ def main() -> None:
         force_weight=args.force_weight,
         force_focus_elements=args.force_focus_elements,
         force_focus_weight=args.force_focus_weight,
+        relative_energy_weight=args.relative_energy_weight,
+        relative_energy_group_key=args.relative_energy_group_key,
+        relative_energy_image_key=args.relative_energy_image_key,
         use_short_range_repulsion=args.use_short_range_repulsion,
         short_range_repulsion_potential=args.short_range_repulsion_potential,
         learnable_radial_mixing=args.learnable_radial_mixing,

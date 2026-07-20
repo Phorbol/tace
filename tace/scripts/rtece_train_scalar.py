@@ -20,6 +20,7 @@ from tace.models.rtece_workflow import (
     evaluate_loss,
     load_checkpoint as load_checkpoint_with_metadata,
     loss_for_batch,
+    relative_energy_group_loss,
     save_checkpoint,
     train_steps,
 )
@@ -320,6 +321,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force-weight", type=float, default=10.0)
     parser.add_argument("--force-focus-elements", default=None)
     parser.add_argument("--force-focus-weight", type=float, default=1.0)
+    parser.add_argument("--relative-energy-weight", type=float, default=0.0)
+    parser.add_argument("--relative-energy-group-key", default="case_id")
+    parser.add_argument("--relative-energy-image-key", default="source_frame")
     parser.add_argument("--device", choices=("cpu", "cuda"), default="cuda")
     parser.add_argument("--default-dtype", choices=("float32", "float64"), default="float32")
     parser.add_argument("--neighborlist-backend", choices=("ase", "vesin", "matscipy"), default="matscipy")
@@ -398,6 +402,9 @@ def main() -> None:
             force_weight=args.force_weight,
             force_focus_elements=args.force_focus_elements,
             force_focus_weight=args.force_focus_weight,
+            relative_energy_weight=args.relative_energy_weight,
+            relative_group_key=args.relative_energy_group_key,
+            relative_image_key=args.relative_energy_image_key,
             default_dtype=args.default_dtype,
             neighborlist_backend=args.neighborlist_backend,
             no_fit_energy_shift=args.no_fit_energy_shift,
@@ -423,6 +430,9 @@ def main() -> None:
         )
         print(json.dumps(summary, indent=2, sort_keys=True))
         return
+
+    if args.trainer_backend != "lightning" and float(args.relative_energy_weight) != 0.0:
+        raise ValueError("--relative-energy-weight currently requires --trainer-backend lightning so NEB metadata is preserved in batches")
 
     set_training_seed(args.seed)
     dtype = torch.float64 if args.default_dtype == "float64" else torch.float32
@@ -507,6 +517,9 @@ def main() -> None:
             "min_eval_step": args.min_eval_step,
             "force_focus_atomic_numbers": list(force_focus_atomic_numbers),
             "force_focus_weight": args.force_focus_weight,
+            "relative_energy_weight": args.relative_energy_weight,
+            "relative_group_key": args.relative_energy_group_key,
+            "relative_image_key": args.relative_energy_image_key,
             "device": str(device),
             "default_dtype": args.default_dtype,
             "neighborlist_backend": args.neighborlist_backend,

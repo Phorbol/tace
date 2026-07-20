@@ -4114,6 +4114,61 @@ def test_loss_for_batch_supports_per_config_sobolev_weights():
     assert torch.allclose(weighted, torch.tensor(1.0, dtype=torch.float64))
 
 
+def test_relative_energy_group_loss_ignores_per_group_energy_gauge():
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import relative_energy_group_loss
+
+    pred_energy = torch.tensor([11.0, 13.0, 15.0], dtype=torch.float64)
+    ref_energy = torch.tensor([1.0, 3.0, 5.0], dtype=torch.float64)
+    natoms = torch.tensor([2.0, 2.0, 2.0], dtype=torch.float64)
+
+    loss = relative_energy_group_loss(
+        pred_energy,
+        ref_energy,
+        natoms,
+        group_ids=("path-a", "path-a", "path-a"),
+        image_indices=torch.tensor([0.0, 1.0, 2.0], dtype=torch.float64),
+    )
+
+    assert torch.allclose(loss, torch.tensor(0.0, dtype=torch.float64))
+
+
+def test_loss_for_batch_can_use_relative_neb_energy_without_absolute_gauge():
+    from benchmarks.oc20neb_tace_mace.train_rtece_scalar import loss_for_batch
+
+    config = build_rtece_config_from_path_ids(
+        "relative_loss",
+        ("atomic.radial_density",),
+        cutoff=1.0,
+        num_radial=2,
+        hidden_channels=(4,),
+    )
+    model = RTECEScalarModel(config).double()
+    for param in model.parameters():
+        param.data.zero_()
+    graph = RTECEGraph(
+        z=torch.tensor([1, 1], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=torch.zeros((2, 0), dtype=torch.long),
+        batch=torch.tensor([0, 1], dtype=torch.long),
+    )
+    ref_energy = torch.tensor([0.0, 2.0], dtype=torch.float64)
+    ref_forces = torch.zeros((2, 3), dtype=torch.float64)
+
+    loss = loss_for_batch(
+        model,
+        graph,
+        ref_energy,
+        ref_forces,
+        energy_weight=0.0,
+        force_weight=0.0,
+        relative_energy_weight=3.0,
+        relative_group_ids=("path-a", "path-a"),
+        relative_image_indices=torch.tensor([0.0, 1.0], dtype=torch.float64),
+    )
+
+    assert torch.allclose(loss, torch.tensor(6.0, dtype=torch.float64))
+
+
 def test_loss_for_batch_normalizes_batched_energy_by_each_config_natoms():
     from benchmarks.oc20neb_tace_mace.train_rtece_scalar import loss_for_batch
 
@@ -4167,6 +4222,80 @@ def test_lightning_load_samples_reads_extxyz_property_weights(tmp_path):
     assert len(sample) == 5
     assert torch.allclose(sample[3], torch.tensor([2.5], dtype=torch.float64))
     assert torch.allclose(sample[4], torch.tensor([3.5], dtype=torch.float64))
+
+
+def test_lightning_load_samples_reads_relative_neb_metadata(tmp_path):
+    import ase.io
+    from ase import Atoms
+    from tace.lightning.rtece import load_samples
+
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]])
+    atoms.info["energy"] = -0.5
+    atoms.info["energy_weight"] = 2.5
+    atoms.info["forces_weight"] = 3.5
+    atoms.info["case_id"] = "neb-a"
+    atoms.info["source_frame"] = 7
+    atoms.arrays["forces"] = torch.zeros((2, 3), dtype=torch.float64).numpy()
+    path = tmp_path / "relative.extxyz"
+    ase.io.write(path, [atoms])
+
+    sample = load_samples(
+        path,
+        cutoff=5.0,
+        dtype=torch.float64,
+        include_sample_weights=True,
+        include_relative_metadata=True,
+    )[0]
+
+    assert len(sample) == 7
+    assert sample[5] == "neb-a"
+    assert torch.allclose(sample[6], torch.tensor([7.0], dtype=torch.float64))
+
+
+def test_lightning_shared_step_accepts_relative_neb_metadata():
+    from tace.lightning.rtece import RTECELightningModule, _collate_rtece_samples
+
+    config = build_rtece_config_from_path_ids(
+        "relative_lightning",
+        ("atomic.radial_density",),
+        cutoff=1.0,
+        num_radial=2,
+        hidden_channels=(4,),
+    )
+    model = RTECEScalarModel(config).double()
+    for param in model.parameters():
+        param.data.zero_()
+    samples = []
+    for image, energy in enumerate([0.0, 2.0]):
+        graph = RTECEGraph(
+            z=torch.tensor([1], dtype=torch.long),
+            pos=torch.tensor([[float(image) * 2.0, 0.0, 0.0]], dtype=torch.float64),
+            edge_index=torch.zeros((2, 0), dtype=torch.long),
+            batch=torch.zeros(1, dtype=torch.long),
+        )
+        samples.append(
+            (
+                graph,
+                torch.tensor([energy], dtype=torch.float64),
+                torch.zeros((1, 3), dtype=torch.float64),
+                torch.tensor([1.0], dtype=torch.float64),
+                torch.tensor([1.0], dtype=torch.float64),
+                "path-a",
+                torch.tensor([float(image)], dtype=torch.float64),
+            )
+        )
+    batch = _collate_rtece_samples(samples)
+    lit = RTECELightningModule(
+        model,
+        config,
+        energy_weight=0.0,
+        force_weight=0.0,
+        relative_energy_weight=3.0,
+    ).double()
+
+    loss = lit._shared_step(batch, "train")
+
+    assert torch.allclose(loss, torch.tensor(6.0, dtype=torch.float64))
 
 
 def test_apply_extxyz_sample_weights_supports_source_energy_and_force_multipliers(tmp_path):

@@ -191,6 +191,24 @@ def _sample_weights(atoms, *, dtype: torch.dtype, device: torch.device | str = "
     )
 
 
+def _relative_metadata(
+    atoms,
+    *,
+    index: int,
+    dtype: torch.dtype,
+    device: torch.device | str = "cpu",
+    group_key: str = "case_id",
+    image_key: str = "source_frame",
+) -> tuple[str, torch.Tensor]:
+    group = str(atoms.info.get(group_key, f"config_{int(index)}"))
+    raw_image = atoms.info.get(image_key, index)
+    try:
+        image = float(raw_image)
+    except (TypeError, ValueError):
+        image = float(index)
+    return group, torch.tensor([image], dtype=dtype, device=device)
+
+
 def atoms_to_weighted_graph(
     atoms,
     *,
@@ -264,24 +282,48 @@ def load_samples(
     limit_configs: int | None = None,
     neighborlist_backend: str = "matscipy",
     include_sample_weights: bool = False,
-) -> list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]]:
+    include_relative_metadata: bool = False,
+    relative_group_key: str = "case_id",
+    relative_image_key: str = "source_frame",
+) -> list[tuple]:
     import ase.io
 
     index = ":" if limit_configs is None else f":{int(limit_configs)}"
     atoms_list = ase.io.read(str(configs), index=index)
     if not isinstance(atoms_list, list):
         atoms_list = [atoms_list]
-    converter = atoms_to_weighted_graph if include_sample_weights else atoms_to_graph
-    return [
-        converter(
-            atoms,
-            cutoff=cutoff,
-            device="cpu",
-            dtype=dtype,
-            neighborlist_backend=neighborlist_backend,
-        )
-        for atoms in atoms_list
-    ]
+    if include_relative_metadata and not include_sample_weights:
+        raise ValueError("include_relative_metadata currently requires include_sample_weights for a stable sample tuple schema")
+    samples = []
+    for idx, atoms in enumerate(atoms_list):
+        if include_sample_weights:
+            sample = atoms_to_weighted_graph(
+                atoms,
+                cutoff=cutoff,
+                device="cpu",
+                dtype=dtype,
+                neighborlist_backend=neighborlist_backend,
+            )
+            if include_relative_metadata:
+                group, image = _relative_metadata(
+                    atoms,
+                    index=idx,
+                    dtype=dtype,
+                    device="cpu",
+                    group_key=relative_group_key,
+                    image_key=relative_image_key,
+                )
+                sample = (*sample, group, image)
+        else:
+            sample = atoms_to_graph(
+                atoms,
+                cutoff=cutoff,
+                device="cpu",
+                dtype=dtype,
+                neighborlist_backend=neighborlist_backend,
+            )
+        samples.append(sample)
+    return samples
 
 
 class RTECEDataset(Dataset):
@@ -299,13 +341,24 @@ def _collate_rtece_samples(samples):
     if len(samples[0]) == 3:
         graphs, energies, forces = zip(*samples, strict=True)
         return collate_graphs(list(graphs)), torch.cat(list(energies), dim=0), torch.cat(list(forces), dim=0)
-    graphs, energies, forces, energy_weights, force_weights = zip(*samples, strict=True)
+    if len(samples[0]) == 5:
+        graphs, energies, forces, energy_weights, force_weights = zip(*samples, strict=True)
+        return (
+            collate_graphs(list(graphs)),
+            torch.cat(list(energies), dim=0),
+            torch.cat(list(forces), dim=0),
+            torch.cat(list(energy_weights), dim=0),
+            torch.cat(list(force_weights), dim=0),
+        )
+    graphs, energies, forces, energy_weights, force_weights, group_ids, image_indices = zip(*samples, strict=True)
     return (
         collate_graphs(list(graphs)),
         torch.cat(list(energies), dim=0),
         torch.cat(list(forces), dim=0),
         torch.cat(list(energy_weights), dim=0),
         torch.cat(list(force_weights), dim=0),
+        tuple(str(group) for group in group_ids),
+        torch.cat(list(image_indices), dim=0),
     )
 
 
@@ -373,6 +426,7 @@ class RTECELightningModule(L.LightningModule):
         force_weight: float = 10.0,
         force_focus_atomic_numbers: tuple[int, ...] = (),
         force_focus_weight: float = 1.0,
+        relative_energy_weight: float = 0.0,
         lr_scheduler: str = "plateau",
         lr_factor: float = 0.5,
         lr_patience: int = 25,
@@ -388,6 +442,7 @@ class RTECELightningModule(L.LightningModule):
         self.force_weight = float(force_weight)
         self.force_focus_atomic_numbers = tuple(int(z) for z in force_focus_atomic_numbers)
         self.force_focus_weight = float(force_focus_weight)
+        self.relative_energy_weight = float(relative_energy_weight)
         self.lr_scheduler = str(lr_scheduler)
         self.lr_factor = float(lr_factor)
         self.lr_patience = int(lr_patience)
@@ -407,17 +462,22 @@ class RTECELightningModule(L.LightningModule):
                 group["lr"] = self.lr * scale
 
     def _shared_step(self, batch, prefix: str):
+        relative_group_ids = None
+        relative_image_indices = None
         if len(batch) == 3:
             graph, energy, forces = batch
             energy_sample_weights = None
             force_sample_weights = None
-        else:
+        elif len(batch) == 5:
             graph, energy, forces, energy_sample_weights, force_sample_weights = batch
+        else:
+            graph, energy, forces, energy_sample_weights, force_sample_weights, relative_group_ids, relative_image_indices = batch
         graph = _graph_to_device(graph, self.device)
         energy = energy.to(self.device)
         forces = forces.to(self.device)
         energy_sample_weights = energy_sample_weights.to(self.device) if energy_sample_weights is not None else None
         force_sample_weights = force_sample_weights.to(self.device) if force_sample_weights is not None else None
+        relative_image_indices = relative_image_indices.to(self.device) if relative_image_indices is not None else None
         loss = loss_for_batch(
             self.model,
             graph,
@@ -429,6 +489,9 @@ class RTECELightningModule(L.LightningModule):
             force_focus_weight=self.force_focus_weight,
             energy_sample_weights=energy_sample_weights,
             force_sample_weights=force_sample_weights,
+            relative_energy_weight=self.relative_energy_weight,
+            relative_group_ids=relative_group_ids,
+            relative_image_indices=relative_image_indices,
         )
         with torch.enable_grad():
             output = self.model(graph)
@@ -524,6 +587,9 @@ def fit_rtece_lightning(
     force_weight: float = 10.0,
     force_focus_elements: str | tuple[int, ...] | list[int] | None = None,
     force_focus_weight: float = 1.0,
+    relative_energy_weight: float = 0.0,
+    relative_group_key: str = "case_id",
+    relative_image_key: str = "source_frame",
     default_dtype: str | torch.dtype = "float32",
     neighborlist_backend: str = "matscipy",
     no_fit_energy_shift: bool = False,
@@ -569,6 +635,7 @@ def fit_rtece_lightning(
         short_range_repulsion_beta=short_range_repulsion_beta,
         short_range_repulsion_radius_scale=short_range_repulsion_radius_scale,
     )
+    include_relative_metadata = float(relative_energy_weight) != 0.0
     train_samples = load_samples(
         train_file,
         cutoff=config.cutoff,
@@ -576,6 +643,9 @@ def fit_rtece_lightning(
         limit_configs=limit_configs,
         neighborlist_backend=neighborlist_backend,
         include_sample_weights=True,
+        include_relative_metadata=include_relative_metadata,
+        relative_group_key=relative_group_key,
+        relative_image_key=relative_image_key,
     )
     if not no_fit_energy_shift:
         config = replace(config, atomic_energies=fit_atomic_energies(train_samples))
@@ -586,6 +656,9 @@ def fit_rtece_lightning(
             limit_configs=limit_configs,
             neighborlist_backend=neighborlist_backend,
             include_sample_weights=True,
+            include_relative_metadata=include_relative_metadata,
+            relative_group_key=relative_group_key,
+            relative_image_key=relative_image_key,
         )
     valid_samples = load_samples(
         valid_file,
@@ -594,6 +667,9 @@ def fit_rtece_lightning(
         limit_configs=valid_limit_configs,
         neighborlist_backend=neighborlist_backend,
         include_sample_weights=True,
+        include_relative_metadata=include_relative_metadata,
+        relative_group_key=relative_group_key,
+        relative_image_key=relative_image_key,
     )
     model = RTECEScalarModel(config).to(dtype=dtype)
     datamodule = RTECEDataModule(
@@ -612,6 +688,7 @@ def fit_rtece_lightning(
         force_weight=force_weight,
         force_focus_atomic_numbers=parse_force_focus_elements(force_focus_elements),
         force_focus_weight=force_focus_weight,
+        relative_energy_weight=relative_energy_weight,
         lr_scheduler=lr_scheduler,
         lr_factor=lr_factor,
         lr_patience=lr_patience,
@@ -702,6 +779,10 @@ def fit_rtece_lightning(
         "force_weight": float(force_weight),
         "force_focus_atomic_numbers": list(parse_force_focus_elements(force_focus_elements)),
         "force_focus_weight": float(force_focus_weight),
+        "relative_energy_weight": float(relative_energy_weight),
+        "relative_group_key": str(relative_group_key),
+        "relative_image_key": str(relative_image_key),
+        "relative_metadata_enabled": bool(include_relative_metadata),
         "sample_weight_keys": ["energy_weight", "forces_weight"],
         "default_dtype": "float64" if dtype == torch.float64 else "float32",
         "neighborlist_backend": neighborlist_backend,
