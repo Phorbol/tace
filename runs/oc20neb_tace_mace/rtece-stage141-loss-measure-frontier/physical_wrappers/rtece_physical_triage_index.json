@@ -1,0 +1,30 @@
+{
+  "schema_version": "rtece_stage141_physical_wrapper_index.v1",
+  "stage": 141,
+  "rows": [
+    {
+      "variant": "l2_active_nrad12_species24_radial_species8_cross3_cond32_fm1p5_ew2_h64",
+      "teacher_force_multiplier": 1.5,
+      "energy_weight": 2.0,
+      "train_output_dir": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/loss_measure_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_fm1p5_ew2_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_fm1p5_ew2_h64",
+      "physical_output_dir": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_fm1p5_ew2_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/physical_wrappers/l2_active_nrad12_species24_radial_species8_cross3_cond32_fm1p5_ew2_h64/rtece_physical_triage_no_export.sbatch"
+    },
+    {
+      "variant": "l2_active_nrad12_species24_radial_species8_cross3_cond32_fm2p5_ew2_h64",
+      "teacher_force_multiplier": 2.5,
+      "energy_weight": 2.0,
+      "train_output_dir": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/loss_measure_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_fm2p5_ew2_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_fm2p5_ew2_h64",
+      "physical_output_dir": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_fm2p5_ew2_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/physical_wrappers/l2_active_nrad12_species24_radial_species8_cross3_cond32_fm2p5_ew2_h64/rtece_physical_triage_no_export.sbatch"
+    },
+    {
+      "variant": "l2_active_nrad12_species24_radial_species8_cross3_cond32_fm2p0_ew3_h64",
+      "teacher_force_multiplier": 2.0,
+      "energy_weight": 3.0,
+      "train_output_dir": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/loss_measure_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_fm2p0_ew3_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_fm2p0_ew3_h64",
+      "physical_output_dir": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_fm2p0_ew3_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/physical_wrappers/l2_active_nrad12_species24_radial_species8_cross3_cond32_fm2p0_ew3_h64/rtece_physical_triage_no_export.sbatch"
+    }
+  ]
+}

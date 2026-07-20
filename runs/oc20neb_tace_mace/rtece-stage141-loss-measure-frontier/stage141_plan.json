@@ -1,0 +1,75 @@
+{
+  "schema_version": "rtece_stage141_loss_measure_frontier_plan.v1",
+  "stage": 141,
+  "title": "Loss-measure frontier around Stage140 source-balanced L=2 conditioned rTECE",
+  "basis": {
+    "TECE_design_space": "hold the selected TECE/rTECE operator subspace fixed and vary the deployment Sobolev measure before adding architecture cost",
+    "rTECE_review": "after weighted E0s repair, verify true distillation closure with teacher-labeled deployment trajectories, RMSE/max-error metrics, and physical tests",
+    "stage140_result": "force-only teacher-relax with energy_weight=2.0 passed E/F benchmark gate and improved C/N rattle RMSD, but force max and relaxed fmax remained open",
+    "not_this_stage": "no head widening, no edge-sketch expansion, no kernel work; this isolates loss/data measure from representation capacity"
+  },
+  "controlled_variables": {
+    "architecture": "Stage140 L=2 conditioned-front cond32 with learnable radial/species front-end and scalarized moments",
+    "short_range_repulsion_potential": "zbl",
+    "short_range_repulsion_strength": 0.0,
+    "train_configs": 2368,
+    "valid_configs": 256,
+    "bench_configs": 1024,
+    "max_steps": 20000,
+    "batch_size": 8,
+    "valid_batch_size": 16,
+    "lr": 0.001,
+    "lr_scheduler": "plateau",
+    "lr_warmup_steps": 500,
+    "lr_patience": 25,
+    "early_stopping_patience": 400,
+    "hidden_channels": "64,64",
+    "num_radial": 12,
+    "moment_l_max": 2,
+    "scalar_path_ids": "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot,atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius",
+    "species_basis_channels": 24,
+    "species_basis_mode": "learnable_embedding",
+    "atomic_cross_radial_sketch_channels": 3,
+    "atomic_cross_radial_projection": "learnable",
+    "learnable_radial_mixing": 1,
+    "radial_species_adapter_channels": 8,
+    "radial_species_adapter_scope": "all",
+    "descriptor_conditioner": "residual_mlp",
+    "descriptor_conditioner_hidden_channels": 32,
+    "descriptor_bottleneck_dim": 0,
+    "force_mode": "autograd"
+  },
+  "rows": [
+    {
+      "name": "l2_active_nrad12_species24_radial_species8_cross3_cond32_fm1p5_ew2_h64",
+      "teacher_force_multiplier": 1.5,
+      "energy_weight": 2.0,
+      "train_file": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/weighted_train_base2048_plus_teacher_relax320_forceonly_fm1p5_e0.extxyz",
+      "train_summary": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/weighted_train_base2048_plus_teacher_relax320_forceonly_fm1p5_e0_summary.json",
+      "hypothesis": "lower teacher-relax force measure may reduce force-tail artifacts and rattle relaxed fmax while retaining Stage140 ew2 energy anchor"
+    },
+    {
+      "name": "l2_active_nrad12_species24_radial_species8_cross3_cond32_fm2p5_ew2_h64",
+      "teacher_force_multiplier": 2.5,
+      "energy_weight": 2.0,
+      "train_file": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/weighted_train_base2048_plus_teacher_relax320_forceonly_fm2p5_e0.extxyz",
+      "train_summary": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/weighted_train_base2048_plus_teacher_relax320_forceonly_fm2p5_e0_summary.json",
+      "hypothesis": "higher teacher-relax force measure tests whether physical relaxation and force max improve when Sobolev mass is moved toward teacher trajectories"
+    },
+    {
+      "name": "l2_active_nrad12_species24_radial_species8_cross3_cond32_fm2p0_ew3_h64",
+      "teacher_force_multiplier": 2.0,
+      "energy_weight": 3.0,
+      "train_file": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/weighted_train_base2048_plus_teacher_relax320_forceonly_e0.extxyz",
+      "train_summary": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/weighted_train_base2048_plus_teacher_relax320_forceonly_e0_summary.json",
+      "hypothesis": "keep Stage140 best force-only teacher measure but strengthen global DFT energy anchor to test energy RMSE/max boundary"
+    }
+  ],
+  "decision_rule": [
+    "Primary comparison uses DFT E/F RMSE plus E/F max error; MAE is secondary and not sufficient for selecting the frontier row.",
+    "If fm1.5 improves F max or rattle relaxed fmax without losing the Stage140 E gate, teacher-relax force measure was overweighting noisy/tail local curvature.",
+    "If fm2.5 improves physical relaxation while preserving E gate, the current student benefits from more deployment Sobolev mass and Stage142 should increase teacher trajectory volume instead of architecture.",
+    "If ew3 improves E RMSE/max but damages F RMSE/max or rattle, energy anchor weight becomes an explicit Pareto knob rather than a universal default.",
+    "If all three fail the same physical tail modes, return to representation capacity/projection error: active scalar path rank, edge-relational sketches, or teacher projection diagnostics."
+  ]
+}

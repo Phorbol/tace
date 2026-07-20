@@ -1,0 +1,37 @@
+{
+  "schema_version": "rtece_stage141_loss_measure_manifest.v1",
+  "stage": 141,
+  "source_stage": 140,
+  "created_by": "Codex",
+  "large_files_not_committed": [
+    "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/weighted_train_base2048_plus_teacher_relax320_forceonly_fm1p5_e0.extxyz",
+    "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/weighted_train_base2048_plus_teacher_relax320_forceonly_fm2p5_e0.extxyz",
+    "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/weighted_train_base2048_plus_teacher_relax320_forceonly_e0.extxyz"
+  ],
+  "rows": [
+    {
+      "name": "l2_active_nrad12_species24_radial_species8_cross3_cond32_fm1p5_ew2_h64",
+      "teacher_force_multiplier": 1.5,
+      "energy_weight": 2.0,
+      "train_file": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/weighted_train_base2048_plus_teacher_relax320_forceonly_fm1p5_e0.extxyz",
+      "train_summary": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/weighted_train_base2048_plus_teacher_relax320_forceonly_fm1p5_e0_summary.json",
+      "hypothesis": "lower teacher-relax force measure may reduce force-tail artifacts and rattle relaxed fmax while retaining Stage140 ew2 energy anchor"
+    },
+    {
+      "name": "l2_active_nrad12_species24_radial_species8_cross3_cond32_fm2p5_ew2_h64",
+      "teacher_force_multiplier": 2.5,
+      "energy_weight": 2.0,
+      "train_file": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/weighted_train_base2048_plus_teacher_relax320_forceonly_fm2p5_e0.extxyz",
+      "train_summary": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/weighted_train_base2048_plus_teacher_relax320_forceonly_fm2p5_e0_summary.json",
+      "hypothesis": "higher teacher-relax force measure tests whether physical relaxation and force max improve when Sobolev mass is moved toward teacher trajectories"
+    },
+    {
+      "name": "l2_active_nrad12_species24_radial_species8_cross3_cond32_fm2p0_ew3_h64",
+      "teacher_force_multiplier": 2.0,
+      "energy_weight": 3.0,
+      "train_file": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/weighted_train_base2048_plus_teacher_relax320_forceonly_e0.extxyz",
+      "train_summary": "runs/oc20neb_tace_mace/rtece-stage140-source-balanced-distill/weighted_train_base2048_plus_teacher_relax320_forceonly_e0_summary.json",
+      "hypothesis": "keep Stage140 best force-only teacher measure but strengthen global DFT energy anchor to test energy RMSE/max boundary"
+    }
+  ]
+}
