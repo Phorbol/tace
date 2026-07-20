@@ -1,0 +1,176 @@
+{
+  "calibration_metrics_before_fit": {
+    "bias_e_mev_atom": -31.81954930888665,
+    "mae_e_mev_atom": 31.81954930888665,
+    "mae_f_mev_a": 38.71217210622097,
+    "max_abs_e_mev_atom": 45.699507595312525,
+    "max_abs_f_mev_a": 633.5397069013213,
+    "mean_signed_e_mev_atom": -31.81954930888665,
+    "rmse_e_mev_atom": 32.128584528338365,
+    "rmse_f_mev_a": 70.90089662641715
+  },
+  "calibration_window": {
+    "configs": 32,
+    "extxyz_index": ":32",
+    "limit": 32,
+    "start": 0
+  },
+  "configs": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "default_dtype": "float32",
+  "device": "cpu",
+  "elements_z": [
+    1,
+    6,
+    7,
+    8,
+    20,
+    31,
+    43
+  ],
+  "energy_key": "energy",
+  "eval_calibrations": {
+    "global": {
+      "calibration": {
+        "elements_z": [
+          1,
+          6,
+          7,
+          8,
+          20,
+          31,
+          43
+        ],
+        "kind": "global_total_energy_shift",
+        "shift_eV": 1.5909774654443325
+      },
+      "eval_metrics": {
+        "bias_e_mev_atom": -25.906422482679233,
+        "mae_e_mev_atom": 26.864312068662393,
+        "mae_f_mev_a": 48.83762271506644,
+        "max_abs_e_mev_atom": 54.4438453545271,
+        "max_abs_f_mev_a": 1204.9218419337465,
+        "mean_signed_e_mev_atom": -25.906422482679233,
+        "rmse_e_mev_atom": 32.326873724088266,
+        "rmse_f_mev_a": 102.02546689276764
+      }
+    },
+    "none": {
+      "calibration": {
+        "elements_z": [
+          1,
+          6,
+          7,
+          8,
+          20,
+          31,
+          43
+        ],
+        "kind": "none"
+      },
+      "eval_metrics": {
+        "bias_e_mev_atom": -74.9142104807412,
+        "mae_e_mev_atom": 74.9142104807412,
+        "mae_f_mev_a": 48.83762271506644,
+        "max_abs_e_mev_atom": 111.26446912039611,
+        "max_abs_f_mev_a": 1204.9218419337465,
+        "mean_signed_e_mev_atom": -74.9142104807412,
+        "rmse_e_mev_atom": 80.90543802193828,
+        "rmse_f_mev_a": 102.02546689276764
+      }
+    },
+    "per_element": {
+      "calibration": {
+        "calibration_residual_metrics": {
+          "bias_e_mev_atom": -8.100187187665142e-12,
+          "mae_e_mev_atom": 3.014324891579676,
+          "max_abs_e_mev_atom": 13.879958286433975,
+          "mean_signed_e_mev_atom": -8.100187187665142e-12,
+          "rmse_e_mev_atom": 4.445472480391094
+        },
+        "elements_z": [
+          1,
+          6,
+          7,
+          8,
+          20,
+          31,
+          43
+        ],
+        "kind": "per_element_residual_e0",
+        "residual_e0_by_z_eV": {
+          "1": 0.0,
+          "20": 0.0,
+          "31": 0.033084997347860516,
+          "43": 0.03309087146576987,
+          "6": 0.0013780870533006955,
+          "7": 0.0013785268634717404,
+          "8": 0.0
+        },
+        "ridge": 1e-08
+      },
+      "eval_metrics": {
+        "bias_e_mev_atom": -64.90292740392049,
+        "mae_e_mev_atom": 65.86081698990041,
+        "mae_f_mev_a": 48.83762271506644,
+        "max_abs_e_mev_atom": 111.1660343308744,
+        "max_abs_f_mev_a": 1204.9218419337465,
+        "mean_signed_e_mev_atom": -64.90292740392049,
+        "rmse_e_mev_atom": 79.01017165724548,
+        "rmse_f_mev_a": 102.02546689276764
+      }
+    }
+  },
+  "eval_window": {
+    "configs": 64,
+    "extxyz_index": "32:96",
+    "limit": 64,
+    "start": 32
+  },
+  "force_mode": "autograd",
+  "forces_key": "forces",
+  "graph_construction_backend": "matscipy_neighborlist",
+  "model": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/t3_cavity_vector_runs/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64/rtece_scalar_best.pt",
+  "model_atomic_energies": {
+    "1": -3.5822312189278986,
+    "11": -1.252303678399598,
+    "13": -3.520121137398768,
+    "14": -5.408909580927386,
+    "15": -4.643384486515283,
+    "19": -1.1645096693916264,
+    "20": -1.7486644865220777,
+    "21": -6.481540890034113,
+    "22": -7.412439127145202,
+    "30": -0.5496757565904375,
+    "31": -2.611072557071361,
+    "32": -4.187094683283908,
+    "33": -4.224256445499343,
+    "38": -1.9960451746076817,
+    "39": -6.683612614485246,
+    "40": -8.320175597022441,
+    "41": -9.403801290665436,
+    "43": -9.082019245531306,
+    "45": -6.889581872828794,
+    "46": -4.967578925632854,
+    "47": -1.9448315802233695,
+    "48": 0.04065060982882689,
+    "49": -2.7895338592194863,
+    "50": -3.525624366083109,
+    "51": -4.073220509841223,
+    "6": -7.612668729300341,
+    "7": -8.392043870949523,
+    "72": -9.572196302384055,
+    "73": -10.780036189557313,
+    "75": -12.348690915783454,
+    "77": -8.76452599094007,
+    "78": -5.638107577265353,
+    "79": -2.6381647908454076,
+    "8": -7.089074271402918,
+    "80": 0.41676999674441184,
+    "81": -1.0690596407950186,
+    "82": -2.8334910985755632,
+    "83": -3.359005122282398
+  },
+  "model_energy_per_atom_shift": 0.0,
+  "schema_version": "rtece_stage146_energy_gauge.v1",
+  "variant": "t3_l2_cavity_vector_cond32_h64"
+}

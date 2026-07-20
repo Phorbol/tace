@@ -9244,3 +9244,63 @@ def test_rtece_train_cli_defaults_to_lightning_and_exposes_training_controls():
     assert "--lr-scheduler" in result.stdout
     assert "--early-stopping-patience" in result.stdout
     assert "--lr-warmup-steps" in result.stdout
+
+def test_stage146_energy_calibration_fits_per_element_residual_on_calibration_and_applies_to_eval():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_energy_gauge import (
+        apply_energy_calibration,
+        fit_residual_energy_calibration,
+    )
+
+    elements = [1, 6]
+    calib_counts = [
+        {1: 2, 6: 1},
+        {1: 0, 6: 2},
+        {1: 2, 6: 0},
+    ]
+    calib_pred_e = torch.tensor([10.0, 8.0, 2.0], dtype=torch.float64).numpy()
+    residual_e0 = {1: 0.25, 6: -0.75}
+    calib_ref_e = calib_pred_e + torch.tensor([
+        2 * residual_e0[1] + residual_e0[6],
+        2 * residual_e0[6],
+        2 * residual_e0[1],
+    ], dtype=torch.float64).numpy()
+
+    calibration = fit_residual_energy_calibration(
+        calib_counts,
+        calib_pred_e,
+        calib_ref_e,
+        elements=elements,
+        mode="per_element",
+        ridge=0.0,
+    )
+
+    assert calibration["kind"] == "per_element_residual_e0"
+    assert calibration["residual_e0_by_z_eV"] == pytest.approx({"1": 0.25, "6": -0.75})
+
+    eval_counts = [{1: 1, 6: 1}, {1: 4, 6: 0}]
+    eval_pred_e = torch.tensor([3.0, -2.0], dtype=torch.float64).numpy()
+    eval_ref_e = eval_pred_e + torch.tensor([-0.5, 1.0], dtype=torch.float64).numpy()
+
+    corrected = apply_energy_calibration(eval_counts, eval_pred_e, calibration)
+
+    assert corrected == pytest.approx(eval_ref_e)
+
+
+def test_stage146_energy_calibration_keeps_global_shift_as_separate_control():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_energy_gauge import (
+        apply_energy_calibration,
+        fit_residual_energy_calibration,
+    )
+
+    calibration = fit_residual_energy_calibration(
+        [{1: 2}, {1: 3}],
+        torch.tensor([1.0, 5.0], dtype=torch.float64).numpy(),
+        torch.tensor([2.5, 6.5], dtype=torch.float64).numpy(),
+        elements=[1],
+        mode="global",
+    )
+
+    assert calibration["kind"] == "global_total_energy_shift"
+    assert calibration["shift_eV"] == pytest.approx(1.5)
+    assert apply_energy_calibration([{1: 1}], torch.tensor([10.0], dtype=torch.float64).numpy(), calibration) == pytest.approx([11.5])
+

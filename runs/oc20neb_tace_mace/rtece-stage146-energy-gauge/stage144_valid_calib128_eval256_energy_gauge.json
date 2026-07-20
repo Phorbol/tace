@@ -1,0 +1,216 @@
+{
+  "calibration_metrics_before_fit": {
+    "bias_e_mev_atom": -24.791112859155362,
+    "mae_e_mev_atom": 91.24163061282117,
+    "mae_f_mev_a": 43.72755748034115,
+    "max_abs_e_mev_atom": 286.99737500946986,
+    "max_abs_f_mev_a": 1619.431488942852,
+    "mean_signed_e_mev_atom": -24.791112859155362,
+    "rmse_e_mev_atom": 118.95716767004933,
+    "rmse_f_mev_a": 94.62622892263302
+  },
+  "calibration_window": {
+    "configs": 128,
+    "extxyz_index": ":128",
+    "limit": 128,
+    "start": 0
+  },
+  "configs": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "default_dtype": "float32",
+  "device": "cpu",
+  "elements_z": [
+    1,
+    6,
+    7,
+    8,
+    14,
+    20,
+    21,
+    22,
+    30,
+    31,
+    38,
+    43,
+    46,
+    51,
+    78
+  ],
+  "energy_key": "energy",
+  "eval_calibrations": {
+    "global": {
+      "calibration": {
+        "elements_z": [
+          1,
+          6,
+          7,
+          8,
+          14,
+          20,
+          21,
+          22,
+          30,
+          31,
+          38,
+          43,
+          46,
+          51,
+          78
+        ],
+        "kind": "global_total_energy_shift",
+        "shift_eV": -0.28854727597885255
+      },
+      "eval_metrics": {
+        "bias_e_mev_atom": -32.19600295559968,
+        "mae_e_mev_atom": 122.99586013555876,
+        "mae_f_mev_a": 39.83685448027239,
+        "max_abs_e_mev_atom": 282.6775007829908,
+        "max_abs_f_mev_a": 1514.5626042874146,
+        "mean_signed_e_mev_atom": -32.19600295559968,
+        "rmse_e_mev_atom": 159.89534701765206,
+        "rmse_f_mev_a": 93.70271186753966
+      }
+    },
+    "none": {
+      "calibration": {
+        "elements_z": [
+          1,
+          6,
+          7,
+          8,
+          14,
+          20,
+          21,
+          22,
+          30,
+          31,
+          38,
+          43,
+          46,
+          51,
+          78
+        ],
+        "kind": "none"
+      },
+      "eval_metrics": {
+        "bias_e_mev_atom": -27.554943513110636,
+        "mae_e_mev_atom": 124.01023422980157,
+        "mae_f_mev_a": 39.83685448027239,
+        "max_abs_e_mev_atom": 287.04942920691246,
+        "max_abs_f_mev_a": 1514.5626042874146,
+        "mean_signed_e_mev_atom": -27.554943513110636,
+        "rmse_e_mev_atom": 159.18202841789596,
+        "rmse_f_mev_a": 93.70271186753966
+      }
+    },
+    "per_element": {
+      "calibration": {
+        "calibration_residual_metrics": {
+          "bias_e_mev_atom": -1.2250422898318902e-11,
+          "mae_e_mev_atom": 3.831216738629895,
+          "max_abs_e_mev_atom": 16.218386077104288,
+          "mean_signed_e_mev_atom": -1.2250422898318902e-11,
+          "rmse_e_mev_atom": 5.217738168629428
+        },
+        "elements_z": [
+          1,
+          6,
+          7,
+          8,
+          14,
+          20,
+          21,
+          22,
+          30,
+          31,
+          38,
+          43,
+          46,
+          51,
+          78
+        ],
+        "kind": "per_element_residual_e0",
+        "residual_e0_by_z_eV": {
+          "1": -0.014652319527974453,
+          "14": 0.0,
+          "20": 0.11016329024068278,
+          "21": 0.0,
+          "22": -0.6156857244472214,
+          "30": 0.0,
+          "31": 0.031836986063448244,
+          "38": 0.0,
+          "43": 0.031836986063448244,
+          "46": 0.0,
+          "51": 0.0,
+          "6": 0.023338765287255352,
+          "7": 0.014144092668412319,
+          "78": 0.0,
+          "8": -0.014653851610752321
+        },
+        "ridge": 1e-08
+      },
+      "eval_metrics": {
+        "bias_e_mev_atom": -47.50086600188475,
+        "mae_e_mev_atom": 103.49898024915613,
+        "mae_f_mev_a": 39.83685448027239,
+        "max_abs_e_mev_atom": 240.91106606823422,
+        "max_abs_f_mev_a": 1514.5626042874146,
+        "mean_signed_e_mev_atom": -47.50086600188475,
+        "rmse_e_mev_atom": 139.49220150620644,
+        "rmse_f_mev_a": 93.70271186753966
+      }
+    }
+  },
+  "eval_window": {
+    "configs": 256,
+    "extxyz_index": "128:384",
+    "limit": 256,
+    "start": 128
+  },
+  "force_mode": "autograd",
+  "forces_key": "forces",
+  "graph_construction_backend": "matscipy_neighborlist",
+  "model": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector/t3_cavity_vector_runs/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64/rtece_scalar_best.pt",
+  "model_atomic_energies": {
+    "1": -3.5822312189278986,
+    "11": -1.252303678399598,
+    "13": -3.520121137398768,
+    "14": -5.408909580927386,
+    "15": -4.643384486515283,
+    "19": -1.1645096693916264,
+    "20": -1.7486644865220777,
+    "21": -6.481540890034113,
+    "22": -7.412439127145202,
+    "30": -0.5496757565904375,
+    "31": -2.611072557071361,
+    "32": -4.187094683283908,
+    "33": -4.224256445499343,
+    "38": -1.9960451746076817,
+    "39": -6.683612614485246,
+    "40": -8.320175597022441,
+    "41": -9.403801290665436,
+    "43": -9.082019245531306,
+    "45": -6.889581872828794,
+    "46": -4.967578925632854,
+    "47": -1.9448315802233695,
+    "48": 0.04065060982882689,
+    "49": -2.7895338592194863,
+    "50": -3.525624366083109,
+    "51": -4.073220509841223,
+    "6": -7.612668729300341,
+    "7": -8.392043870949523,
+    "72": -9.572196302384055,
+    "73": -10.780036189557313,
+    "75": -12.348690915783454,
+    "77": -8.76452599094007,
+    "78": -5.638107577265353,
+    "79": -2.6381647908454076,
+    "8": -7.089074271402918,
+    "80": 0.41676999674441184,
+    "81": -1.0690596407950186,
+    "82": -2.8334910985755632,
+    "83": -3.359005122282398
+  },
+  "model_energy_per_atom_shift": 0.0,
+  "schema_version": "rtece_stage146_energy_gauge.v1",
+  "variant": "t3_l2_cavity_vector_cond32_h64"
+}
