@@ -5589,6 +5589,8 @@ def test_prediction_error_payload_includes_relative_energy_metrics_when_groups_a
     assert payload["relative_energy_errors_available"] is True
     assert payload["relative_image_rmse_mev_atom"] == pytest.approx((10000.0 / 3) ** 0.5)
     assert payload["barrier_rmse_mev_atom"] == pytest.approx(0.0)
+    assert payload["energy_decomposition_metric_schema_version"] == "rtece_energy_error_decomposition.v1"
+    assert payload["first_image_anchor_rmse_mev_atom"] == pytest.approx((10000.0 / 3) ** 0.5)
 
 def test_benchmark_error_summary_reports_signed_energy_bias_and_absolute_max_errors():
     import numpy as np
@@ -7903,7 +7905,7 @@ def test_stage145_summary_keeps_rmse_first_and_missing_outputs_explicit(tmp_path
 
     markdown = render_stage145_markdown(summary)
     assert "Primary ranking metric: DFT force RMSE" in markdown
-    assert "| row | engine | conversion | training | DFT F RMSE | DFT E RMSE | rel image RMSE | barrier RMSE | atoms/s | physical |" in markdown
+    assert "| row | engine | conversion | training | DFT F RMSE | DFT E RMSE | rel image RMSE | barrier RMSE | case offset RMSE | first anchor RMSE | atoms/s | physical |" in markdown
     assert "deepmd_dpa_like_mixed_smoke" in markdown
 
 
@@ -7929,6 +7931,8 @@ def test_stage145_summary_preserves_relative_neb_energy_metrics(tmp_path):
                 "relative_energy_errors_available": True,
                 "relative_image_rmse_mev_atom": 8.5,
                 "barrier_rmse_mev_atom": 19.25,
+                "group_mean_offset_rmse_mev_atom": 6.75,
+                "first_image_anchor_rmse_mev_atom": 17.5,
                 "atoms_per_second": 12345.0,
             }
         )
@@ -7943,12 +7947,63 @@ def test_stage145_summary_preserves_relative_neb_energy_metrics(tmp_path):
 
     assert row["dft_relative_image_rmse_mev_atom"] == pytest.approx(8.5)
     assert row["dft_barrier_rmse_mev_atom"] == pytest.approx(19.25)
+    assert row["dft_group_mean_offset_rmse_mev_atom"] == pytest.approx(6.75)
+    assert row["dft_first_image_anchor_rmse_mev_atom"] == pytest.approx(17.5)
     markdown = render_stage145_markdown(summary)
     assert "rel image RMSE" in markdown
     assert "barrier RMSE" in markdown
+    assert "case offset RMSE" in markdown
+    assert "first anchor RMSE" in markdown
     assert "8.500" in markdown
     assert "19.250" in markdown
+    assert "6.750" in markdown
+    assert "17.500" in markdown
 
+
+
+def test_stage145_nep_calculator_adds_vacuum_cell_for_nonperiodic_dimer(tmp_path, monkeypatch):
+    import numpy as np
+    from ase import Atoms
+
+    from benchmarks.oc20neb_tace_mace import physical_stage145_community as physical
+
+    captured = {}
+
+    def fake_run_nep_prediction(*, model_artifact, atoms_list, energy_key, forces_key, work_dir):
+        captured["atoms"] = atoms_list[0].copy()
+        return np.array([0.0], dtype=np.float64), np.zeros((len(atoms_list[0]), 3), dtype=np.float64), {}
+
+    monkeypatch.setattr(physical, "run_nep_prediction", fake_run_nep_prediction)
+    calc = physical.NEPPredictionCalculator(tmp_path / "nep.txt", run_dir=tmp_path / "work").calculator
+    atoms = Atoms("CN", positions=[[0.0, 0.0, 0.0], [1.2, 0.0, 0.0]], pbc=False)
+    atoms.calc = calc
+
+    assert atoms.get_potential_energy() == pytest.approx(0.0)
+    passed = captured["atoms"]
+    assert passed.cell.volume > 0.0
+    assert passed.pbc.all()
+
+
+def test_stage145_nep_prediction_writer_reads_singlepoint_reference_keys(tmp_path):
+    import numpy as np
+    from ase import Atoms
+    from ase.calculators.singlepoint import SinglePointCalculator
+
+    from benchmarks.oc20neb_tace_mace.benchmark_stage145_community import _write_nep_prediction_xyz
+
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]])
+    atoms.calc = SinglePointCalculator(
+        atoms,
+        energy=-1.25,
+        forces=np.array([[0.1, 0.0, 0.0], [-0.1, 0.0, 0.0]], dtype=np.float64),
+    )
+
+    output = tmp_path / "train.xyz"
+    _write_nep_prediction_xyz([atoms], output, energy_key="energy", forces_key="forces")
+
+    text = output.read_text()
+    assert "energy=-1.25" in text
+    assert "Properties=species:S:1:pos:R:3:force:R:3" in text
 
 
 def test_stage145_community_benchmark_emits_relative_energy_metrics(tmp_path, monkeypatch):
@@ -8000,6 +8055,8 @@ def test_stage145_community_benchmark_emits_relative_energy_metrics(tmp_path, mo
     assert payload["relative_energy_errors_available"] is True
     assert payload["relative_image_rmse_mev_atom"] == pytest.approx((10000.0 / 3) ** 0.5)
     assert payload["barrier_rmse_mev_atom"] == pytest.approx(0.0)
+    assert payload["energy_decomposition_metric_schema_version"] == "rtece_energy_error_decomposition.v1"
+    assert payload["first_image_anchor_rmse_mev_atom"] == pytest.approx((10000.0 / 3) ** 0.5)
     saved = json.loads(output.read_text())
     assert saved["schema_version"] == "community_baseline_dft_benchmark.v1"
     assert saved["relative_energy_errors_available"] is True
@@ -9461,4 +9518,40 @@ def test_stage147_relative_energy_metrics_report_barrier_errors_per_group():
     assert metrics["barrier_mae_mev_atom"] == pytest.approx(625.0)
     assert metrics["barrier_rmse_mev_atom"] == pytest.approx(((500.0**2 + 750.0**2) / 2) ** 0.5)
     assert metrics["barrier_max_abs_mev_atom"] == pytest.approx(750.0)
+
+
+def test_stage148_energy_decomposition_identifies_case_offset_without_path_shape_error():
+    from benchmarks.oc20neb_tace_mace.relative_energy_metrics import energy_error_decomposition_metrics
+
+    ref_e = torch.tensor([0.0, 1.0, 2.0, 10.0, 12.0, 14.0], dtype=torch.float64).numpy()
+    pred_e = torch.tensor([5.0, 6.0, 7.0, 6.0, 8.0, 10.0], dtype=torch.float64).numpy()
+    natoms = torch.tensor([10, 10, 10, 20, 20, 20], dtype=torch.float64).numpy()
+    groups = ["path-a", "path-a", "path-a", "path-b", "path-b", "path-b"]
+    images = [0, 1, 2, 0, 1, 2]
+
+    metrics = energy_error_decomposition_metrics(pred_e, ref_e, natoms, groups, image_indices=images)
+
+    assert metrics["raw_rmse_mev_atom"] > 0.0
+    assert metrics["global_offset_rmse_mev_atom"] > 0.0
+    assert metrics["group_mean_offset_rmse_mev_atom"] == pytest.approx(0.0)
+    assert metrics["first_image_anchor_rmse_mev_atom"] == pytest.approx(0.0)
+    assert metrics["relative_image_rmse_mev_atom"] == pytest.approx(0.0)
+    assert metrics["barrier_rmse_mev_atom"] == pytest.approx(0.0)
+
+
+def test_stage148_energy_decomposition_preserves_along_path_shape_error():
+    from benchmarks.oc20neb_tace_mace.relative_energy_metrics import energy_error_decomposition_metrics
+
+    ref_e = torch.tensor([0.0, 1.0, 2.0], dtype=torch.float64).numpy()
+    pred_e = torch.tensor([5.0, 7.0, 7.0], dtype=torch.float64).numpy()
+    natoms = torch.tensor([10, 10, 10], dtype=torch.float64).numpy()
+    groups = ["path-a", "path-a", "path-a"]
+    images = [0, 1, 2]
+
+    metrics = energy_error_decomposition_metrics(pred_e, ref_e, natoms, groups, image_indices=images)
+
+    assert metrics["group_mean_offset_rmse_mev_atom"] > 0.0
+    assert metrics["first_image_anchor_rmse_mev_atom"] == pytest.approx((10000.0 / 3) ** 0.5)
+    assert metrics["relative_image_rmse_mev_atom"] == pytest.approx((10000.0 / 3) ** 0.5)
+    assert metrics["barrier_rmse_mev_atom"] == pytest.approx(0.0)
 

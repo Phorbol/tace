@@ -69,6 +69,8 @@ def summarize_stage145(manifest: Mapping[str, Any], output_root: str | Path) -> 
                 "dft_barrier_rmse_mev_atom": _metric(dft, "barrier_rmse_mev_atom"),
                 "dft_barrier_mae_mev_atom": _metric(dft, "barrier_mae_mev_atom"),
                 "dft_barrier_max_mev_atom": _metric(dft, "barrier_max_abs_mev_atom"),
+                "dft_group_mean_offset_rmse_mev_atom": _metric(dft, "group_mean_offset_rmse_mev_atom"),
+                "dft_first_image_anchor_rmse_mev_atom": _metric(dft, "first_image_anchor_rmse_mev_atom"),
                 "atoms_per_second": _metric(dft, "atoms_per_second") or _metric(dft, "atoms_per_s"),
             }
         )
@@ -96,14 +98,14 @@ def render_stage145_markdown(summary: Mapping[str, Any]) -> str:
     lines = [
         "# Stage145 Community Baselines Summary",
         "",
-        "Primary ranking metric: DFT force RMSE; relative image/barrier RMSE is reported for NEB PES shape.",
+        "Primary ranking metric: DFT force RMSE; relative image/barrier RMSE is reported for NEB PES shape; case/first-anchor offsets diagnose energy gauge.",
         "",
-        "| row | engine | conversion | training | DFT F RMSE | DFT E RMSE | rel image RMSE | barrier RMSE | atoms/s | physical |",
-        "|---|---|---|---|---:|---:|---:|---:|---:|---|",
+        "| row | engine | conversion | training | DFT F RMSE | DFT E RMSE | rel image RMSE | barrier RMSE | case offset RMSE | first anchor RMSE | atoms/s | physical |",
+        "|---|---|---|---|---:|---:|---:|---:|---:|---:|---:|---|",
     ]
     for row in summary.get("rows", []):
         lines.append(
-            "| {name} | {engine} | {conversion_status} | {training_status} | {f_rmse} | {e_rmse} | {rel_rmse} | {barrier_rmse} | {atoms_s} | {physical_status} |".format(
+            "| {name} | {engine} | {conversion_status} | {training_status} | {f_rmse} | {e_rmse} | {rel_rmse} | {barrier_rmse} | {case_offset_rmse} | {first_anchor_rmse} | {atoms_s} | {physical_status} |".format(
                 name=row["name"],
                 engine=row["engine"],
                 conversion_status=row["conversion_status"],
@@ -112,6 +114,8 @@ def render_stage145_markdown(summary: Mapping[str, Any]) -> str:
                 e_rmse=_fmt(row.get("dft_e_rmse_mev_atom")),
                 rel_rmse=_fmt(row.get("dft_relative_image_rmse_mev_atom")),
                 barrier_rmse=_fmt(row.get("dft_barrier_rmse_mev_atom")),
+                case_offset_rmse=_fmt(row.get("dft_group_mean_offset_rmse_mev_atom")),
+                first_anchor_rmse=_fmt(row.get("dft_first_image_anchor_rmse_mev_atom")),
                 atoms_s=_fmt(row.get("atoms_per_second")),
                 physical_status=row["physical_status"],
             )

@@ -26,6 +26,24 @@ from benchmarks.oc20neb_tace_mace.dimer_scan_rtece import (
 from benchmarks.oc20neb_tace_mace.rattle_relax_rtece import relax_rattled_structure, summarize_relax_records
 
 
+def _ensure_nep_lattice(atoms, *, vacuum_a: float = 20.0):
+    local = atoms.copy()
+    cell = np.asarray(local.cell.array, dtype=np.float64)
+    has_full_cell = bool(abs(float(np.linalg.det(cell))) > 1.0e-12)
+    if has_full_cell and bool(np.asarray(local.pbc, dtype=bool).all()):
+        return local
+    positions = np.asarray(local.positions, dtype=np.float64)
+    if positions.size:
+        span = np.ptp(positions, axis=0)
+    else:
+        span = np.zeros(3, dtype=np.float64)
+    lengths = np.maximum(span + float(vacuum_a), float(vacuum_a))
+    local.set_cell(np.diag(lengths))
+    local.center()
+    local.pbc = True
+    return local
+
+
 class NEPPredictionCalculator:
     implemented_properties = ["energy", "forces"]
 
@@ -45,7 +63,7 @@ class NEPPredictionCalculator:
                 if atoms is None:
                     raise ValueError("atoms is required")
                 self.call_index += 1
-                local = atoms.copy()
+                local = _ensure_nep_lattice(atoms)
                 local.info[self.outer.energy_key] = 0.0
                 local.arrays[self.outer.forces_key] = np.zeros((len(local), 3), dtype=np.float64)
                 work_dir = self.outer.run_dir / f"nep_single_{self.call_index:06d}"

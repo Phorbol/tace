@@ -20,7 +20,11 @@ if str(REPO_ROOT) not in sys.path:
 import numpy as np
 
 from benchmarks.oc20neb_tace_mace.benchmark_models import reference_arrays, summarize_errors
-from benchmarks.oc20neb_tace_mace.relative_energy_metrics import atoms_group_values, relative_energy_group_metrics
+from benchmarks.oc20neb_tace_mace.relative_energy_metrics import (
+    atoms_group_values,
+    energy_error_decomposition_metrics,
+    relative_energy_group_metrics,
+)
 
 
 def _flatten_relative_energy_metrics(metrics: dict[str, object]) -> dict[str, object]:
@@ -28,6 +32,14 @@ def _flatten_relative_energy_metrics(metrics: dict[str, object]) -> dict[str, ob
     schema = flattened.pop("schema_version", None)
     if schema is not None:
         flattened["relative_energy_metric_schema_version"] = schema
+    return flattened
+
+
+def _flatten_energy_decomposition_metrics(metrics: dict[str, object]) -> dict[str, object]:
+    flattened = dict(metrics)
+    schema = flattened.pop("schema_version", None)
+    if schema is not None:
+        flattened["energy_decomposition_metric_schema_version"] = schema
     return flattened
 
 
@@ -47,22 +59,42 @@ def _load_atoms(configs: Path, *, start_config: int, limit_configs: int):
     return atoms_list
 
 
+def _atoms_energy(atoms, energy_key: str, config_idx: int) -> float:
+    if energy_key in atoms.info:
+        return float(atoms.info[energy_key])
+    if atoms.calc is not None and energy_key in getattr(atoms.calc, "results", {}):
+        return float(atoms.calc.results[energy_key])
+    try:
+        return float(atoms.get_potential_energy())
+    except Exception as exc:  # noqa: BLE001 - preserve config context for benchmark JSON.
+        raise KeyError(f"configuration {config_idx} is missing energy key {energy_key!r}") from exc
+
+
+def _atoms_forces(atoms, forces_key: str, config_idx: int) -> np.ndarray:
+    if forces_key in atoms.arrays:
+        return np.asarray(atoms.arrays[forces_key], dtype=np.float64)
+    if atoms.calc is not None and forces_key in getattr(atoms.calc, "results", {}):
+        return np.asarray(atoms.calc.results[forces_key], dtype=np.float64)
+    try:
+        return np.asarray(atoms.get_forces(), dtype=np.float64)
+    except Exception as exc:  # noqa: BLE001 - preserve config context for benchmark JSON.
+        raise KeyError(f"configuration {config_idx} is missing forces key {forces_key!r}") from exc
+
+
 def _write_nep_prediction_xyz(atoms_list, path: Path, *, energy_key: str, forces_key: str) -> None:
     import ase.io
 
     serializable = []
-    for atoms in atoms_list:
+    for config_idx, atoms in enumerate(atoms_list):
         item = atoms.copy()
-        if energy_key not in item.info:
-            raise KeyError(f"missing energy key {energy_key!r} for NEP prediction")
-        if forces_key not in item.arrays:
-            raise KeyError(f"missing forces key {forces_key!r} for NEP prediction")
+        energy = _atoms_energy(atoms, energy_key, config_idx)
+        forces = _atoms_forces(atoms, forces_key, config_idx)
         item.info.clear()
-        item.info["energy"] = float(atoms.info[energy_key])
+        item.info["energy"] = energy
         for key in list(item.arrays.keys()):
             if key not in {"numbers", "positions"}:
                 del item.arrays[key]
-        item.arrays["force"] = np.asarray(atoms.arrays[forces_key], dtype=np.float64)
+        item.arrays["force"] = forces
         serializable.append(item)
     ase.io.write(path, serializable, format="extxyz")
 
@@ -213,6 +245,13 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         group_ids,
         image_indices=image_indices,
     )
+    decomposition_metrics = energy_error_decomposition_metrics(
+        pred_e,
+        ref_e,
+        natoms,
+        group_ids,
+        image_indices=image_indices,
+    )
     mean_time = float(np.mean(pass_times)) if pass_times else None
     payload = {
         "schema_version": "community_baseline_dft_benchmark.v1",
@@ -233,6 +272,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         "relative_energy_errors_available": True,
         **metrics,
         **_flatten_relative_energy_metrics(relative_metrics),
+        **_flatten_energy_decomposition_metrics(decomposition_metrics),
         **metadata,
     }
     args.output.parent.mkdir(parents=True, exist_ok=True)

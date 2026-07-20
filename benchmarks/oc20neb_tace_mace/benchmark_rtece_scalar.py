@@ -22,6 +22,7 @@ from benchmarks.oc20neb_tace_mace.benchmark_models import (
 )
 from benchmarks.oc20neb_tace_mace.relative_energy_metrics import (
     atoms_group_values,
+    energy_error_decomposition_metrics,
     relative_energy_group_metrics,
 )
 from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
@@ -39,6 +40,14 @@ def _flatten_relative_energy_metrics(metrics: dict[str, object]) -> dict[str, ob
     schema = flattened.pop("schema_version", None)
     if schema is not None:
         flattened["relative_energy_metric_schema_version"] = schema
+    return flattened
+
+
+def _flatten_energy_decomposition_metrics(metrics: dict[str, object]) -> dict[str, object]:
+    flattened = dict(metrics)
+    schema = flattened.pop("schema_version", None)
+    if schema is not None:
+        flattened["energy_decomposition_metric_schema_version"] = schema
     return flattened
 
 
@@ -968,7 +977,15 @@ def prediction_error_payload(
             group_ids,
             image_indices=image_indices,
         )
+        decomposition = energy_error_decomposition_metrics(
+            pred_e,
+            ref_e,
+            natoms,
+            group_ids,
+            image_indices=image_indices,
+        )
         payload.update(_flatten_relative_energy_metrics(relative))
+        payload.update(_flatten_energy_decomposition_metrics(decomposition))
         payload["relative_energy_errors_available"] = True
     return payload
 

@@ -24,6 +24,7 @@ from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import (
 )
 from benchmarks.oc20neb_tace_mace.relative_energy_metrics import (
     atoms_group_values as _atoms_group_values,
+    energy_error_decomposition_metrics,
     relative_energy_group_metrics,
 )
 from benchmarks.oc20neb_tace_mace.train_rtece_scalar import load_checkpoint
@@ -212,10 +213,18 @@ def run_energy_gauge_diagnostic(args: argparse.Namespace) -> dict[str, object]:
             eval_groups,
             image_indices=eval_images,
         )
+        decomposition_metrics = energy_error_decomposition_metrics(
+            corrected_eval_e,
+            eval_ref_e,
+            eval_natoms,
+            eval_groups,
+            image_indices=eval_images,
+        )
         calibration_payload[mode] = {
             "calibration": calibration,
             "eval_metrics": metrics,
             "eval_relative_energy_metrics": relative_metrics,
+            "eval_energy_error_decomposition": decomposition_metrics,
         }
     return {
         "schema_version": "rtece_stage146_energy_gauge.v1",
@@ -255,8 +264,9 @@ def write_markdown(payload: Mapping[str, object], path: Path) -> None:
     for mode, item in dict(payload["eval_calibrations"]).items():
         metrics = dict(item["eval_metrics"])
         relative = dict(item.get("eval_relative_energy_metrics") or {})
+        decomposition = dict(item.get("eval_energy_error_decomposition") or {})
         rows.append(
-            f"| {mode} | {metrics['rmse_e_mev_atom']:.3f} | {metrics['mae_e_mev_atom']:.3f} | {metrics['max_abs_e_mev_atom']:.3f} | {metrics['bias_e_mev_atom']:.3f} | {metrics['rmse_f_mev_a']:.3f} | {metrics['mae_f_mev_a']:.3f} | {float(relative.get('relative_image_rmse_mev_atom', 0.0)):.3f} | {float(relative.get('barrier_rmse_mev_atom', 0.0)):.3f} |"
+            f"| {mode} | {metrics['rmse_e_mev_atom']:.3f} | {metrics['mae_e_mev_atom']:.3f} | {metrics['max_abs_e_mev_atom']:.3f} | {metrics['bias_e_mev_atom']:.3f} | {metrics['rmse_f_mev_a']:.3f} | {metrics['mae_f_mev_a']:.3f} | {float(relative.get('relative_image_rmse_mev_atom', 0.0)):.3f} | {float(relative.get('barrier_rmse_mev_atom', 0.0)):.3f} | {float(decomposition.get('group_mean_offset_rmse_mev_atom', 0.0)):.3f} | {float(decomposition.get('first_image_anchor_rmse_mev_atom', 0.0)):.3f} |"
         )
     text = "\n".join(
         [
@@ -269,8 +279,8 @@ def write_markdown(payload: Mapping[str, object], path: Path) -> None:
             f"- evaluation: `{dict(payload['eval_window'])['extxyz_index']}`",
             f"- model energy reference: per-element={bool(dict(payload['model_atomic_energies']))}, global_shift={payload['model_energy_per_atom_shift']}",
             "",
-            "| calibration | E RMSE meV/atom | E MAE meV/atom | E max meV/atom | E bias meV/atom | F RMSE meV/A | F MAE meV/A | relative image RMSE meV/atom | barrier RMSE meV/atom |",
-            "|---|---:|---:|---:|---:|---:|---:|---:|---:|",
+            "| calibration | E RMSE meV/atom | E MAE meV/atom | E max meV/atom | E bias meV/atom | F RMSE meV/A | F MAE meV/A | relative image RMSE meV/atom | barrier RMSE meV/atom | group mean-offset RMSE meV/atom | first image-anchor RMSE meV/atom |",
+            "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
             *rows,
             "",
         ]
