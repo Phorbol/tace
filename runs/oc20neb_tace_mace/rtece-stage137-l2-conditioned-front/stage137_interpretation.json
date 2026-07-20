@@ -1,0 +1,142 @@
+{
+  "anchors": {
+    "stage132_l1_atomic": {
+      "atoms_per_second": 1217882.2660484551,
+      "cn_rattle_final_rmsd_a": 0.10313320250384972,
+      "dft_e_max_abs_mev_atom": 697.3013906020223,
+      "dft_e_rmse_mev_atom": 293.39137320419337,
+      "dft_f_mae_mev_a": 46.5025060854312,
+      "dft_f_max_abs_mev_a": 1840.5392509918213,
+      "dft_f_rmse_mev_a": 108.35452654579393,
+      "dimer_gate_pass": true,
+      "params": 28925,
+      "physical_gate_pass": false,
+      "physical_score": 14.298451723191814,
+      "rattle_gate_pass": false,
+      "source": "stage132_l1_atomic_broad_teacher_rattle",
+      "variant": "l1_active_nrad12_species24_radial_species8_cross3_h64"
+    },
+    "stage135_naive_l2_atomic": {
+      "atoms_per_second": 1058909.3264312164,
+      "cn_rattle_final_rmsd_a": 0.10959208802356364,
+      "dft_e_max_abs_mev_atom": 720.403556272978,
+      "dft_e_rmse_mev_atom": 294.9453104908115,
+      "dft_f_mae_mev_a": 47.506089388709796,
+      "dft_f_max_abs_mev_a": 2649.912420471191,
+      "dft_f_rmse_mev_a": 112.9600930248914,
+      "dimer_gate_pass": true,
+      "params": 29885,
+      "physical_gate_pass": false,
+      "physical_score": 14.897396530304288,
+      "rattle_gate_pass": false,
+      "source": "stage135_naive_l2_atomic",
+      "variant": "l2_active_nrad12_species24_radial_species8_cross3_h64"
+    }
+  },
+  "delta_vs_stage132_l1_atomic": {
+    "l2_active_nrad12_species24_radial_species8_cross3_bneck32_h64": {
+      "atoms_per_second": -156841.74268563278,
+      "cn_rattle_final_rmsd_a": 0.0068451486717702875,
+      "dft_e_max_abs_mev_atom": -5.425307329963289,
+      "dft_e_rmse_mev_atom": 16.33646146047846,
+      "dft_f_mae_mev_a": 2.4854286440412565,
+      "dft_f_max_abs_mev_a": 20.49615913391108,
+      "dft_f_rmse_mev_a": 5.904007097164268,
+      "physical_score": -1.4376952769344875
+    },
+    "l2_active_nrad12_species24_radial_species8_cross3_cond32_h64": {
+      "atoms_per_second": -194386.5832073912,
+      "cn_rattle_final_rmsd_a": 0.00802743507978973,
+      "dft_e_max_abs_mev_atom": 42.964179009088525,
+      "dft_e_rmse_mev_atom": 46.64027477279541,
+      "dft_f_mae_mev_a": -0.656558935305732,
+      "dft_f_max_abs_mev_a": 74.0326352487184,
+      "dft_f_rmse_mev_a": -0.8384241716994154,
+      "physical_score": 0.10485011901248242
+    }
+  },
+  "delta_vs_stage135_naive_l2_atomic": {
+    "l2_active_nrad12_species24_radial_species8_cross3_bneck32_h64": {
+      "atoms_per_second": 2131.196931605926,
+      "cn_rattle_final_rmsd_a": 0.0003862631520563653,
+      "dft_e_max_abs_mev_atom": -28.52747300091903,
+      "dft_e_rmse_mev_atom": 14.782524173860338,
+      "dft_f_mae_mev_a": 1.4818453407626606,
+      "dft_f_max_abs_mev_a": -788.8770103454588,
+      "dft_f_rmse_mev_a": 1.2984406180667918,
+      "physical_score": -2.0366400840469616
+    },
+    "l2_active_nrad12_species24_radial_species8_cross3_cond32_h64": {
+      "atoms_per_second": -35413.6435901525,
+      "cn_rattle_final_rmsd_a": 0.0015685495600758076,
+      "dft_e_max_abs_mev_atom": 19.862013338132783,
+      "dft_e_rmse_mev_atom": 45.086337486177285,
+      "dft_f_mae_mev_a": -1.6601422385843279,
+      "dft_f_max_abs_mev_a": -735.3405342306514,
+      "dft_f_rmse_mev_a": -5.443990650796891,
+      "physical_score": -0.4940946880999917
+    }
+  },
+  "interpretation": {
+    "bottleneck_result": "The bottleneck row lowers force max relative to naive Stage135 L2 and keeps energy max comparable to Stage132, but average force RMSE is worse than both Stage132 and conditioner Stage137.",
+    "force_rmse_result": "The residual descriptor conditioner row converts the Stage136 L2 force-projection signal into a real DFT force-RMSE improvement over the Stage132 L1 atomic anchor, but only marginally and at lower throughput.",
+    "next_priority": "Do not continue widening the descriptor conditioner. The next TECE-consistent step is to separate energy-reference/energy-head calibration from force-Sobolev/path projection, and then test a minimal teacher-projected relational edge scalar sketch or force/Jacobian-distillation target on the Stage132/137 active basis.",
+    "not_full_pareto": "The same conditioner row worsens energy RMSE/max and does not fix rattle physical robustness, so it is not a clean deployment Pareto point.",
+    "stage136_update": "Stage136 was directionally right that L2 contains force-response information; Stage137 shows optimization/front conditioning can expose part of it, but the information is not sufficient to close energy/physical errors in this scalar-only atomic L2 family."
+  },
+  "jobs": {
+    "physical_bneck32": 685311,
+    "physical_bneck32_elapsed": "00:00:14",
+    "physical_cond32": 685312,
+    "physical_cond32_elapsed": "00:00:20",
+    "slurm_exit": "all COMPLETED 0:0",
+    "train_bneck32": 685308,
+    "train_bneck32_elapsed": "00:35:08",
+    "train_cond32": 685309,
+    "train_cond32_elapsed": "00:35:04"
+  },
+  "rows": [
+    {
+      "atoms_per_second": 1061040.5233628224,
+      "cn_rattle_final_rmsd_a": 0.10997835117562,
+      "dft_e_max_abs_mev_atom": 691.876083272059,
+      "dft_e_rmse_mev_atom": 309.72783466467183,
+      "dft_f_mae_mev_a": 48.98793472947246,
+      "dft_f_max_abs_mev_a": 1861.0354101257324,
+      "dft_f_rmse_mev_a": 114.2585336429582,
+      "dimer_gate_pass": true,
+      "params": 21405,
+      "physical_gate_pass": false,
+      "physical_score": 12.860756446257327,
+      "rattle_gate_pass": false,
+      "variant": "l2_active_nrad12_species24_radial_species8_cross3_bneck32_h64"
+    },
+    {
+      "atoms_per_second": 1023495.682841064,
+      "cn_rattle_final_rmsd_a": 0.11116063758363945,
+      "dft_e_max_abs_mev_atom": 740.2655696111108,
+      "dft_e_rmse_mev_atom": 340.0316479769888,
+      "dft_f_mae_mev_a": 45.84594715012547,
+      "dft_f_max_abs_mev_a": 1914.5718862405397,
+      "dft_f_rmse_mev_a": 107.51610237409452,
+      "dimer_gate_pass": true,
+      "params": 51367,
+      "physical_gate_pass": false,
+      "physical_score": 14.403301842204296,
+      "rattle_gate_pass": false,
+      "variant": "l2_active_nrad12_species24_radial_species8_cross3_cond32_h64"
+    }
+  ],
+  "schema_version": "rtece_stage137_interpretation.v1",
+  "stage": "stage137_l2_conditioned_front",
+  "training_contract": {
+    "batch_size": 8,
+    "early_stopping_patience": 400,
+    "limit_configs": 2560,
+    "lr_warmup_steps": 500,
+    "max_steps": 20000,
+    "train_file": "runs/oc20neb_tace_mace/rtece-stage132-broad-teacher-distill/augmented_train_base2048_plus_teacher_rattle512.extxyz",
+    "trainer_backend": "lightning",
+    "valid_batch_size": 16
+  }
+}
