@@ -1,0 +1,78 @@
+{
+  "schema_version": "rtece_stage153_summary.v1",
+  "jobs": [
+    {
+      "job_id": 687455,
+      "role": "dft_only_base2048",
+      "state": "COMPLETED",
+      "exit_code": "0:0",
+      "elapsed": "00:10:28",
+      "max_rss": "1734692K"
+    },
+    {
+      "job_id": 687456,
+      "role": "mixed_base2048",
+      "state": "COMPLETED",
+      "exit_code": "0:0",
+      "elapsed": "00:10:22",
+      "max_rss": "1609732K"
+    }
+  ],
+  "dft_valid": {
+    "stage153_l2_dft_only_base2048": {
+      "atoms_per_second": 1023732.4938378729,
+      "energy_rmse_mev_atom": 133.83500041937702,
+      "energy_mae_mev_atom": 99.78736127092074,
+      "energy_bias_mev_atom": 4.9996972072848855,
+      "energy_max_abs_mev_atom": 359.3231622012869,
+      "force_rmse_mev_a": 110.46541099206054,
+      "force_mae_mev_a": 50.928284640580415,
+      "force_max_abs_mev_a": 1881.008322921753,
+      "relative_image_rmse_mev_atom": 8.188387276165345,
+      "barrier_rmse_mev_atom": 16.00713791774223
+    },
+    "stage153_l2_mixed_base2048": {
+      "atoms_per_second": 1022675.825820861,
+      "energy_rmse_mev_atom": 126.8834227869377,
+      "energy_mae_mev_atom": 99.10164383774725,
+      "energy_bias_mev_atom": -16.55297487154902,
+      "energy_max_abs_mev_atom": 325.7732139016545,
+      "force_rmse_mev_a": 105.7451976247372,
+      "force_mae_mev_a": 46.92201610038965,
+      "force_max_abs_mev_a": 1641.9243800366212,
+      "relative_image_rmse_mev_atom": 8.546294003035339,
+      "barrier_rmse_mev_atom": 16.089284794656642
+    }
+  },
+  "teacher_valid": {
+    "stage153_l2_dft_only_base2048": {
+      "atoms_per_second": 1024418.8306574113,
+      "energy_rmse_mev_atom": 113.86063713029677,
+      "energy_mae_mev_atom": 86.96955550736091,
+      "energy_bias_mev_atom": 1.0236201636262727,
+      "energy_max_abs_mev_atom": 318.08328067555146,
+      "force_rmse_mev_a": 107.78776992008427,
+      "force_mae_mev_a": 51.813173861262996,
+      "force_max_abs_mev_a": 1614.8284678067016,
+      "relative_image_rmse_mev_atom": 7.532833892360696,
+      "barrier_rmse_mev_atom": 13.746656382134368
+    },
+    "stage153_l2_mixed_base2048": {
+      "atoms_per_second": 1023945.2168723202,
+      "energy_rmse_mev_atom": 107.61910465345719,
+      "energy_mae_mev_atom": 82.13649997453636,
+      "energy_bias_mev_atom": -20.529009634050542,
+      "energy_max_abs_mev_atom": 284.5333323759191,
+      "force_rmse_mev_a": 103.73482296087884,
+      "force_mae_mev_a": 48.34813676893108,
+      "force_max_abs_mev_a": 1585.00659509552,
+      "relative_image_rmse_mev_atom": 7.834887519536259,
+      "barrier_rmse_mev_atom": 13.515571886031532
+    }
+  },
+  "interpretation": {
+    "dft_only_repairs_energy": false,
+    "primary_next_axis": "front_loaded_representation_or_path_capacity",
+    "not_primary_next_axis": "E0_or_teacher_weight_only"
+  }
+}
