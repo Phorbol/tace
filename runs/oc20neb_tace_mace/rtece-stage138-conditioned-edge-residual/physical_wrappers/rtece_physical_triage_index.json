@@ -1,0 +1,39 @@
+{
+  "cases": [
+    {
+      "checkpoint": "runs/oc20neb_tace_mace/rtece-stage138-conditioned-edge-residual/conditioned_edge_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_cavity_vec_direct_h64/rtece_scalar_best.pt",
+      "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage138-conditioned-edge-residual/conditioned_edge_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_cavity_vec_direct_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_cavity_vec_direct_h64_dft_benchmark.json",
+      "dimer_json": "runs/oc20neb_tace_mace/rtece-stage138-conditioned-edge-residual/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_cavity_vec_direct_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_cavity_vec_direct_h64_dimer.json",
+      "physical_pareto_json": "runs/oc20neb_tace_mace/rtece-stage138-conditioned-edge-residual/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_cavity_vec_direct_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_cavity_vec_direct_h64_physical_pareto.json",
+      "rattle_json": "runs/oc20neb_tace_mace/rtece-stage138-conditioned-edge-residual/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_cavity_vec_direct_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_cavity_vec_direct_h64_rattle.json",
+      "run_dir": "runs/oc20neb_tace_mace/rtece-stage138-conditioned-edge-residual/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_cavity_vec_direct_h64",
+      "selection_basis": "stage138 conditioned L2 front plus minimal edge-relational residual; test whether sparse edge m_total=0 sketches improve physical tail enough to justify throughput cost",
+      "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage138-conditioned-edge-residual/conditioned_edge_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_cavity_vec_direct_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_cavity_vec_direct_h64_teacher_benchmark.json",
+      "variant": "l2_active_nrad12_species24_radial_species8_cross3_cond32_cavity_vec_direct_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage138-conditioned-edge-residual/physical_wrappers/l2_active_nrad12_species24_radial_species8_cross3_cond32_cavity_vec_direct_h64/rtece_physical_triage_no_export.sbatch"
+    }
+  ],
+  "configs": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "design_basis": "TECE_design_space defines T2/T3 rTECE as sparse atomic contractions plus sparse edge-relational scalar sketches; rTECE_review flags edge sketch semantics as P0. Stage138 tests whether a minimal cavity-vector/direct-edge residual improves RMSE/max/physical behavior enough to justify the measured hardware cost.",
+  "dimer_num_points": 24,
+  "dimer_pairs": [
+    "C-N",
+    "C-O",
+    "C-H",
+    "N-H",
+    "O-H",
+    "C-C",
+    "N-N"
+  ],
+  "job_name": "rtece-phys138",
+  "max_focus_rattle_rmsd_a": 0.35,
+  "rattle_focus_label": "C_or_N",
+  "rattle_limit_configs": 8,
+  "rattle_max_steps": 10,
+  "rattle_start_config": 58,
+  "run_root": "runs/oc20neb_tace_mace/rtece-stage138-conditioned-edge-residual/physical_triage",
+  "schema_version": "rtece_physical_triage.v1",
+  "source": "runs/oc20neb_tace_mace/rtece-stage138-conditioned-edge-residual/stage138_plan.md",
+  "stage": "stage138_physical_triage",
+  "stage127_source": "runs/oc20neb_tace_mace/rtece-stage138-conditioned-edge-residual/stage138_plan.md"
+}
