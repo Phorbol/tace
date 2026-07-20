@@ -148,7 +148,7 @@ def make_stage143_manifest(
     output_root: str | Path,
     train_configs: str | Path = DEFAULT_TRAIN_CONFIGS,
     valid_configs: str | Path = DEFAULT_DFT_VALID,
-    limit_configs: int = 128,
+    limit_configs: int = 512,
     energy_eval_stride: int = 4,
     force_eval_stride: int = 0,
     energy_eval_offset: int = 0,
@@ -186,7 +186,8 @@ def make_stage143_manifest(
         "comparison_question": (
             "Stage142 showed that more same-window teacher-relax force-only coverage is not enough. "
             "Use a Schur-complement-style projection diagnostic over explicit TECE semantic path groups to decide which "
-            "atomic and edge-relational paths deserve the next training budget; this is not another same-window teacher-relax expansion."
+            "atomic and edge-relational paths deserve the next training budget; this is not another same-window teacher-relax expansion. "
+            "The default uses 512 configs so the energy projection fit is not below the 300-334 descriptor dimensions."
         ),
         "train_configs": str(train_configs),
         "valid_configs": str(valid_configs),
@@ -396,7 +397,7 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument("--output-root", required=True)
     parser.add_argument("--train-configs", default=DEFAULT_TRAIN_CONFIGS)
     parser.add_argument("--valid-configs", default=DEFAULT_DFT_VALID)
-    parser.add_argument("--limit-configs", type=int, default=128)
+    parser.add_argument("--limit-configs", type=int, default=512)
     parser.add_argument("--energy-eval-stride", type=int, default=4)
     parser.add_argument("--force-eval-stride", type=int, default=0)
     parser.add_argument("--force-target-key", default=None)

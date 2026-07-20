@@ -7,7 +7,7 @@
       "t3_l2_cavity_vector",
       "t3_l2_cavity_vector_quadrupole_direct"
     ],
-    "limit_configs": 128,
+    "limit_configs": 512,
     "reference_path_ids": [
       "atomic.radial_density",
       "atomic.species_basis_density",

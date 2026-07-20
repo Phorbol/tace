@@ -7,8 +7,8 @@
     "stage141_results": "runs/oc20neb_tace_mace/rtece-stage141-loss-measure-frontier/stage141_results_summary.json",
     "stage142_results": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/stage142_results_summary.json",
     "stage_plan": "runs/oc20neb_tace_mace/rtece-stage143-semantic-active-set/stage143_plan.md",
-    "train_projection_json": "runs/oc20neb_tace_mace/rtece-stage143-semantic-active-set/projection_outputs/stage143_train_limit128_semantic_active_set_projection.json",
-    "valid_projection_json": "runs/oc20neb_tace_mace/rtece-stage143-semantic-active-set/projection_outputs/stage143_valid_limit128_semantic_active_set_projection.json",
+    "train_projection_json": "runs/oc20neb_tace_mace/rtece-stage143-semantic-active-set/projection_outputs/stage143_train_limit512_semantic_active_set_projection.json",
+    "valid_projection_json": "runs/oc20neb_tace_mace/rtece-stage143-semantic-active-set/projection_outputs/stage143_valid_limit512_semantic_active_set_projection.json",
     "wrapper": "runs/oc20neb_tace_mace/rtece-stage143-semantic-active-set/rtece_stage143_semantic_active_set_no_export.sbatch"
   },
   "atomic_cross_radial_projection": "learnable",
@@ -132,7 +132,7 @@
       "tece_tier": "T3_rtece_edge_relational"
     }
   ],
-  "comparison_question": "Stage142 showed that more same-window teacher-relax force-only coverage is not enough. Use a Schur-complement-style projection diagnostic over explicit TECE semantic path groups to decide which atomic and edge-relational paths deserve the next training budget; this is not another same-window teacher-relax expansion.",
+  "comparison_question": "Stage142 showed that more same-window teacher-relax force-only coverage is not enough. Use a Schur-complement-style projection diagnostic over explicit TECE semantic path groups to decide which atomic and edge-relational paths deserve the next training budget; this is not another same-window teacher-relax expansion. The default uses 512 configs so the energy projection fit is not below the 300-334 descriptor dimensions.",
   "deployment_measure_source": "stage142_force_only_teacher_relax_distribution",
   "diagnostic_semantics": "semantic_path_active_set_projection_after_stage142",
   "energy_eval_offset": 0,
@@ -142,7 +142,7 @@
   "force_eval_stride": 0,
   "force_projection_status": "deferred_force_descriptor_jacobian_cost",
   "force_target_key": null,
-  "limit_configs": 128,
+  "limit_configs": 512,
   "num_radial": 12,
   "reference_path_ids": [
     "atomic.radial_density",

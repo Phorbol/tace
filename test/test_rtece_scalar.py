@@ -7431,7 +7431,6 @@ def test_rtece_stage143_semantic_active_set_manifest_materializes_projection_wra
         output_root=tmp_path / "stage143",
         train_configs="stage142_weighted.extxyz",
         valid_configs="dft_valid.extxyz",
-        limit_configs=128,
         energy_eval_stride=4,
     )
 
@@ -7445,7 +7444,7 @@ def test_rtece_stage143_semantic_active_set_manifest_materializes_projection_wra
     assert "not another same-window teacher-relax expansion" in payload["comparison_question"]
     assert payload["train_configs"] == "stage142_weighted.extxyz"
     assert payload["valid_configs"] == "dft_valid.extxyz"
-    assert payload["limit_configs"] == 128
+    assert payload["limit_configs"] == 512
 
     assert payload["reference_path_ids"] == [
         "atomic.radial_density",
@@ -7494,7 +7493,7 @@ def test_rtece_stage143_semantic_active_set_manifest_materializes_projection_wra
     assert "--force-target-key" not in wrapper_text
     assert "TRAIN_CONFIGS=stage142_weighted.extxyz" in wrapper_text
     assert "VALID_CONFIGS=dft_valid.extxyz" in wrapper_text
-    assert "LIMIT_CONFIGS=128" in wrapper_text
+    assert "LIMIT_CONFIGS=512" in wrapper_text
     assert "NUM_RADIAL=12" in wrapper_text
     assert "SPECIES_BASIS_CHANNELS=24" in wrapper_text
     assert "ATOMIC_CROSS_RADIAL_SKETCH_CHANNELS=3" in wrapper_text
