@@ -7418,6 +7418,88 @@ def test_rtece_stage142_teacher_relax_coverage_manifest_materializes_force_only_
     assert "rattle_relax_rtece.py" in physical_text
 
 
+def test_rtece_stage143_semantic_active_set_manifest_materializes_projection_wrapper(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage143_semantic_active_set import (
+        audit_stage143_manifest,
+        make_stage143_manifest,
+        materialize_stage143,
+    )
+
+    payload = make_stage143_manifest(
+        output_root=tmp_path / "stage143",
+        train_configs="stage142_weighted.extxyz",
+        valid_configs="dft_valid.extxyz",
+        limit_configs=128,
+        energy_eval_stride=4,
+    )
+
+    assert payload["schema_version"] == "rtece_stage143_semantic_active_set.v1"
+    assert payload["stage"] == "stage143_semantic_active_set"
+    assert payload["diagnostic_semantics"] == "semantic_path_active_set_projection_after_stage142"
+    assert payload["deployment_measure_source"] == "stage142_force_only_teacher_relax_distribution"
+    assert payload["force_projection_status"] == "deferred_force_descriptor_jacobian_cost"
+    assert payload["force_target_key"] is None
+    assert "Schur" in payload["comparison_question"]
+    assert "not another same-window teacher-relax expansion" in payload["comparison_question"]
+    assert payload["train_configs"] == "stage142_weighted.extxyz"
+    assert payload["valid_configs"] == "dft_valid.extxyz"
+    assert payload["limit_configs"] == 128
+
+    assert payload["reference_path_ids"] == [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius",
+        "edge.cavity.vector_dot",
+        "edge.cavity.quadrupole_frobenius",
+        "edge.direct.radial",
+    ]
+
+    candidates = payload["candidates"]
+    assert [candidate["name"] for candidate in candidates] == [
+        "t2_l0_species_radial",
+        "t2_l1_atomic_cross",
+        "t2_l2_atomic_cross",
+        "t3_l2_cavity_vector",
+        "t3_l2_cavity_vector_quadrupole_direct",
+    ]
+    assert candidates[0]["tece_tier"] == "T2_scalar_endpoint"
+    assert candidates[-1]["tece_tier"] == "T3_rtece_edge_relational"
+    assert candidates[0]["cost_proxy"]["edge_scalar_paths"] == 0
+    assert candidates[-1]["cost_proxy"]["edge_scalar_paths"] == 4
+    assert "edge.cavity.vector_dot" in candidates[-2]["path_ids"]
+    assert "edge.cavity.quadrupole_frobenius" in candidates[-1]["path_ids"]
+    assert "edge.direct.radial" in candidates[-1]["path_ids"]
+    assert all(candidate["moment_l_max"] in {0, 1, 2} for candidate in candidates)
+
+    audit = audit_stage143_manifest(payload)
+    assert audit["contract_pass"] is True
+    assert audit["failed_checks"] == []
+
+    materialized = materialize_stage143(payload)
+    wrapper_text = Path(materialized["artifacts"]["wrapper"]).read_text()
+    combined = wrapper_text + "\n" + Path(materialized["artifacts"]["stage_plan"]).read_text()
+    assert "--export" not in combined
+    assert "--mem" not in combined
+    assert "--cpus-per-task" not in combined
+    assert "#SBATCH --time=03:55:00" in wrapper_text
+    assert "analyze_rtece_projection_error.py" in wrapper_text
+    assert "--reference-path-ids" in wrapper_text
+    assert "--candidate t2_l0_species_radial:" in wrapper_text
+    assert "--candidate t3_l2_cavity_vector_quadrupole_direct:" in wrapper_text
+    assert "--force-target-key" not in wrapper_text
+    assert "TRAIN_CONFIGS=stage142_weighted.extxyz" in wrapper_text
+    assert "VALID_CONFIGS=dft_valid.extxyz" in wrapper_text
+    assert "LIMIT_CONFIGS=128" in wrapper_text
+    assert "NUM_RADIAL=12" in wrapper_text
+    assert "SPECIES_BASIS_CHANNELS=24" in wrapper_text
+    assert "ATOMIC_CROSS_RADIAL_SKETCH_CHANNELS=3" in wrapper_text
+
+
 def test_rtece_stage136_l2_projection_diagnostic_manifest_materializes_no_export_wrapper(tmp_path):
     from pathlib import Path
 

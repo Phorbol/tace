@@ -1,0 +1,42 @@
+{
+  "checked": {
+    "candidate_names": [
+      "t2_l0_species_radial",
+      "t2_l1_atomic_cross",
+      "t2_l2_atomic_cross",
+      "t3_l2_cavity_vector",
+      "t3_l2_cavity_vector_quadrupole_direct"
+    ],
+    "limit_configs": 128,
+    "reference_path_ids": [
+      "atomic.radial_density",
+      "atomic.species_basis_density",
+      "atomic.vector_norm",
+      "atomic.vector_cross_radial_dot",
+      "atomic.quadrupole_norm",
+      "atomic.quadrupole_cross_radial_frobenius",
+      "edge.cavity.vector_dot",
+      "edge.cavity.quadrupole_frobenius",
+      "edge.direct.radial"
+    ]
+  },
+  "checks": {
+    "artifacts": true,
+    "candidate_lattice": true,
+    "contains_edge_relational_step": true,
+    "current_active_ranks": true,
+    "diagnostic_semantics": true,
+    "energy_target": true,
+    "final_candidate_matches_reference": true,
+    "force_projection_status": true,
+    "heldout_split": true,
+    "reference_is_t3_cavity_supernet": true,
+    "schema_version": true,
+    "stage": true,
+    "stage142_measure": true,
+    "starts_without_edge_paths": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "schema_version": "rtece_stage143_manifest_audit.v1"
+}
