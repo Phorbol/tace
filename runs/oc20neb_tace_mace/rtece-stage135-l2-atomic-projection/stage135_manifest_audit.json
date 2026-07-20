@@ -1,0 +1,27 @@
+{
+  "checked": {
+    "row_set": "stage135-l2-atomic-projection",
+    "scalar_path_ids": [
+      "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot,atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius"
+    ],
+    "train_file": "runs/oc20neb_tace_mace/rtece-stage132-broad-teacher-distill/augmented_train_base2048_plus_teacher_rattle512.extxyz",
+    "variants": [
+      "l2_active_nrad12_species24_radial_species8_cross3_h64"
+    ]
+  },
+  "checks": {
+    "distillation_semantics": true,
+    "fixed_head_contract": true,
+    "moment_l_max_2": true,
+    "no_edge_paths": true,
+    "quadrupole_paths_present": true,
+    "schema_version": true,
+    "single_l2_atomic_row": true,
+    "stage": true,
+    "stage132_train_reuse": true,
+    "training_contract": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "schema_version": "rtece_stage135_manifest_audit.v1"
+}

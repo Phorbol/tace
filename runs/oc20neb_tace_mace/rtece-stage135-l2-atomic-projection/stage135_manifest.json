@@ -1,0 +1,102 @@
+{
+  "artifacts": {
+    "physical_run_root": "runs/oc20neb_tace_mace/rtece-stage135-l2-atomic-projection/physical_triage",
+    "physical_wrapper_root": "runs/oc20neb_tace_mace/rtece-stage135-l2-atomic-projection/physical_triage_wrappers",
+    "run_root": "runs/oc20neb_tace_mace/rtece-stage135-l2-atomic-projection/l2_atomic_projection_runs",
+    "stage132_results": "runs/oc20neb_tace_mace/rtece-stage132-broad-teacher-distill/stage132_results_summary.json",
+    "wrapper_root": "runs/oc20neb_tace_mace/rtece-stage135-l2-atomic-projection/l2_atomic_projection_wrappers"
+  },
+  "bench_limit_configs": 1024,
+  "comparison_question": "With Stage132 broad-teacher-rattle data, fixed ZBL, fixed 64,64 head, and no edge sketch, does controlled L_A=2 atomic quadrupole projection reduce projection error, DFT E/F RMSE/max tails, and physical rattle failure enough to justify its throughput cost relative to the Stage132 L_A=1 atomic anchor?",
+  "dft_valid_file": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "distillation_semantics": "fixed_stage132_broad_teacher_rattle_train_l2_atomic_projection",
+  "early_stopping_patience": 400,
+  "limit_configs": 2560,
+  "lr_warmup_steps": 500,
+  "max_steps": 20000,
+  "physical_cases": [
+    {
+      "checkpoint": "runs/oc20neb_tace_mace/rtece-stage135-l2-atomic-projection/l2_atomic_projection_runs/l2_active_nrad12_species24_radial_species8_cross3_h64/l2_active_nrad12_species24_radial_species8_cross3_h64/rtece_scalar_best.pt",
+      "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage135-l2-atomic-projection/l2_atomic_projection_runs/l2_active_nrad12_species24_radial_species8_cross3_h64/l2_active_nrad12_species24_radial_species8_cross3_h64/l2_active_nrad12_species24_radial_species8_cross3_h64_dft_benchmark.json",
+      "dimer_json": "runs/oc20neb_tace_mace/rtece-stage135-l2-atomic-projection/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_h64/l2_active_nrad12_species24_radial_species8_cross3_h64_dimer.json",
+      "physical_pareto_json": "runs/oc20neb_tace_mace/rtece-stage135-l2-atomic-projection/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_h64/l2_active_nrad12_species24_radial_species8_cross3_h64_physical_pareto.json",
+      "rattle_json": "runs/oc20neb_tace_mace/rtece-stage135-l2-atomic-projection/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_h64/l2_active_nrad12_species24_radial_species8_cross3_h64_rattle.json",
+      "run_dir": "runs/oc20neb_tace_mace/rtece-stage135-l2-atomic-projection/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_h64",
+      "selection_basis": "stage135 controlled L_A=2 atomic quadrupole projection ablation on fixed Stage132 broad-teacher-rattle data",
+      "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage135-l2-atomic-projection/l2_atomic_projection_runs/l2_active_nrad12_species24_radial_species8_cross3_h64/l2_active_nrad12_species24_radial_species8_cross3_h64/l2_active_nrad12_species24_radial_species8_cross3_h64_teacher_benchmark.json",
+      "variant": "l2_active_nrad12_species24_radial_species8_cross3_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage135-l2-atomic-projection/physical_triage_wrappers/l2_active_nrad12_species24_radial_species8_cross3_h64/rtece_physical_triage_no_export.sbatch"
+    }
+  ],
+  "physical_wrappers": [
+    "runs/oc20neb_tace_mace/rtece-stage135-l2-atomic-projection/physical_triage_wrappers/l2_active_nrad12_species24_radial_species8_cross3_h64/rtece_physical_triage_no_export.sbatch"
+  ],
+  "review_basis": [
+    "TECE_design_space: prioritize a fused moment pass with L_A=2 or 3, immediate scalarization, sparse high-nu scalar paths, no persistent high-l node state, and a small scalar head.",
+    "rTECE_review: treat current scalar rTECE as a promising endpoint, but separate projection/representation error from label and weighting heuristics before further kernel work.",
+    "Stage132: current L_A=1 atomic front is the throughput/RMSE anchor but still fails the rattle physical gate.",
+    "Stage133/134: teacher-relax trajectory and source balancing did not recover a clean benchmark/physical Pareto row, so the next isolated variable is representation bandwidth."
+  ],
+  "row_set": "stage135-l2-atomic-projection",
+  "rows": [
+    {
+      "atomic_cross_radial_projection": "learnable",
+      "atomic_cross_radial_sketch_channels": 3,
+      "capacity_allocation": "controlled_L_A_2_atomic_front_not_wider_head",
+      "descriptor_bottleneck_dim": 0,
+      "descriptor_conditioner": "none",
+      "descriptor_conditioner_hidden_channels": 0,
+      "hidden_channels": "64,64",
+      "learnable_radial_mixing": true,
+      "moment_l_max": 2,
+      "name": "l2_active_nrad12_species24_radial_species8_cross3_h64",
+      "num_parameters_estimate": 29885,
+      "num_radial": 12,
+      "radial_edge_sketch_channels": 0,
+      "radial_species_adapter_channels": 8,
+      "radial_species_adapter_scope": "all",
+      "readout_parameters_estimate": 25473,
+      "representation_parameters_estimate": 4412,
+      "review_basis": "Stage133/134 showed trajectory-label and source-weight changes did not recover a clean RMSE/physical Pareto row. Stage135 therefore keeps the Stage132 broad-teacher-rattle data and 64,64 scalar head fixed, then increases only the TECE atomic angular projection from L_A=1 to L_A=2 by adding quadrupole scalar paths. This tests whether the remaining force-tail/physical error is representation/projection error before adding edge-relational cost.",
+      "scalar_path_ids": "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot,atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius",
+      "short_range_repulsion_potential": "zbl",
+      "species_basis_channels": 24,
+      "species_basis_mode": "learnable_embedding",
+      "stage132_source": "runs/oc20neb_tace_mace/rtece-stage132-broad-teacher-distill/stage132_results_summary.json",
+      "stage134_source": "runs/oc20neb_tace_mace/rtece-stage134-balanced-teacher-relax/stage134_results_summary.json",
+      "stage_basis": "stage135_l2_atomic_projection",
+      "tece_axes": [
+        "angular_bandwidth_l_max",
+        "scalar_path_density",
+        "radial_rank",
+        "scalar_head_capacity",
+        "trainable_feature_extractor",
+        "trainable_edge_species_radial_basis",
+        "trainable_species_basis",
+        "short_range_physical_prior",
+        "stage135_l2_atomic_projection",
+        "stage132_broad_teacher_anchor",
+        "stage127_local_cross_species_anchor",
+        "hardware_cost_conditioned_active_set",
+        "controlled_L_A_axis",
+        "atomic_quadrupole_scalar_paths",
+        "cross_radial_invariants",
+        "trainable_cross_radial_projection",
+        "low_rank_neighbor_species_basis",
+        "projection_error_vs_distillation_error_check"
+      ],
+      "train_variant": "l2_active_nrad12_species24_radial_species8_cross3_h64",
+      "use_short_range_repulsion": true,
+      "variant": "l2_active_nrad12_species24_radial_species8_cross3_h64"
+    }
+  ],
+  "schema_version": "rtece_stage135_l2_atomic_projection.v1",
+  "stage": "stage135_l2_atomic_projection",
+  "teacher_valid_file": "runs/oc20neb_tace_mace/tece-distill-20260717/teacher_valid.extxyz",
+  "train_file": "runs/oc20neb_tace_mace/rtece-stage132-broad-teacher-distill/augmented_train_base2048_plus_teacher_rattle512.extxyz",
+  "train_valid_file": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "train_wrappers": [
+    "runs/oc20neb_tace_mace/rtece-stage135-l2-atomic-projection/l2_atomic_projection_wrappers/l2_active_nrad12_species24_radial_species8_cross3_h64/rtece_scalar_matrix_no_export.sbatch"
+  ],
+  "valid_limit_configs": 256
+}

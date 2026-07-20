@@ -7292,6 +7292,75 @@ def test_rtece_stage134_balanced_teacher_relax_manifest_materializes_weighted_at
     assert "edge.cavity.vector_dot" not in train_text
 
 
+def test_rtece_stage135_l2_atomic_projection_manifest_materializes_no_export_row(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage135_l2_atomic_projection import (
+        audit_stage135_manifest,
+        make_stage135_manifest,
+        materialize_stage135,
+    )
+
+    payload = make_stage135_manifest(
+        output_root=tmp_path / "stage135",
+        train_file="stage132_augmented.extxyz",
+        train_valid_file="train_valid.extxyz",
+        dft_valid_file="dft_valid.extxyz",
+        teacher_valid_file="teacher_valid.extxyz",
+        valid_limit_configs=256,
+        bench_limit_configs=1024,
+        max_steps=20000,
+        lr_warmup_steps=500,
+        early_stopping_patience=400,
+    )
+
+    assert payload["schema_version"] == "rtece_stage135_l2_atomic_projection.v1"
+    assert payload["stage"] == "stage135_l2_atomic_projection"
+    assert payload["row_set"] == "stage135-l2-atomic-projection"
+    assert payload["distillation_semantics"] == "fixed_stage132_broad_teacher_rattle_train_l2_atomic_projection"
+    assert "L_A=2" in payload["comparison_question"]
+    assert "projection error" in payload["comparison_question"]
+    assert payload["train_file"] == "stage132_augmented.extxyz"
+    assert [row["variant"] for row in payload["rows"]] == [
+        "l2_active_nrad12_species24_radial_species8_cross3_h64",
+    ]
+    row = payload["rows"][0]
+    path_ids = tuple(part.strip() for part in row["scalar_path_ids"].split(",") if part.strip())
+    assert row["moment_l_max"] == 2
+    assert row["hidden_channels"] == "64,64"
+    assert row["num_radial"] == 12
+    assert row["species_basis_channels"] == 24
+    assert row["radial_species_adapter_channels"] == 8
+    assert row["atomic_cross_radial_sketch_channels"] == 3
+    assert row["short_range_repulsion_potential"] == "zbl"
+    assert "atomic.quadrupole_norm" in path_ids
+    assert "atomic.quadrupole_cross_radial_frobenius" in path_ids
+    assert not any(path_id.startswith("edge.") for path_id in path_ids)
+
+    audit = audit_stage135_manifest(payload)
+    assert audit["contract_pass"] is True
+    assert audit["failed_checks"] == []
+
+    materialized = materialize_stage135(payload)
+    assert len(materialized["train_wrappers"]) == 1
+    assert len(materialized["physical_wrappers"]) == 1
+    train_text = Path(materialized["train_wrappers"][0]).read_text()
+    physical_text = Path(materialized["physical_wrappers"][0]).read_text()
+    combined = train_text + "\n" + physical_text
+    assert "--export" not in combined
+    assert "--mem" not in combined
+    assert "--cpus-per-task" not in combined
+    assert "TRAIN_FILE=stage132_augmented.extxyz" in train_text
+    assert "MAX_STEPS=20000" in train_text
+    assert "LR_WARMUP_STEPS=500" in train_text
+    assert "EARLY_STOPPING_PATIENCE=400" in train_text
+    assert "MOMENT_L_MAX=2" in train_text
+    assert "atomic.quadrupole_norm" in train_text
+    assert "atomic.quadrupole_cross_radial_frobenius" in train_text
+    assert "edge.cavity.vector_dot" not in train_text
+    assert "rattle_relax_rtece.py" in physical_text
+
+
 def test_rtece_stage128_physical_triage_writes_no_export_wrappers(tmp_path):
     from pathlib import Path
 
