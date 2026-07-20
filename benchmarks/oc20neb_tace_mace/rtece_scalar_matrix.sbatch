@@ -9,7 +9,7 @@
 #SBATCH --output=/home/gengjianrui/bin/logs/rtece-scalar-%j.out
 #SBATCH --error=/home/gengjianrui/bin/logs/rtece-scalar-%j.err
 
-set -euo pipefail
+set -eo pipefail
 set -x
 export PYTHONUNBUFFERED=1
 

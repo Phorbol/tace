@@ -1,0 +1,33 @@
+{
+  "checked": {
+    "path_ids": [
+      "atomic.radial_density",
+      "atomic.species_basis_density",
+      "atomic.vector_norm",
+      "atomic.vector_cross_radial_dot",
+      "atomic.quadrupole_norm",
+      "atomic.quadrupole_cross_radial_frobenius",
+      "edge.cavity.vector_dot"
+    ],
+    "train_file": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/weighted_train_base2048_plus_teacher_relax640_forceonly_eanchor.extxyz",
+    "variants": [
+      "t3_l2_cavity_vector_cond32_h64"
+    ]
+  },
+  "checks": {
+    "distillation_semantics": true,
+    "exact_path_lattice": true,
+    "fixed_l2_conditioned_front": true,
+    "only_minimal_edge_increment": true,
+    "row_set": true,
+    "schema_version": true,
+    "single_variant": true,
+    "stage": true,
+    "stage143_source": true,
+    "training_contract": true,
+    "zbl_contract": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "schema_version": "rtece_stage144_manifest_audit.v1"
+}

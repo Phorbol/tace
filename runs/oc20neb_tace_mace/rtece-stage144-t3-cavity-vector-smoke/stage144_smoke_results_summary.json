@@ -1,0 +1,73 @@
+{
+  "architecture": {
+    "descriptor_dim": 331,
+    "num_parameters_estimate": 51496,
+    "path_manifest_hash": "c2aba169fc550b16",
+    "scalar_path_ids": null,
+    "semantic_tier": "T3_vector_moment_scalarization_learnable_species_basis_learnable_radial_mixing_learnable_edge_species_radial_adapter_with_short_range_zbl_prior_scalar_conditioned",
+    "variant": "t3_l2_cavity_vector_cond32_h64"
+  },
+  "dft_benchmark": {
+    "atoms_per_second": 343818.151534538,
+    "bias_e_mev_atom": -190.43112207763554,
+    "mae_e_mev_atom": 240.18857517056435,
+    "mae_f_mev_a": 35.04129175768423,
+    "max_abs_e_mev_atom": 344.7547318331473,
+    "max_abs_f_mev_a": 2719.590666937866,
+    "rmse_e_mev_atom": 252.94077344358183,
+    "rmse_f_mev_a": 131.07248142180126
+  },
+  "interpretation": [
+    "This smoke proves the Stage144 minimal T3 cavity-vector workflow now trains, benchmarks, and runs dimer/rattle physical triage after the previous import/page-wait failure.",
+    "The 2000-step/512-config run is not a final Pareto result and should not be used to accept or reject edge.cavity.vector_dot accuracy.",
+    "Benchmark and rattle gates fail at smoke quality: DFT F RMSE is above the configured 120 meV/A threshold and rattle max fmax is slightly above 1.0 eV/A, while dimer scan passes without nonfinite values and all short-range pair forces are repulsive.",
+    "The next research step remains the full Stage144 run, then comparison to Stage139/137 and the Stage145 NEP/DPA baselines under the same RMSE/max-error/physical protocol."
+  ],
+  "physical": {
+    "benchmark_gate_pass": false,
+    "cn_max_final_rmsd_a": 0.1022134552468813,
+    "cn_mean_final_rmsd_a": 0.09107140073337175,
+    "dimer_all_short_force_repulsive": true,
+    "dimer_gate_pass": true,
+    "dimer_max_abs_force_ev_a": 62.311336517333984,
+    "dimer_num_nonfinite_energy": 0,
+    "dimer_num_nonfinite_force": 0,
+    "dimer_num_pairs": 7,
+    "physical_gate_pass": false,
+    "physical_score": 4.660040003988215,
+    "rattle_gate_pass": false,
+    "rattle_max_fmax_ev_a": 1.0175043488570679,
+    "rattle_mean_final_rmsd_a": 0.09107140073337175
+  },
+  "schema_version": "rtece_stage144_smoke_results.v1",
+  "semantics": "stage143_active_set_guided_minimal_t3_edge_relational_training_smoke",
+  "slurm_jobs": {
+    "physical_triage": {
+      "elapsed": "00:00:09",
+      "exit_code": "0:0",
+      "job_id": "687416",
+      "state": "COMPLETED"
+    },
+    "training": {
+      "elapsed": "00:04:47",
+      "exit_code": "0:0",
+      "job_id": "687409",
+      "state": "COMPLETED"
+    }
+  },
+  "smoke_scope": {
+    "best_step": 64,
+    "best_valid_loss": 0.21165268123149872,
+    "max_steps": 2000,
+    "train_configs": 512,
+    "valid_configs": 64
+  },
+  "stage": "stage144_t3_cavity_vector_smoke",
+  "status": "completed",
+  "teacher_benchmark": {
+    "atoms_per_second": 320954.11565025285,
+    "max_abs_f_mev_a": 2690.0217569378665,
+    "rmse_e_mev_atom": 234.79905419248152,
+    "rmse_f_mev_a": 127.44717571075253
+  }
+}

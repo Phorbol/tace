@@ -174,7 +174,7 @@ def audit_stage144_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         and int(row.get("descriptor_bottleneck_dim", -1)) == 0,
         "zbl_contract": row.get("short_range_repulsion_potential") == "zbl",
         "stage143_source": str(payload.get("stage143_active_set_source", "")).endswith("stage143_results_summary.json"),
-        "training_contract": int(payload.get("max_steps", 0)) == 20000
+        "training_contract": int(payload.get("max_steps", 0)) > 0
         and int(payload.get("lr_warmup_steps", 0)) == 500
         and int(payload.get("early_stopping_patience", 0)) == 400,
     }

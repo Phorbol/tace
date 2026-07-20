@@ -7499,6 +7499,41 @@ def test_rtece_stage143_semantic_active_set_manifest_materializes_projection_wra
     assert "ATOMIC_CROSS_RADIAL_SKETCH_CHANNELS=3" in wrapper_text
 
 
+def test_rtece_stage144_t3_cavity_vector_smoke_contract_allows_short_run(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage144_t3_cavity_vector import (
+        audit_stage144_manifest,
+        make_stage144_manifest,
+        materialize_stage144,
+    )
+
+    payload = make_stage144_manifest(
+        output_root=tmp_path / "stage144-smoke",
+        train_file="stage142_weighted.extxyz",
+        train_valid_file="train_valid.extxyz",
+        dft_valid_file="dft_valid.extxyz",
+        teacher_valid_file="teacher_valid.extxyz",
+        limit_configs=512,
+        valid_limit_configs=64,
+        bench_limit_configs=128,
+        max_steps=2000,
+        lr_warmup_steps=500,
+        early_stopping_patience=400,
+    )
+
+    audit = audit_stage144_manifest(payload)
+
+    assert audit["contract_pass"] is True
+    assert audit["failed_checks"] == []
+    materialized = materialize_stage144(payload)
+    train_text = Path(materialized["train_wrappers"][0]).read_text()
+    assert "LIMIT_CONFIGS=512" in train_text
+    assert "VALID_LIMIT_CONFIGS=64" in train_text
+    assert "BENCH_LIMIT_CONFIGS=128" in train_text
+    assert "MAX_STEPS=2000" in train_text
+
+
 def test_rtece_stage144_t3_cavity_vector_manifest_materializes_minimal_edge_row(tmp_path):
     from pathlib import Path
 
@@ -7566,6 +7601,9 @@ def test_rtece_stage144_t3_cavity_vector_manifest_materializes_minimal_edge_row(
     assert "--export" not in combined
     assert "--mem" not in combined
     assert "--cpus-per-task" not in combined
+    assert "set -euo pipefail" not in combined
+    assert "set -eo pipefail" in train_text
+    assert "set -eo pipefail" in physical_text
     assert "TRAIN_FILE=stage142_weighted.extxyz" in train_text
     assert "MAX_STEPS=20000" in train_text
     assert "LR_WARMUP_STEPS=500" in train_text

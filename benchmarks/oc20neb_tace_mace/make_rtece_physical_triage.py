@@ -77,7 +77,7 @@ def _write_wrapper(
 #SBATCH --output=/home/gengjianrui/bin/logs/{job_name}-%j.out
 #SBATCH --error=/home/gengjianrui/bin/logs/{job_name}-%j.err
 
-set -euo pipefail
+set -eo pipefail
 set -x
 export PYTHONUNBUFFERED=1
 

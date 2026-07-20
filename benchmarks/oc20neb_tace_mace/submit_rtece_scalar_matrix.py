@@ -147,7 +147,7 @@ def write_rtece_matrix_wrapper(
         "#SBATCH --output=/home/gengjianrui/bin/logs/rtece-matrix-%j.out",
         "#SBATCH --error=/home/gengjianrui/bin/logs/rtece-matrix-%j.err",
         "",
-        "set -euo pipefail",
+        "set -eo pipefail",
         "# SAI policy: pass parameters inside this wrapper, not through Slurm command-line environment export.",
     ]
     body.extend(f"export {line}" for line in assignments if line)

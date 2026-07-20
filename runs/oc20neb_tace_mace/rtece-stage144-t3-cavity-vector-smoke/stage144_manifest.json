@@ -1,0 +1,103 @@
+{
+  "artifacts": {
+    "manifest": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/stage144_manifest.json",
+    "manifest_audit": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/stage144_manifest_audit.json",
+    "physical_run_root": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/physical_triage",
+    "physical_wrapper_root": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/physical_triage_wrappers",
+    "run_root": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/t3_cavity_vector_runs",
+    "stage143_results": "runs/oc20neb_tace_mace/rtece-stage143-semantic-active-set/stage143_results_summary.json",
+    "stage_plan": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/stage144_plan.md",
+    "wrapper_root": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/t3_cavity_vector_wrappers"
+  },
+  "bench_limit_configs": 128,
+  "comparison_question": "With the Stage140/141 L2 conditioned atomic anchor and Stage142 force-only teacher-relax training measure fixed, does adding exactly one edge.cavity.vector_dot architecture increment create a real RMSE/max-error/physical-tail Pareto movement that justifies the first true rTECE edge-relational cost?",
+  "dft_valid_file": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "distillation_semantics": "stage143_active_set_guided_minimal_t3_edge_relational_training",
+  "early_stopping_patience": 400,
+  "limit_configs": 512,
+  "lr_warmup_steps": 500,
+  "max_steps": 2000,
+  "physical_cases": [
+    {
+      "checkpoint": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/t3_cavity_vector_runs/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64/rtece_scalar_best.pt",
+      "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/t3_cavity_vector_runs/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64_dft_benchmark.json",
+      "dimer_json": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/physical_triage/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64_dimer.json",
+      "physical_pareto_json": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/physical_triage/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64_physical_pareto.json",
+      "rattle_json": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/physical_triage/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64_rattle.json",
+      "run_dir": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/physical_triage/t3_l2_cavity_vector_cond32_h64",
+      "selection_basis": "Stage144 minimal T3 edge.cavity.vector_dot increment from Stage143 semantic active set",
+      "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/t3_cavity_vector_runs/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64/t3_l2_cavity_vector_cond32_h64_teacher_benchmark.json",
+      "variant": "t3_l2_cavity_vector_cond32_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/physical_triage_wrappers/t3_l2_cavity_vector_cond32_h64/rtece_physical_triage_no_export.sbatch"
+    }
+  ],
+  "physical_wrappers": [
+    "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/physical_triage_wrappers/t3_l2_cavity_vector_cond32_h64/rtece_physical_triage_no_export.sbatch"
+  ],
+  "review_basis": [
+    "TECE_design_space: rTECE is the middle tier with sparse edge-relational scalar ECE sketches after immediate scalarization.",
+    "TECE_design_space: test one controlled semantic path increment and charge real hardware throughput, not just parameter count.",
+    "rTECE_review: report E/F RMSE and max errors separately, then dimer/rattle physical probes; do not use MAE alone.",
+    "Stage142: more same-window teacher-relax coverage did not close the tail, so do not add more data before checking operator-basis value.",
+    "Stage143: edge.cavity.vector_dot is the minimal T3 active-set step; cavity quadrupole/direct radial remain deferred."
+  ],
+  "row_set": "stage144-t3-cavity-vector",
+  "rows": [
+    {
+      "atomic_cross_radial_projection": "learnable",
+      "atomic_cross_radial_sketch_channels": 3,
+      "descriptor_bottleneck_dim": 0,
+      "descriptor_conditioner": "residual_mlp",
+      "descriptor_conditioner_hidden_channels": 32,
+      "hidden_channels": "64,64",
+      "learnable_radial_mixing": true,
+      "moment_l_max": 2,
+      "name": "t3_l2_cavity_vector_cond32_h64",
+      "num_parameters_estimate": 51496,
+      "num_radial": 12,
+      "radial_edge_sketch_channels": 0,
+      "radial_species_adapter_channels": 8,
+      "radial_species_adapter_scope": "all",
+      "readout_parameters_estimate": 25537,
+      "representation_parameters_estimate": 25959,
+      "review_basis": "Stage143 descriptor projection showed that edge.cavity.vector_dot reduces the remaining L2 atomic descriptor residual. Stage144 isolates that single edge-relational scalar path against the fixed Stage140/141 L2 conditioned atomic anchor before adding cavity quadrupole or direct radial edge paths.",
+      "scalar_path_ids": "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot,atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius,edge.cavity.vector_dot",
+      "short_range_repulsion_potential": "zbl",
+      "species_basis_channels": 24,
+      "species_basis_mode": "learnable_embedding",
+      "stage143_active_set_source": "runs/oc20neb_tace_mace/rtece-stage143-semantic-active-set/stage143_results_summary.json",
+      "stage144_isolated_increment": "edge.cavity.vector_dot",
+      "stage_basis": "stage144_minimal_t3_cavity_vector",
+      "tece_axes": [
+        "angular_bandwidth_l_max",
+        "scalar_path_density",
+        "radial_rank",
+        "scalar_head_capacity",
+        "trainable_feature_extractor",
+        "trainable_edge_species_radial_basis",
+        "trainable_species_basis",
+        "short_range_physical_prior",
+        "stage144_t3_cavity_vector",
+        "stage143_active_set_guided",
+        "minimal_edge_relational_scalar_increment",
+        "cavity_vector_total_m0_sketch",
+        "fixed_stage140_141_l2_conditioned_anchor",
+        "front_representation_capacity_not_wider_head"
+      ],
+      "tece_tier": "T3_rtece_edge_relational_minimal",
+      "train_variant": "t3_l2_cavity_vector_cond32_h64",
+      "use_short_range_repulsion": true,
+      "variant": "t3_l2_cavity_vector_cond32_h64"
+    }
+  ],
+  "schema_version": "rtece_stage144_t3_cavity_vector.v1",
+  "stage": "stage144_t3_cavity_vector",
+  "stage143_active_set_source": "runs/oc20neb_tace_mace/rtece-stage143-semantic-active-set/stage143_results_summary.json",
+  "teacher_valid_file": "runs/oc20neb_tace_mace/tece-distill-20260717/teacher_valid.extxyz",
+  "train_file": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/weighted_train_base2048_plus_teacher_relax640_forceonly_eanchor.extxyz",
+  "train_valid_file": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "train_wrappers": [
+    "runs/oc20neb_tace_mace/rtece-stage144-t3-cavity-vector-smoke/t3_cavity_vector_wrappers/t3_l2_cavity_vector_cond32_h64/rtece_scalar_matrix_no_export.sbatch"
+  ],
+  "valid_limit_configs": 64
+}
