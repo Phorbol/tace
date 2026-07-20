@@ -1,0 +1,159 @@
+{
+  "artifacts": {
+    "augmented_train": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/augmented_train_base2048_plus_teacher_relax640.extxyz",
+    "augmented_train_summary": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/augmented_train_base2048_plus_teacher_relax640_summary.json",
+    "physical_run_root": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/physical_triage",
+    "physical_wrapper_root": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/physical_triage_wrappers",
+    "prep_wrapper": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/rtece_stage142_prepare_no_export.sbatch",
+    "run_root": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/teacher_relax_coverage_runs",
+    "teacher_relax_summary": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/teacher_relax_valid_start0_limit64_copies2_std0p05_steps4_summary.json",
+    "teacher_relax_trajectory": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/teacher_relax_valid_start0_limit64_copies2_std0p05_steps4.extxyz",
+    "weighted_train": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/weighted_train_base2048_plus_teacher_relax640_forceonly_eanchor.extxyz",
+    "weighted_train_summary": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/weighted_train_base2048_plus_teacher_relax640_forceonly_eanchor_summary.json",
+    "wrapper_root": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/teacher_relax_coverage_wrappers"
+  },
+  "augmented_limit_configs": 2688,
+  "base_limit_configs": 2048,
+  "base_train": "runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz",
+  "bench_limit_configs": 1024,
+  "comparison_question": "With the Stage140/141 L2 conditioned rTECE architecture fixed, does broader teacher-relax deployment-measure coverage reduce the rattle force-tail/fmax failure while keeping DFT energy comparability through force-only teacher labels and DFT-only energy anchoring?",
+  "copies_per_config": 2,
+  "dft_valid_file": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "distillation_semantics": "dft_energy_anchor_plus_force_only_teacher_relax_coverage",
+  "early_stopping_patience": 400,
+  "frames_per_copy": 5,
+  "lr_warmup_steps": 500,
+  "max_steps": 20000,
+  "physical_cases": [
+    {
+      "checkpoint": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/teacher_relax_coverage_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/rtece_scalar_best.pt",
+      "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/teacher_relax_coverage_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64_dft_benchmark.json",
+      "dimer_json": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64_dimer.json",
+      "physical_pareto_json": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64_physical_pareto.json",
+      "rattle_json": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64_rattle.json",
+      "run_dir": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64",
+      "selection_basis": "stage142 force-only teacher-relax coverage ablation on fixed cond32 L2 architecture",
+      "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/teacher_relax_coverage_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64_teacher_benchmark.json",
+      "variant": "l2_active_nrad12_species24_radial_species8_cross3_cond32_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/physical_triage_wrappers/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/rtece_physical_triage_no_export.sbatch"
+    }
+  ],
+  "physical_wrappers": [
+    "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/physical_triage_wrappers/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/rtece_physical_triage_no_export.sbatch"
+  ],
+  "rattle_std_a": 0.05,
+  "relax_max_steps": 4,
+  "review_basis": [
+    "TECE_design_space: separate projection/architecture error from optimization/distillation error before changing paths.",
+    "TECE_design_space: deployment Sobolev measure should include force and local-curvature trajectory stability, not only train/valid RMSE.",
+    "rTECE_review: teacher distillation must preserve explicit source semantics, E/F max errors, and physical dimer/rattle probes.",
+    "Stage140: force-only teacher-relax with weighted E0s repaired the Stage139 energy drift and became the physical-rattle reference.",
+    "Stage141: loss weighting alone did not close rattle fmax, so coverage is the next controlled variable before edge/L/head complexity."
+  ],
+  "row_set": "stage142-teacher-relax-coverage",
+  "rows": [
+    {
+      "atomic_cross_radial_projection": "learnable",
+      "atomic_cross_radial_sketch_channels": 3,
+      "capacity_allocation": "stage136_force_projection_guided_l2_front_conditioning_not_wider_head",
+      "descriptor_bottleneck_dim": 0,
+      "descriptor_conditioner": "residual_mlp",
+      "descriptor_conditioner_hidden_channels": 32,
+      "descriptor_dim_estimate": 330,
+      "distillation_test_role": "fixed Stage140/141 L2 conditioned-front architecture; only teacher-relax deployment coverage changes",
+      "hidden_channels": "64,64",
+      "learnable_radial_mixing": true,
+      "moment_l_max": 2,
+      "name": "l2_active_nrad12_species24_radial_species8_cross3_cond32_h64",
+      "num_parameters_estimate": 51367,
+      "num_radial": 12,
+      "radial_edge_sketch_channels": 0,
+      "radial_species_adapter_channels": 8,
+      "radial_species_adapter_scope": "all",
+      "readout_parameters_estimate": 25473,
+      "representation_parameters_estimate": 25894,
+      "review_basis": "Stage136 showed the L2 atomic quadrupole paths reduce held-out force projection RMSE/max relative to the Stage132 L1 active basis, while Stage135 showed naive full-L2 training worsens DFT F RMSE/max and throughput. Stage137 therefore keeps the Stage132 broad-teacher-rattle data, fixed 64,64 head, ZBL baseline, and no edge sketch, then tests whether a low-rank descriptor mixer or zero-initialized residual descriptor conditioner can make the force-relevant L2 information trainable without turning this into blind head widening.",
+      "scalar_path_ids": "atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot,atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius",
+      "short_range_repulsion_potential": "zbl",
+      "species_basis_channels": 24,
+      "species_basis_mode": "learnable_embedding",
+      "stage132_source": "runs/oc20neb_tace_mace/rtece-stage132-broad-teacher-distill/stage132_results_summary.json",
+      "stage135_source": "runs/oc20neb_tace_mace/rtece-stage135-l2-atomic-projection/stage135_results_summary.json",
+      "stage136_source": "runs/oc20neb_tace_mace/rtece-stage136-l2-projection-diagnostic/stage136_results_summary.json",
+      "stage142_source_basis": "Stage140 showed force-only teacher-relax plus weighted E0/source balance can repair the Stage139 energy drift. Stage141 showed loss-measure tweaks alone do not close the rattle fmax tail. Stage142 therefore keeps the architecture and weights fixed enough to test deployment-measure coverage before spending new representation cost.",
+      "stage_basis": "stage142_teacher_relax_coverage",
+      "tece_axes": [
+        "angular_bandwidth_l_max",
+        "scalar_path_density",
+        "radial_rank",
+        "scalar_head_capacity",
+        "trainable_feature_extractor",
+        "trainable_edge_species_radial_basis",
+        "trainable_species_basis",
+        "short_range_physical_prior",
+        "stage137_l2_conditioned_front",
+        "stage136_force_projection_guided",
+        "stage132_broad_teacher_anchor",
+        "stage135_l2_atomic_reference",
+        "controlled_L_A_axis",
+        "atomic_quadrupole_scalar_paths",
+        "cross_radial_invariants",
+        "trainable_cross_radial_projection",
+        "low_rank_neighbor_species_basis",
+        "front_representation_capacity_not_wider_head",
+        "scalar_descriptor_conditioning",
+        "zero_init_residual_path_conditioner",
+        "stage142_teacher_relax_coverage",
+        "force_only_teacher_relax_distillation",
+        "dft_energy_anchor",
+        "deployment_measure_coverage_check",
+        "architecture_fixed_distillation_ablation"
+      ],
+      "train_variant": "l2_active_nrad12_species24_radial_species8_cross3_cond32_h64",
+      "use_short_range_repulsion": true,
+      "variant": "l2_active_nrad12_species24_radial_species8_cross3_cond32_h64"
+    }
+  ],
+  "schema_version": "rtece_stage142_teacher_relax_coverage.v1",
+  "seed": 20260720,
+  "source_configs": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "source_limit_configs": 64,
+  "source_start_config": 0,
+  "stage": "stage142_teacher_relax_coverage",
+  "steps": [
+    {
+      "command": "${TACE_PYTHON:-python} benchmarks/oc20neb_tace_mace/make_teacher_relax_distill_configs.py --model runs/oc20neb_tace_mace/675969_resume/checkpoints_epoch/TACE-0-100000-0.1329.ckpt --input /home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz --output runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/teacher_relax_valid_start0_limit64_copies2_std0p05_steps4.extxyz --summary runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/teacher_relax_valid_start0_limit64_copies2_std0p05_steps4_summary.json --start-config 0 --limit-configs 64 --copies-per-config 2 --rattle-std-a 0.05 --seed 20260720 --relax-max-steps ${RELAX_MAX_STEPS:-4} --device cuda --default-dtype float32 --nl-backend matscipy --reference-prefix source_",
+      "id": "make_teacher_relax_trajectory_labels"
+    },
+    {
+      "command": "${TACE_PYTHON:-python} benchmarks/oc20neb_tace_mace/concat_extxyz_datasets.py --input runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz --source-label base_mixed_train_tw0p75 --input runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/teacher_relax_valid_start0_limit64_copies2_std0p05_steps4.extxyz --source-label teacher_relax_trajectory640 --input-limit 2048 --input-limit -1 --output runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/augmented_train_base2048_plus_teacher_relax640.extxyz --summary runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/augmented_train_base2048_plus_teacher_relax640_summary.json",
+      "id": "concat_base_and_teacher_relax_trajectory"
+    },
+    {
+      "command": "${TACE_PYTHON:-python} benchmarks/oc20neb_tace_mace/apply_extxyz_sample_weights.py --input runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/augmented_train_base2048_plus_teacher_relax640.extxyz --output runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/weighted_train_base2048_plus_teacher_relax640_forceonly_eanchor.extxyz --summary runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/weighted_train_base2048_plus_teacher_relax640_forceonly_eanchor_summary.json --source-energy-multiplier base_mixed_train_tw0p75:1.25 --source-energy-multiplier teacher_relax_trajectory640:0.0 --source-force-multiplier teacher_relax_trajectory640:2.0 --normalize-energy-mean",
+      "id": "apply_dft_anchor_force_only_teacher_relax_weights"
+    }
+  ],
+  "teacher_model": "runs/oc20neb_tace_mace/675969_resume/checkpoints_epoch/TACE-0-100000-0.1329.ckpt",
+  "teacher_valid_file": "runs/oc20neb_tace_mace/tece-distill-20260717/teacher_valid.extxyz",
+  "train_valid_file": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "train_wrappers": [
+    "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/teacher_relax_coverage_wrappers/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/rtece_scalar_matrix_no_export.sbatch"
+  ],
+  "trajectory_frame_count": 640,
+  "valid_limit_configs": 256,
+  "weight_policy": {
+    "normalize_energy_mean": true,
+    "normalize_force_mean": true,
+    "purpose": "Keep DFT base structures as the only energy-zero/PES anchor while using broader teacher relaxation trajectories as force/Sobolev deployment constraints.",
+    "schema_version": "rtece_stage142_force_only_source_balance.v1",
+    "source_energy_multipliers": {
+      "base_mixed_train_tw0p75": 1.25,
+      "teacher_relax_trajectory640": 0.0
+    },
+    "source_force_multipliers": {
+      "teacher_relax_trajectory640": 2.0
+    },
+    "teacher_energy_multiplier_is_fixed_zero": true
+  }
+}

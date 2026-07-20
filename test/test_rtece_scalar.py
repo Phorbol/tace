@@ -7329,6 +7329,93 @@ def test_rtece_stage134_balanced_teacher_relax_manifest_materializes_weighted_at
     assert "edge.cavity.vector_dot" not in train_text
 
 
+def test_rtece_stage142_teacher_relax_coverage_manifest_materializes_force_only_cond32_row(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage142_teacher_relax_coverage import (
+        audit_stage142_manifest,
+        make_stage142_manifest,
+        materialize_stage142,
+    )
+
+    payload = make_stage142_manifest(
+        output_root=tmp_path / "stage142",
+        base_train="base.extxyz",
+        source_configs="source.extxyz",
+        teacher_model="teacher.ckpt",
+        train_valid_file="train_valid.extxyz",
+        dft_valid_file="dft_valid.extxyz",
+        teacher_valid_file="teacher_valid.extxyz",
+        source_start_config=0,
+        source_limit_configs=64,
+        copies_per_config=2,
+        relax_max_steps=4,
+        base_limit_configs=2048,
+        base_energy_multiplier=1.25,
+        teacher_force_multiplier=2.0,
+        valid_limit_configs=256,
+        bench_limit_configs=1024,
+        max_steps=20000,
+        lr_warmup_steps=500,
+        early_stopping_patience=400,
+    )
+
+    assert payload["schema_version"] == "rtece_stage142_teacher_relax_coverage.v1"
+    assert payload["stage"] == "stage142_teacher_relax_coverage"
+    assert payload["distillation_semantics"] == "dft_energy_anchor_plus_force_only_teacher_relax_coverage"
+    assert payload["trajectory_frame_count"] == 640
+    assert payload["augmented_limit_configs"] == 2688
+    assert payload["row_set"] == "stage142-teacher-relax-coverage"
+    assert payload["weight_policy"]["source_energy_multipliers"] == {
+        "base_mixed_train_tw0p75": 1.25,
+        "teacher_relax_trajectory640": 0.0,
+    }
+    assert payload["weight_policy"]["source_force_multipliers"] == {"teacher_relax_trajectory640": 2.0}
+    assert payload["weight_policy"]["teacher_energy_multiplier_is_fixed_zero"] is True
+    assert "deployment-measure coverage" in payload["comparison_question"]
+    assert "architecture fixed" in payload["comparison_question"]
+    assert [row["variant"] for row in payload["rows"]] == [
+        "l2_active_nrad12_species24_radial_species8_cross3_cond32_h64",
+    ]
+    row = payload["rows"][0]
+    assert row["moment_l_max"] == 2
+    assert row["descriptor_conditioner"] == "residual_mlp"
+    assert row["descriptor_conditioner_hidden_channels"] == 32
+    assert row["descriptor_bottleneck_dim"] == 0
+    assert "atomic.quadrupole_norm" in row["scalar_path_ids"]
+    assert "atomic.quadrupole_cross_radial_frobenius" in row["scalar_path_ids"]
+    assert "edge.cavity.vector_dot" not in row["scalar_path_ids"]
+
+    audit = audit_stage142_manifest(payload)
+    assert audit["contract_pass"] is True
+    assert audit["failed_checks"] == []
+
+    materialized = materialize_stage142(payload)
+    assert len(materialized["train_wrappers"]) == 1
+    assert len(materialized["physical_wrappers"]) == 1
+    train_text = Path(materialized["train_wrappers"][0]).read_text()
+    prep_text = Path(materialized["artifacts"]["prep_wrapper"]).read_text()
+    physical_text = Path(materialized["physical_wrappers"][0]).read_text()
+    combined = prep_text + '\n' + train_text + '\n' + physical_text
+    assert "--export" not in combined
+    assert "--mem" not in combined
+    assert "--cpus-per-task" not in combined
+    assert "make_teacher_relax_distill_configs.py" in prep_text
+    assert "apply_extxyz_sample_weights.py" in prep_text
+    assert "--source-energy-multiplier base_mixed_train_tw0p75:1.25" in prep_text
+    assert "--source-energy-multiplier teacher_relax_trajectory640:0.0" in prep_text
+    assert "--source-force-multiplier teacher_relax_trajectory640:2.0" in prep_text
+    assert "--normalize-energy-mean" in prep_text
+    assert "weighted_train_base2048_plus_teacher_relax640_forceonly_eanchor.extxyz" in train_text
+    assert "MOMENT_L_MAX=2" in train_text
+    assert "DESCRIPTOR_CONDITIONER=residual_mlp" in train_text
+    assert "DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS=32" in train_text
+    assert "MAX_STEPS=20000" in train_text
+    assert "LR_WARMUP_STEPS=500" in train_text
+    assert "EARLY_STOPPING_PATIENCE=400" in train_text
+    assert "rattle_relax_rtece.py" in physical_text
+
+
 def test_rtece_stage136_l2_projection_diagnostic_manifest_materializes_no_export_wrapper(tmp_path):
     from pathlib import Path
 

@@ -1,0 +1,39 @@
+{
+  "cases": [
+    {
+      "checkpoint": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/teacher_relax_coverage_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/rtece_scalar_best.pt",
+      "dft_benchmark": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/teacher_relax_coverage_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64_dft_benchmark.json",
+      "dimer_json": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64_dimer.json",
+      "physical_pareto_json": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64_physical_pareto.json",
+      "rattle_json": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64_rattle.json",
+      "run_dir": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/physical_triage/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64",
+      "selection_basis": "stage142 force-only teacher-relax coverage ablation on fixed cond32 L2 architecture",
+      "teacher_benchmark": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/teacher_relax_coverage_runs/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64_teacher_benchmark.json",
+      "variant": "l2_active_nrad12_species24_radial_species8_cross3_cond32_h64",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/physical_triage_wrappers/l2_active_nrad12_species24_radial_species8_cross3_cond32_h64/rtece_physical_triage_no_export.sbatch"
+    }
+  ],
+  "configs": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "design_basis": "Evaluate whether broader force-only teacher relaxation trajectory coverage repairs the rattle fmax tail for the fixed Stage140/141 L2 conditioned architecture before changing representation paths.",
+  "dimer_num_points": 24,
+  "dimer_pairs": [
+    "C-N",
+    "C-O",
+    "C-H",
+    "N-H",
+    "O-H",
+    "C-C",
+    "N-N"
+  ],
+  "job_name": "rtece-phys142",
+  "max_focus_rattle_rmsd_a": 0.35,
+  "rattle_focus_label": "C_or_N",
+  "rattle_limit_configs": 8,
+  "rattle_max_steps": 10,
+  "rattle_start_config": 58,
+  "run_root": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/physical_triage",
+  "schema_version": "rtece_physical_triage.v1",
+  "source": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/stage142_plan.md",
+  "stage": "stage142_physical_triage",
+  "stage127_source": "runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/stage142_plan.md"
+}

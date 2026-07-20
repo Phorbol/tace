@@ -1,0 +1,42 @@
+{
+  "checked": {
+    "row_set": "stage142-teacher-relax-coverage",
+    "trajectory_frame_count": 640,
+    "variants": [
+      "l2_active_nrad12_species24_radial_species8_cross3_cond32_h64"
+    ],
+    "weight_policy": {
+      "normalize_energy_mean": true,
+      "normalize_force_mean": true,
+      "purpose": "Keep DFT base structures as the only energy-zero/PES anchor while using broader teacher relaxation trajectories as force/Sobolev deployment constraints.",
+      "schema_version": "rtece_stage142_force_only_source_balance.v1",
+      "source_energy_multipliers": {
+        "base_mixed_train_tw0p75": 1.25,
+        "teacher_relax_trajectory640": 0.0
+      },
+      "source_force_multipliers": {
+        "teacher_relax_trajectory640": 2.0
+      },
+      "teacher_energy_multiplier_is_fixed_zero": true
+    }
+  },
+  "checks": {
+    "base_energy_anchor_present": true,
+    "coverage_larger_than_stage140": true,
+    "distillation_semantics": true,
+    "moment_l_max_2_cond32": true,
+    "no_forbidden_sbatch_flags": true,
+    "schema_version": true,
+    "single_cond32_row": true,
+    "stage": true,
+    "teacher_energy_multiplier_fixed_zero": true,
+    "teacher_force_multiplier_present": true,
+    "training_contract": true,
+    "trajectory_count": true,
+    "uses_source_weight_tool": true,
+    "uses_teacher_relax_generator": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "schema_version": "rtece_stage142_manifest_audit.v1"
+}
