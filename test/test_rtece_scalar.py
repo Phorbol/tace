@@ -7740,6 +7740,41 @@ def test_stage145_deepmd_converter_splits_mixed_atom_orders(tmp_path):
     assert payload["training"]["training_data"]["systems"] == ["mixed_000", "mixed_001"]
 
 
+def test_stage145_summary_keeps_rmse_first_and_missing_outputs_explicit(tmp_path):
+    import json
+
+    from benchmarks.oc20neb_tace_mace.summarize_community_baselines_stage145 import (
+        render_stage145_markdown,
+        summarize_stage145,
+    )
+
+    manifest = {
+        "schema_version": "community_baselines_stage145.v1",
+        "rows": [
+            {"name": "nep4_mixed_smoke", "engine": "nep", "train_dir": str(tmp_path / "nep")},
+            {"name": "deepmd_dpa_like_mixed_smoke", "engine": "deepmd", "train_dir": str(tmp_path / "dp")},
+        ],
+    }
+    (tmp_path / "nep").mkdir()
+    (tmp_path / "nep" / "conversion_summary.json").write_text(
+        json.dumps({"engine": "nep", "num_configs": 2, "type_map": ["C", "N"]})
+    )
+
+    summary = summarize_stage145(manifest, tmp_path)
+
+    assert summary["schema_version"] == "community_baselines_stage145_results.v1"
+    assert summary["primary_ranking_metric"] == "dft_f_rmse_mev_a"
+    rows = {row["name"]: row for row in summary["rows"]}
+    assert rows["nep4_mixed_smoke"]["conversion_status"] == "found"
+    assert rows["deepmd_dpa_like_mixed_smoke"]["conversion_status"] == "missing"
+    assert rows["deepmd_dpa_like_mixed_smoke"]["dft_benchmark_status"] == "missing"
+
+    markdown = render_stage145_markdown(summary)
+    assert "Primary ranking metric: DFT force RMSE" in markdown
+    assert "| row | engine | conversion | DFT F RMSE | DFT E RMSE | atoms/s | physical |" in markdown
+    assert "deepmd_dpa_like_mixed_smoke" in markdown
+
+
 def test_rtece_stage136_l2_projection_diagnostic_manifest_materializes_no_export_wrapper(tmp_path):
     from pathlib import Path
 
