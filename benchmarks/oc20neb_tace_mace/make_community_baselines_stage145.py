@@ -133,7 +133,7 @@ def _write_wrapper(row: dict[str, Any], payload: dict[str, Any]) -> str:
 export STAGE145_TRAIN_FILE="{train_file}"
 export STAGE145_OUTPUT_DIR="{train_dir}"
 export STAGE145_LIMIT_CONFIGS="{limit}"
-python benchmarks/oc20neb_tace_mace/convert_stage145_nep.py --manifest {payload['artifacts']['manifest']} --row {row['name']}
+/home/gengjianrui/bin/.venvs/tace-mace-cu126/bin/python benchmarks/oc20neb_tace_mace/convert_stage145_nep.py --manifest {payload['artifacts']['manifest']} --row {row['name']}
 cd "{train_dir}"
 nep
 """
@@ -142,18 +142,18 @@ nep
 export STAGE145_TRAIN_FILE="{train_file}"
 export STAGE145_OUTPUT_DIR="{train_dir}"
 export STAGE145_LIMIT_CONFIGS="{limit}"
-python benchmarks/oc20neb_tace_mace/convert_stage145_deepmd.py --manifest {payload['artifacts']['manifest']} --row {row['name']}
+/home/gengjianrui/bin/.venvs/tace-mace-cu126/bin/python benchmarks/oc20neb_tace_mace/convert_stage145_deepmd.py --manifest {payload['artifacts']['manifest']} --row {row['name']}
 cd "{train_dir}"
 dp --pt train input.json
 dp --pt freeze -o frozen_model.pth
 """
     text = f"""#!/bin/bash
 #SBATCH --job-name={row['name']}
-#SBATCH --partition=4V100
+#SBATCH --partition=16V100
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gpus-per-node=1
-#SBATCH --qos=rush-1o2gpu
+#SBATCH --qos=flood-1o2gpu
 #SBATCH --output=logs/{row['name']}-%j.out
 #SBATCH --error=logs/{row['name']}-%j.err
 

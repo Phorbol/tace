@@ -7629,10 +7629,13 @@ def test_community_baselines_stage145_manifest_materializes_no_export_wrappers(t
         assert "#SBATCH --nodes=1" in text
         assert "#SBATCH --ntasks=1" in text
         assert "#SBATCH --gpus-per-node=1" in text
+        assert "#SBATCH --partition=16V100" in text
+        assert "#SBATCH --qos=flood-1o2gpu" in text
         assert "--export" not in text
         assert "--mem" not in text
         assert "--cpus-per-task" not in text
         assert "community-baselines-stage145" in text
+        assert "/home/gengjianrui/bin/.venvs/tace-mace-cu126/bin/python benchmarks/oc20neb_tace_mace/convert_stage145_" in text
         assert "set -eo pipefail" in text
         assert "set -euo pipefail" not in text
 
@@ -7705,6 +7708,7 @@ def test_stage145_deepmd_converter_writes_system_and_input(tmp_path):
     assert (tmp_path / "dp" / "type_map.raw").read_text().splitlines() == ["C", "N"]
     assert np.load(tmp_path / "dp" / "mixed" / "set.000" / "coord.npy").shape == (1, 6)
     assert np.load(tmp_path / "dp" / "mixed" / "set.000" / "force.npy").shape == (1, 6)
+    assert (tmp_path / "dp" / "mixed" / "type_map.raw").read_text().splitlines() == ["C", "N"]
     payload = json.loads((tmp_path / "dp" / "input.json").read_text())
     assert payload["training"]["numb_steps"] == 20
     assert payload["model"]["type_map"] == ["C", "N"]
@@ -7736,6 +7740,8 @@ def test_stage145_deepmd_converter_splits_mixed_atom_orders(tmp_path):
     assert summary["systems"] == ["mixed_000", "mixed_001"]
     assert np.load(tmp_path / "dp" / "mixed_000" / "set.000" / "coord.npy").shape == (1, 6)
     assert np.load(tmp_path / "dp" / "mixed_001" / "set.000" / "coord.npy").shape == (1, 9)
+    assert (tmp_path / "dp" / "mixed_000" / "type_map.raw").read_text().splitlines() == ["C", "H", "N", "O"]
+    assert (tmp_path / "dp" / "mixed_001" / "type_map.raw").read_text().splitlines() == ["C", "H", "N", "O"]
     payload = json.loads((tmp_path / "dp" / "input.json").read_text())
     assert payload["training"]["training_data"]["systems"] == ["mixed_000", "mixed_001"]
 

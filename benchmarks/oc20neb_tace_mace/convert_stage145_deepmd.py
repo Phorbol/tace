@@ -65,6 +65,7 @@ def _write_system_arrays(
     system_dir: Path,
     atoms_list,
     type_to_id: dict[str, int],
+    type_map: list[str],
     *,
     energy_key: str,
     forces_key: str,
@@ -90,6 +91,7 @@ def _write_system_arrays(
     np.save(set_dir / "force.npy", np.asarray(forces, dtype=np.float64))
     type_ids = [type_to_id[symbol] for symbol in symbols]
     (system_dir / "type.raw").write_text("\n".join(str(value) for value in type_ids) + "\n", encoding="utf-8")
+    (system_dir / "type_map.raw").write_text("\n".join(type_map) + "\n", encoding="utf-8")
     return {"name": system_dir.name, "num_configs": len(atoms_list), "num_atoms_per_config": natoms}
 
 
@@ -154,7 +156,9 @@ def convert_extxyz_to_deepmd(
         name = _system_name(index, len(groups))
         systems.append(name)
         system_summaries.append(
-            _write_system_arrays(out / name, group_atoms, type_to_id, energy_key=energy_key, forces_key=forces_key)
+            _write_system_arrays(
+                out / name, group_atoms, type_to_id, types, energy_key=energy_key, forces_key=forces_key
+            )
         )
     (out / "type_map.raw").write_text("\n".join(types) + "\n", encoding="utf-8")
     input_payload = _deepmd_input(types, systems, stop_batch=stop_batch)

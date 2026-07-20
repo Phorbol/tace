@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH --job-name=deepmd_dpa_like_mixed_smoke
-#SBATCH --partition=4V100
+#SBATCH --partition=16V100
 #SBATCH --nodes=1
 #SBATCH --ntasks=1
 #SBATCH --gpus-per-node=1
-#SBATCH --qos=rush-1o2gpu
+#SBATCH --qos=flood-1o2gpu
 #SBATCH --output=logs/deepmd_dpa_like_mixed_smoke-%j.out
 #SBATCH --error=logs/deepmd_dpa_like_mixed_smoke-%j.err
 
@@ -15,7 +15,7 @@ module load deepmd-kit/3.1.2
 export STAGE145_TRAIN_FILE="runs/oc20neb_tace_mace/rtece-stage142-teacher-relax-coverage/weighted_train_base2048_plus_teacher_relax640_forceonly_eanchor.extxyz"
 export STAGE145_OUTPUT_DIR="runs/oc20neb_tace_mace/community-baselines-stage145/deepmd_dpa_like_mixed_smoke"
 export STAGE145_LIMIT_CONFIGS="2688"
-python benchmarks/oc20neb_tace_mace/convert_stage145_deepmd.py --manifest runs/oc20neb_tace_mace/community-baselines-stage145/stage145_manifest.json --row deepmd_dpa_like_mixed_smoke
+/home/gengjianrui/bin/.venvs/tace-mace-cu126/bin/python benchmarks/oc20neb_tace_mace/convert_stage145_deepmd.py --manifest runs/oc20neb_tace_mace/community-baselines-stage145/stage145_manifest.json --row deepmd_dpa_like_mixed_smoke
 cd "runs/oc20neb_tace_mace/community-baselines-stage145/deepmd_dpa_like_mixed_smoke"
 dp --pt train input.json
 dp --pt freeze -o frozen_model.pth
