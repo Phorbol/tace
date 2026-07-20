@@ -7635,6 +7635,47 @@ def test_community_baselines_stage145_manifest_materializes_no_export_wrappers(t
         assert "community-baselines-stage145" in text
 
 
+def test_stage145_nep_converter_writes_gpumd_train_xyz(tmp_path):
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+    from ase.constraints import FixAtoms
+
+    from benchmarks.oc20neb_tace_mace.convert_stage145_nep import convert_extxyz_to_nep
+
+    source = tmp_path / "input.extxyz"
+    atoms = Atoms(
+        "CN",
+        positions=[[0.0, 0.0, 0.0], [1.2, 0.0, 0.0]],
+        cell=[8.0, 8.0, 8.0],
+        pbc=True,
+    )
+    atoms.info["energy"] = -3.0
+    atoms.info["dft_energy"] = -2.9
+    atoms.info["teacher_energy"] = -3.1
+    atoms.set_constraint(FixAtoms(indices=[1]))
+    atoms.arrays["forces"] = np.array([[0.1, 0.0, 0.0], [-0.1, 0.0, 0.0]], dtype=float)
+    atoms.arrays["dft_forces"] = atoms.arrays["forces"]
+    atoms.arrays["teacher_forces"] = atoms.arrays["forces"]
+    ase.io.write(source, [atoms], format="extxyz")
+
+    summary = convert_extxyz_to_nep(source, tmp_path / "nep", limit_configs=1)
+
+    assert summary["engine"] == "nep"
+    assert summary["num_configs"] == 1
+    assert summary["type_map"] == ["C", "N"]
+    text = (tmp_path / "nep" / "train.xyz").read_text()
+    assert "energy=-3.0" in text
+    assert "Properties=species:S:1:pos:R:3:force:R:3" in text
+    assert "move_mask" not in text
+    assert "dft_energy" not in text
+    assert "teacher_energy" not in text
+    assert "C " in text and "N " in text
+    nep_in = (tmp_path / "nep" / "nep.in").read_text()
+    assert "type         2 C N" in nep_in
+    assert "generation   20000" in nep_in
+
+
 def test_rtece_stage136_l2_projection_diagnostic_manifest_materializes_no_export_wrapper(tmp_path):
     from pathlib import Path
 
