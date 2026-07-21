@@ -11911,3 +11911,19 @@ def test_stage182_summary_accepts_peak_reserved_memory_as_peak_memory_alias(tmp_
 
     completed = next(item for item in summary["rows"] if item["row_name"] == row["name"] and item["split"] == "test_300K")
     assert completed["peak_memory_mb"] == 321.5
+
+
+def test_rtece_benchmark_help_exposes_label_key_arguments():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "benchmarks/oc20neb_tace_mace/benchmark_rtece_scalar.py", "--help"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--energy-key" in result.stdout
+    assert "--forces-key" in result.stdout

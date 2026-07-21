@@ -62,6 +62,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--start-config", type=int, default=0)
     parser.add_argument("--limit-configs", type=int, default=128)
     parser.add_argument("--measure-passes", type=int, default=3)
+    parser.add_argument("--energy-key", default="energy", help="ASE info/calc key used as the reference energy label.")
+    parser.add_argument("--forces-key", default="forces", help="ASE arrays/calc key used as the reference force label.")
     parser.add_argument(
         "--force-mode",
         choices=("auto", "autograd", "analytic_pair", "analytic_pair_triton_force", "analytic_element_triton_force", "analytic_element_triton_descriptor_force", "analytic_element_direct_padded_descriptor_force", "analytic_element_cell_list_descriptor_force", "analytic_density", "analytic_element_packed"),
@@ -1029,7 +1031,7 @@ def main() -> None:
         start_config=args.start_config,
         limit_configs=args.limit_configs,
     )
-    ref_e, ref_f, natoms = reference_arrays(atoms_list, "energy", "forces")
+    ref_e, ref_f, natoms = reference_arrays(atoms_list, args.energy_key, args.forces_key)
     prebuilt_graph = None
     replay_template = None
     replay_positions = None
@@ -1280,6 +1282,8 @@ def main() -> None:
         "variant": args.variant,
         "model": str(args.model),
         "configs_path": str(args.configs),
+        "energy_key": str(args.energy_key),
+        "forces_key": str(args.forces_key),
         "start_config": args.start_config,
         "extxyz_index": extxyz_index(
             start_config=args.start_config,

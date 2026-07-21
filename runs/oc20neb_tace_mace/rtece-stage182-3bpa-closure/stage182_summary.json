@@ -1,13 +1,74 @@
 {
-  "markdown": "# Stage182 3BPA Conventional Closure Summary\n\n| row | engine | split | status | rmse_f_mev_a | rmse_e_mev_atom | max_abs_f_mev_a | atoms_per_second | peak_memory_mb |\n| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |\n| deepmd_dpa1_zero_train300k | deepmd | test_300K | missing |  |  |  |  |  |\n| nep4_train300k | nep | test_300K | missing |  |  |  |  |  |\n| rtece_l1_local_l0_train300k | rtece | test_300K | missing |  |  |  |  |  |\n| deepmd_dpa1_zero_train300k | deepmd | test_600K | missing |  |  |  |  |  |\n| nep4_train300k | nep | test_600K | missing |  |  |  |  |  |\n| rtece_l1_local_l0_train300k | rtece | test_600K | missing |  |  |  |  |  |\n| deepmd_dpa1_zero_train300k | deepmd | test_1200K | missing |  |  |  |  |  |\n| nep4_train300k | nep | test_1200K | missing |  |  |  |  |  |\n| rtece_l1_local_l0_train300k | rtece | test_1200K | missing |  |  |  |  |  |\n| deepmd_dpa1_zero_train300k | deepmd | test_dih | missing |  |  |  |  |  |\n| nep4_train300k | nep | test_dih | missing |  |  |  |  |  |\n| rtece_l1_local_l0_train300k | rtece | test_dih | missing |  |  |  |  |  |\n",
+  "markdown": "# Stage182 3BPA Conventional Closure Summary\n\n| row | engine | split | status | rmse_f_mev_a | rmse_e_mev_atom | max_abs_f_mev_a | atoms_per_second | peak_memory_mb |\n| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |\n| deepmd_dpa1_zero_train300k | deepmd | test_300K | completed | 227.427 | 5.117 | 1494.783 | 5712.055 | 30.000 |\n| deepmd_dpa1_zero_train300k | deepmd | test_600K | completed | 316.658 | 8.662 | 3264.115 | 5741.583 | 30.000 |\n| deepmd_dpa1_zero_train300k | deepmd | test_1200K | completed | 502.222 | 14.253 | 7547.579 | 5712.594 | 30.000 |\n| deepmd_dpa1_zero_train300k | deepmd | test_dih | completed | 165.849 | 5.117 | 664.213 | 5719.393 | 30.000 |\n| nep4_train300k | nep | test_300K | missing |  |  |  |  |  |\n| rtece_l1_local_l0_train300k | rtece | test_300K | missing |  |  |  |  |  |\n| nep4_train300k | nep | test_600K | missing |  |  |  |  |  |\n| rtece_l1_local_l0_train300k | rtece | test_600K | missing |  |  |  |  |  |\n| nep4_train300k | nep | test_1200K | missing |  |  |  |  |  |\n| rtece_l1_local_l0_train300k | rtece | test_1200K | missing |  |  |  |  |  |\n| nep4_train300k | nep | test_dih | missing |  |  |  |  |  |\n| rtece_l1_local_l0_train300k | rtece | test_dih | missing |  |  |  |  |  |\n",
   "primary_ranking_metric": "rmse_f_mev_a",
   "rows": [
     {
+      "atoms_per_second": 5712.054751292898,
       "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/deepmd_dpa1_zero_train300k/test_300K_benchmark.json",
       "engine": "deepmd",
+      "mae_e_mev_atom": 3.9870123887355806,
+      "mae_f_mev_a": 169.06707192357246,
+      "max_abs_e_mev_atom": 17.278535883060947,
+      "max_abs_f_mev_a": 1494.7834370925902,
+      "peak_allocated_mb": 23.30908203125,
+      "peak_memory_mb": 30.0,
+      "peak_reserved_mb": 30.0,
+      "rmse_e_mev_atom": 5.116569284950414,
+      "rmse_f_mev_a": 227.4270708399686,
       "row_name": "deepmd_dpa1_zero_train300k",
       "split": "test_300K",
-      "status": "missing"
+      "status": "completed"
+    },
+    {
+      "atoms_per_second": 5741.582777133433,
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/deepmd_dpa1_zero_train300k/test_600K_benchmark.json",
+      "engine": "deepmd",
+      "mae_e_mev_atom": 6.933580954594731,
+      "mae_f_mev_a": 235.35467790512863,
+      "max_abs_e_mev_atom": 34.51231900382683,
+      "max_abs_f_mev_a": 3264.114813820801,
+      "peak_allocated_mb": 23.30908203125,
+      "peak_memory_mb": 30.0,
+      "peak_reserved_mb": 30.0,
+      "rmse_e_mev_atom": 8.661892958978886,
+      "rmse_f_mev_a": 316.65802318156886,
+      "row_name": "deepmd_dpa1_zero_train300k",
+      "split": "test_600K",
+      "status": "completed"
+    },
+    {
+      "atoms_per_second": 5712.594124309981,
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/deepmd_dpa1_zero_train300k/test_1200K_benchmark.json",
+      "engine": "deepmd",
+      "mae_e_mev_atom": 11.358147452374324,
+      "mae_f_mev_a": 349.6755387383001,
+      "max_abs_e_mev_atom": 49.90711261281696,
+      "max_abs_f_mev_a": 7547.579197600098,
+      "peak_allocated_mb": 23.30908203125,
+      "peak_memory_mb": 30.0,
+      "peak_reserved_mb": 30.0,
+      "rmse_e_mev_atom": 14.252521820126793,
+      "rmse_f_mev_a": 502.22206932425087,
+      "row_name": "deepmd_dpa1_zero_train300k",
+      "split": "test_1200K",
+      "status": "completed"
+    },
+    {
+      "atoms_per_second": 5719.393453598235,
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/deepmd_dpa1_zero_train300k/test_dih_benchmark.json",
+      "engine": "deepmd",
+      "mae_e_mev_atom": 3.550024820811431,
+      "mae_f_mev_a": 120.40380284278342,
+      "max_abs_e_mev_atom": 17.01067265835095,
+      "max_abs_f_mev_a": 664.2125179027939,
+      "peak_allocated_mb": 23.30908203125,
+      "peak_memory_mb": 30.0,
+      "peak_reserved_mb": 30.0,
+      "rmse_e_mev_atom": 5.11704844624857,
+      "rmse_f_mev_a": 165.8490495681193,
+      "row_name": "deepmd_dpa1_zero_train300k",
+      "split": "test_dih",
+      "status": "completed"
     },
     {
       "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/nep4_train300k/test_300K_benchmark.json",
@@ -21,13 +82,6 @@
       "engine": "rtece",
       "row_name": "rtece_l1_local_l0_train300k",
       "split": "test_300K",
-      "status": "missing"
-    },
-    {
-      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/deepmd_dpa1_zero_train300k/test_600K_benchmark.json",
-      "engine": "deepmd",
-      "row_name": "deepmd_dpa1_zero_train300k",
-      "split": "test_600K",
       "status": "missing"
     },
     {
@@ -45,13 +99,6 @@
       "status": "missing"
     },
     {
-      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/deepmd_dpa1_zero_train300k/test_1200K_benchmark.json",
-      "engine": "deepmd",
-      "row_name": "deepmd_dpa1_zero_train300k",
-      "split": "test_1200K",
-      "status": "missing"
-    },
-    {
       "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/nep4_train300k/test_1200K_benchmark.json",
       "engine": "nep",
       "row_name": "nep4_train300k",
@@ -63,13 +110,6 @@
       "engine": "rtece",
       "row_name": "rtece_l1_local_l0_train300k",
       "split": "test_1200K",
-      "status": "missing"
-    },
-    {
-      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/deepmd_dpa1_zero_train300k/test_dih_benchmark.json",
-      "engine": "deepmd",
-      "row_name": "deepmd_dpa1_zero_train300k",
-      "split": "test_dih",
       "status": "missing"
     },
     {

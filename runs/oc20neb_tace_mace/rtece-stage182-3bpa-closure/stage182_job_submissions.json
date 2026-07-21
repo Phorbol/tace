@@ -1,5 +1,8 @@
 {
-  "benchmark_jobs": {},
+  "benchmark_jobs": {
+    "deepmd_dpa1_zero_train300k": 689360,
+    "rtece_l1_local_l0_train300k": 689367
+  },
   "note": "Benchmark wrappers should be submitted after model artifacts exist: frozen_model.pth, nep.txt, rtece_scalar_best.pt.",
   "schema_version": "rtece_stage182_job_submissions.v1",
   "stage": "stage182_3bpa_conventional_closure",
