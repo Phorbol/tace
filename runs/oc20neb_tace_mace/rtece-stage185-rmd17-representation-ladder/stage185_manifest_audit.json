@@ -1,0 +1,23 @@
+{
+  "checks": {
+    "contiguous_splits": true,
+    "dataset": true,
+    "fixed_head": true,
+    "metric_contract": true,
+    "molecule": true,
+    "nested_paths": true,
+    "no_forbidden_sbatch_tokens": true,
+    "prep_command": true,
+    "row_names": true,
+    "schema_version": true,
+    "source_units": true,
+    "stage": true,
+    "target_units": true,
+    "train_and_benchmark": true,
+    "train_count_ceiling": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "no_forbidden_sbatch_tokens": true,
+  "schema_version": "rtece_stage185_rmd17_representation_ladder_audit.v1"
+}

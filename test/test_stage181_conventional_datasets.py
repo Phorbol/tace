@@ -568,3 +568,114 @@ def test_stage184_summary_reads_rtece_and_nep_physical_outputs_as_continuous_met
     assert summary["rattle_policy"] == "continuous_rmsd_not_binary_gate"
     assert "rattle_mean_final_rmsd_a" in summary["markdown"]
 
+
+def test_stage185_rmd17_manifest_declares_unit_conversion_split_policy_and_doc_alignment(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage185_rmd17_representation_ladder import (
+        KCAL_MOL_TO_EV,
+        audit_stage185_manifest,
+        make_stage185_manifest,
+        materialize_stage185,
+    )
+
+    payload = make_stage185_manifest(output_root=tmp_path / "stage185", rmd17_root=tmp_path / "rMD17")
+    result = materialize_stage185(payload)
+    audit = audit_stage185_manifest(payload)
+
+    assert result["audit"]["contract_pass"]
+    assert audit["contract_pass"], audit["failed_checks"]
+    assert payload["stage"] == "stage185_rmd17_representation_ladder"
+    assert payload["dataset"]["name"] == "rMD17"
+    assert payload["dataset"]["molecule"] == "ethanol"
+    assert payload["dataset"]["source"]["figshare_article"] == "12672038"
+    assert payload["dataset"]["source"]["version"] == 4
+    assert payload["dataset"]["source_units"] == {"energy": "kcal/mol", "forces": "kcal/mol/A", "distance": "A"}
+    assert payload["dataset"]["target_units"] == {"energy": "eV", "forces": "eV/A", "distance": "A"}
+    assert payload["dataset"]["conversion_factor_energy"] == KCAL_MOL_TO_EV
+    assert payload["split_policy"]["train_count"] <= 1000
+    assert payload["split_policy"]["indexing"] == "contiguous_time_ordered_blocks"
+    assert payload["comparison_contract"]["primary_ranking_metric"] == "rmse_f_mev_a"
+    assert "TECE_design_space.md" in "\n".join(payload["theory_alignment"])
+    assert "rTECE_review.md" in "\n".join(payload["theory_alignment"])
+
+
+def test_stage185_rmd17_rows_reuse_nested_stage183_representation_ladder_without_head_widening(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage185_rmd17_representation_ladder import (
+        make_stage185_manifest,
+    )
+
+    payload = make_stage185_manifest(output_root=tmp_path / "stage185", rmd17_root=tmp_path / "rMD17")
+    rows = payload["rows"]
+
+    assert [row["name"] for row in rows] == [
+        "stage185_rmd17_l0_local_species",
+        "stage185_rmd17_l1_cross",
+        "stage185_rmd17_l2_atomic_quadrupole",
+        "stage185_rmd17_t3_cavity_vecq",
+    ]
+    previous_paths: set[str] = set()
+    for row in rows:
+        current_paths = set(row["student_config"]["scalar_path_ids"])
+        assert previous_paths <= current_paths
+        previous_paths = current_paths
+        assert row["student_config"]["hidden_channels"] == "64,64"
+        assert row["capacity_allocation"] != "widen_final_head_only"
+        assert row["dataset_role"] == "single_molecule_rmd17_temporal_generalization"
+    assert "atomic.quadrupole_norm" in rows[2]["student_config"]["scalar_path_ids"]
+    assert "edge.cavity.vector_dot" in rows[3]["student_config"]["scalar_path_ids"]
+
+
+def test_stage185_rmd17_wrappers_are_sai_safe_and_include_download_convert_train_benchmark(tmp_path):
+    from pathlib import Path
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage185_rmd17_representation_ladder import (
+        FORBIDDEN_SBATCH_TOKENS,
+        make_stage185_manifest,
+        materialize_stage185,
+    )
+
+    payload = make_stage185_manifest(output_root=tmp_path / "stage185", rmd17_root=tmp_path / "rMD17")
+    result = materialize_stage185(payload)
+    wrapper_text = "\n".join(
+        Path(path).read_text(encoding="utf-8")
+        for group in ["prep_wrapper", "wrappers", "benchmark_wrappers"]
+        for path in ([result[group]] if group == "prep_wrapper" else result[group].values())
+    )
+
+    for forbidden in FORBIDDEN_SBATCH_TOKENS:
+        assert forbidden not in wrapper_text
+    assert "https://figshare.com/ndownloader/articles/12672038/versions/4" in wrapper_text
+    assert "rmd17-npz-to-splits" in wrapper_text
+    assert "converted_extxyz/rmd17_ethanol_train.extxyz" in wrapper_text
+    assert "converted_extxyz/rmd17_ethanol_valid.extxyz" in wrapper_text
+    assert "converted_extxyz/rmd17_ethanol_test.extxyz" in wrapper_text
+    assert "tace.scripts.rtece_train_scalar" in wrapper_text
+    assert "benchmark_rtece_scalar.py" in wrapper_text
+    assert "--energy-key energy" in wrapper_text
+    assert "--forces-key forces" in wrapper_text
+    assert "--valid-limit-configs 1000" in wrapper_text
+    assert "--limit-configs 1000" in wrapper_text
+    assert "--measure-passes 5" in wrapper_text
+
+
+def test_stage185_script_runs_as_direct_cli_entrypoint(tmp_path):
+    import subprocess
+    import sys
+
+    script = Path("benchmarks/oc20neb_tace_mace/make_rtece_stage185_rmd17_representation_ladder.py")
+    result = subprocess.run(
+        [
+            sys.executable,
+            str(script),
+            "--output-root",
+            str(tmp_path / "stage185"),
+            "--rmd17-root",
+            str(tmp_path / "rMD17"),
+        ],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert (tmp_path / "stage185" / "stage185_manifest.json").exists()
+    assert (tmp_path / "stage185" / "stage185_manifest_audit.json").exists()
+

@@ -1,0 +1,178 @@
+{
+  "dataset": {
+    "conversion_factor_energy": 0.0433641153,
+    "conversion_factor_forces": 0.0433641153,
+    "converted_splits": {
+      "test": "datasets/rMD17/converted_extxyz/rmd17_ethanol_test.extxyz",
+      "train": "datasets/rMD17/converted_extxyz/rmd17_ethanol_train.extxyz",
+      "valid": "datasets/rMD17/converted_extxyz/rmd17_ethanol_valid.extxyz"
+    },
+    "labels": {
+      "energy_key": "energy",
+      "forces_key": "forces"
+    },
+    "molecule": "ethanol",
+    "name": "rMD17",
+    "root": "datasets/rMD17",
+    "source": {
+      "archive_url": "https://figshare.com/ndownloader/articles/12672038/versions/4",
+      "figshare_article": "12672038",
+      "source_npz": "datasets/rMD17/rmd17_ethanol.npz",
+      "version": 4
+    },
+    "source_units": {
+      "distance": "A",
+      "energy": "kcal/mol",
+      "forces": "kcal/mol/A"
+    },
+    "target_units": {
+      "distance": "A",
+      "energy": "eV",
+      "forces": "eV/A"
+    }
+  },
+  "markdown": "# Stage185 rMD17 Representation Ladder Summary\n\n| row | split | status | rmse_f_mev_a | rmse_e_mev_atom | max_abs_f_mev_a | max_abs_e_mev_atom | atoms/s | peak_memory_mb |\n| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: |\n| stage185_rmd17_l0_local_species | test | missing |  |  |  |  |  |  |\n| stage185_rmd17_l1_cross | test | missing |  |  |  |  |  |  |\n| stage185_rmd17_l2_atomic_quadrupole | test | missing |  |  |  |  |  |  |\n| stage185_rmd17_t3_cavity_vecq | test | missing |  |  |  |  |  |  |\n| stage185_rmd17_l0_local_species | valid | missing |  |  |  |  |  |  |\n| stage185_rmd17_l1_cross | valid | missing |  |  |  |  |  |  |\n| stage185_rmd17_l2_atomic_quadrupole | valid | missing |  |  |  |  |  |  |\n| stage185_rmd17_t3_cavity_vecq | valid | missing |  |  |  |  |  |  |\n| stage185_rmd17_l0_local_species | train | missing |  |  |  |  |  |  |\n| stage185_rmd17_l1_cross | train | missing |  |  |  |  |  |  |\n| stage185_rmd17_l2_atomic_quadrupole | train | missing |  |  |  |  |  |  |\n| stage185_rmd17_t3_cavity_vecq | train | missing |  |  |  |  |  |  |\n\nPrimary ranking is force RMSE; energy RMSE/max and force max remain required diagnostics.\n",
+  "rows": [
+    {
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l0_local_species/test_benchmark.json",
+      "edge_paths": 0,
+      "engine": "rtece",
+      "moment_l_max": 0,
+      "row_name": "stage185_rmd17_l0_local_species",
+      "scalar_paths": 3,
+      "split": "test",
+      "status": "missing",
+      "tece_tier": "T1_scalar_endpoint_local_chemistry"
+    },
+    {
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l1_cross/test_benchmark.json",
+      "edge_paths": 0,
+      "engine": "rtece",
+      "moment_l_max": 1,
+      "row_name": "stage185_rmd17_l1_cross",
+      "scalar_paths": 5,
+      "split": "test",
+      "status": "missing",
+      "tece_tier": "T2_atomic_l1_cross_radial"
+    },
+    {
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l2_atomic_quadrupole/test_benchmark.json",
+      "edge_paths": 0,
+      "engine": "rtece",
+      "moment_l_max": 2,
+      "row_name": "stage185_rmd17_l2_atomic_quadrupole",
+      "scalar_paths": 7,
+      "split": "test",
+      "status": "missing",
+      "tece_tier": "T2_l2_atomic_scalarized_quadrupole"
+    },
+    {
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_t3_cavity_vecq/test_benchmark.json",
+      "edge_paths": 2,
+      "engine": "rtece",
+      "moment_l_max": 2,
+      "row_name": "stage185_rmd17_t3_cavity_vecq",
+      "scalar_paths": 9,
+      "split": "test",
+      "status": "missing",
+      "tece_tier": "T3_sparse_cavity_edge_relational"
+    },
+    {
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l0_local_species/valid_benchmark.json",
+      "edge_paths": 0,
+      "engine": "rtece",
+      "moment_l_max": 0,
+      "row_name": "stage185_rmd17_l0_local_species",
+      "scalar_paths": 3,
+      "split": "valid",
+      "status": "missing",
+      "tece_tier": "T1_scalar_endpoint_local_chemistry"
+    },
+    {
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l1_cross/valid_benchmark.json",
+      "edge_paths": 0,
+      "engine": "rtece",
+      "moment_l_max": 1,
+      "row_name": "stage185_rmd17_l1_cross",
+      "scalar_paths": 5,
+      "split": "valid",
+      "status": "missing",
+      "tece_tier": "T2_atomic_l1_cross_radial"
+    },
+    {
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l2_atomic_quadrupole/valid_benchmark.json",
+      "edge_paths": 0,
+      "engine": "rtece",
+      "moment_l_max": 2,
+      "row_name": "stage185_rmd17_l2_atomic_quadrupole",
+      "scalar_paths": 7,
+      "split": "valid",
+      "status": "missing",
+      "tece_tier": "T2_l2_atomic_scalarized_quadrupole"
+    },
+    {
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_t3_cavity_vecq/valid_benchmark.json",
+      "edge_paths": 2,
+      "engine": "rtece",
+      "moment_l_max": 2,
+      "row_name": "stage185_rmd17_t3_cavity_vecq",
+      "scalar_paths": 9,
+      "split": "valid",
+      "status": "missing",
+      "tece_tier": "T3_sparse_cavity_edge_relational"
+    },
+    {
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l0_local_species/train_benchmark.json",
+      "edge_paths": 0,
+      "engine": "rtece",
+      "moment_l_max": 0,
+      "row_name": "stage185_rmd17_l0_local_species",
+      "scalar_paths": 3,
+      "split": "train",
+      "status": "missing",
+      "tece_tier": "T1_scalar_endpoint_local_chemistry"
+    },
+    {
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l1_cross/train_benchmark.json",
+      "edge_paths": 0,
+      "engine": "rtece",
+      "moment_l_max": 1,
+      "row_name": "stage185_rmd17_l1_cross",
+      "scalar_paths": 5,
+      "split": "train",
+      "status": "missing",
+      "tece_tier": "T2_atomic_l1_cross_radial"
+    },
+    {
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l2_atomic_quadrupole/train_benchmark.json",
+      "edge_paths": 0,
+      "engine": "rtece",
+      "moment_l_max": 2,
+      "row_name": "stage185_rmd17_l2_atomic_quadrupole",
+      "scalar_paths": 7,
+      "split": "train",
+      "status": "missing",
+      "tece_tier": "T2_l2_atomic_scalarized_quadrupole"
+    },
+    {
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_t3_cavity_vecq/train_benchmark.json",
+      "edge_paths": 2,
+      "engine": "rtece",
+      "moment_l_max": 2,
+      "row_name": "stage185_rmd17_t3_cavity_vecq",
+      "scalar_paths": 9,
+      "split": "train",
+      "status": "missing",
+      "tece_tier": "T3_sparse_cavity_edge_relational"
+    }
+  ],
+  "schema_version": "rtece_stage185_rmd17_representation_ladder_summary.v1",
+  "split_policy": {
+    "indexing": "contiguous_time_ordered_blocks",
+    "rationale": "Use explicit contiguous blocks for the first rMD17 closure so train/valid/test membership is reproducible and does not silently mix kcal-source frames after conversion.  The train block respects the documented 1000-sample ceiling for highly correlated rMD17 trajectories.",
+    "test_count": 1000,
+    "train_count": 1000,
+    "valid_count": 1000
+  },
+  "stage": "stage185_rmd17_representation_ladder"
+}

@@ -1,0 +1,311 @@
+{
+  "artifacts": {
+    "audit": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/stage185_manifest_audit.json",
+    "benchmark_wrapper_root": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/benchmark_wrappers",
+    "diagnostics_root": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics",
+    "manifest": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/stage185_manifest.json",
+    "prep_wrapper": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/wrappers/stage185_rmd17_ethanol_prep_no_export.sbatch",
+    "results_root": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/results",
+    "stage_plan": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/stage185_plan.md",
+    "summary_json": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/stage185_summary.json",
+    "summary_md": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/stage185_summary.md",
+    "wrapper_root": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/wrappers"
+  },
+  "comparison_contract": {
+    "benchmark_splits": [
+      "train",
+      "valid",
+      "test"
+    ],
+    "head_capacity_control": "hidden_channels fixed at 64,64 across rows",
+    "interpretation": "If the L2-vs-T3 ordering matches 3BPA, the representation-ladder conclusion is dataset-robust; if rMD17 prefers a lower tier, 3BPA dihedral behavior is a stronger angular/relational stress test than standard molecular MD.",
+    "primary_ranking_metric": "rmse_f_mev_a",
+    "required_metrics": [
+      "mae_e_mev_atom",
+      "rmse_e_mev_atom",
+      "max_abs_e_mev_atom",
+      "mae_f_mev_a",
+      "rmse_f_mev_a",
+      "max_abs_f_mev_a",
+      "atoms_per_second",
+      "peak_memory_mb"
+    ]
+  },
+  "dataset": {
+    "conversion_factor_energy": 0.0433641153,
+    "conversion_factor_forces": 0.0433641153,
+    "converted_splits": {
+      "test": "datasets/rMD17/converted_extxyz/rmd17_ethanol_test.extxyz",
+      "train": "datasets/rMD17/converted_extxyz/rmd17_ethanol_train.extxyz",
+      "valid": "datasets/rMD17/converted_extxyz/rmd17_ethanol_valid.extxyz"
+    },
+    "labels": {
+      "energy_key": "energy",
+      "forces_key": "forces"
+    },
+    "molecule": "ethanol",
+    "name": "rMD17",
+    "root": "datasets/rMD17",
+    "source": {
+      "archive_url": "https://figshare.com/ndownloader/articles/12672038/versions/4",
+      "figshare_article": "12672038",
+      "source_npz": "datasets/rMD17/rmd17_ethanol.npz",
+      "version": 4
+    },
+    "source_units": {
+      "distance": "A",
+      "energy": "kcal/mol",
+      "forces": "kcal/mol/A"
+    },
+    "target_units": {
+      "distance": "A",
+      "energy": "eV",
+      "forces": "eV/A"
+    }
+  },
+  "rows": [
+    {
+      "benchmark_outputs": {
+        "test": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l0_local_species/test_benchmark.json",
+        "train": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l0_local_species/train_benchmark.json",
+        "valid": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l0_local_species/valid_benchmark.json"
+      },
+      "benchmark_wrapper": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/benchmark_wrappers/stage185_rmd17_l0_local_species_benchmark_no_export.sbatch",
+      "capacity_allocation": "learnable_species_basis_and_local_l0_before_head",
+      "cost_proxy": {
+        "atomic_cross_radial_sketch_channels": 0,
+        "atomic_paths": 3,
+        "edge_paths": 0,
+        "local_l0_chemistry_rank": 4,
+        "moment_l_max": 0,
+        "num_radial": 10,
+        "scalar_paths": 3,
+        "species_basis_channels": 16
+      },
+      "dataset_role": "single_molecule_rmd17_temporal_generalization",
+      "engine": "rtece",
+      "marginal_paths": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.local_l0_lowrank_density"
+      ],
+      "model_artifact": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/results/stage185_rmd17_l0_local_species/rtece_scalar_best.pt",
+      "name": "stage185_rmd17_l0_local_species",
+      "rationale": "NEP/DPA1-0-like scalar endpoint: one moment pass, learnable species basis, no angular or edge-relational retention.",
+      "representation_step": "l0_local_species_basis",
+      "source_stage183_row": "stage183_l0_local_species",
+      "student_config": {
+        "atomic_cross_radial_projection": "fixed_shell_mean",
+        "atomic_cross_radial_sketch_channels": 0,
+        "hidden_channels": "64,64",
+        "local_l0_chemistry_rank": 4,
+        "moment_l_max": 0,
+        "num_radial": 10,
+        "scalar_path_ids": [
+          "atomic.radial_density",
+          "atomic.species_basis_density",
+          "atomic.local_l0_lowrank_density"
+        ],
+        "species_basis_channels": 16,
+        "species_basis_mode": "learnable_embedding"
+      },
+      "tece_tier": "T1_scalar_endpoint_local_chemistry",
+      "train_dir": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/results/stage185_rmd17_l0_local_species",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/wrappers/stage185_rmd17_l0_local_species_no_export.sbatch"
+    },
+    {
+      "benchmark_outputs": {
+        "test": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l1_cross/test_benchmark.json",
+        "train": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l1_cross/train_benchmark.json",
+        "valid": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l1_cross/valid_benchmark.json"
+      },
+      "benchmark_wrapper": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/benchmark_wrappers/stage185_rmd17_l1_cross_benchmark_no_export.sbatch",
+      "capacity_allocation": "learnable_l1_cross_radial_front_before_head",
+      "cost_proxy": {
+        "atomic_cross_radial_sketch_channels": 3,
+        "atomic_paths": 5,
+        "edge_paths": 0,
+        "local_l0_chemistry_rank": 4,
+        "moment_l_max": 1,
+        "num_radial": 10,
+        "scalar_paths": 5,
+        "species_basis_channels": 16
+      },
+      "dataset_role": "single_molecule_rmd17_temporal_generalization",
+      "engine": "rtece",
+      "marginal_paths": [
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot"
+      ],
+      "model_artifact": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/results/stage185_rmd17_l1_cross/rtece_scalar_best.pt",
+      "name": "stage185_rmd17_l1_cross",
+      "rationale": "Stage182 rTECE row: keeps sparse L1 atomic moment information while still scalarizing immediately.",
+      "representation_step": "l1_sparse_cross_radial_power_spectrum",
+      "source_stage183_row": "stage183_l1_cross",
+      "student_config": {
+        "atomic_cross_radial_projection": "learnable",
+        "atomic_cross_radial_sketch_channels": 3,
+        "hidden_channels": "64,64",
+        "local_l0_chemistry_rank": 4,
+        "moment_l_max": 1,
+        "num_radial": 10,
+        "scalar_path_ids": [
+          "atomic.radial_density",
+          "atomic.species_basis_density",
+          "atomic.local_l0_lowrank_density",
+          "atomic.vector_norm",
+          "atomic.vector_cross_radial_dot"
+        ],
+        "species_basis_channels": 16,
+        "species_basis_mode": "learnable_embedding"
+      },
+      "tece_tier": "T2_atomic_l1_cross_radial",
+      "train_dir": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/results/stage185_rmd17_l1_cross",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/wrappers/stage185_rmd17_l1_cross_no_export.sbatch"
+    },
+    {
+      "benchmark_outputs": {
+        "test": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l2_atomic_quadrupole/test_benchmark.json",
+        "train": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l2_atomic_quadrupole/train_benchmark.json",
+        "valid": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_l2_atomic_quadrupole/valid_benchmark.json"
+      },
+      "benchmark_wrapper": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/benchmark_wrappers/stage185_rmd17_l2_atomic_quadrupole_benchmark_no_export.sbatch",
+      "capacity_allocation": "learnable_l2_quadrupole_front_before_head",
+      "cost_proxy": {
+        "atomic_cross_radial_sketch_channels": 3,
+        "atomic_paths": 7,
+        "edge_paths": 0,
+        "local_l0_chemistry_rank": 4,
+        "moment_l_max": 2,
+        "num_radial": 10,
+        "scalar_paths": 7,
+        "species_basis_channels": 16
+      },
+      "dataset_role": "single_molecule_rmd17_temporal_generalization",
+      "engine": "rtece",
+      "marginal_paths": [
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius"
+      ],
+      "model_artifact": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/results/stage185_rmd17_l2_atomic_quadrupole/rtece_scalar_best.pt",
+      "name": "stage185_rmd17_l2_atomic_quadrupole",
+      "rationale": "Tests whether angular/dihedral PES error is mainly missing L2 local moment information before adding edge-relational cost.",
+      "representation_step": "l2_atomic_quadrupole_without_edge_cost",
+      "source_stage183_row": "stage183_l2_atomic_quadrupole",
+      "student_config": {
+        "atomic_cross_radial_projection": "learnable",
+        "atomic_cross_radial_sketch_channels": 3,
+        "hidden_channels": "64,64",
+        "local_l0_chemistry_rank": 4,
+        "moment_l_max": 2,
+        "num_radial": 10,
+        "scalar_path_ids": [
+          "atomic.radial_density",
+          "atomic.species_basis_density",
+          "atomic.local_l0_lowrank_density",
+          "atomic.vector_norm",
+          "atomic.vector_cross_radial_dot",
+          "atomic.quadrupole_norm",
+          "atomic.quadrupole_cross_radial_frobenius"
+        ],
+        "species_basis_channels": 16,
+        "species_basis_mode": "learnable_embedding"
+      },
+      "tece_tier": "T2_l2_atomic_scalarized_quadrupole",
+      "train_dir": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/results/stage185_rmd17_l2_atomic_quadrupole",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/wrappers/stage185_rmd17_l2_atomic_quadrupole_no_export.sbatch"
+    },
+    {
+      "benchmark_outputs": {
+        "test": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_t3_cavity_vecq/test_benchmark.json",
+        "train": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_t3_cavity_vecq/train_benchmark.json",
+        "valid": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/stage185_rmd17_t3_cavity_vecq/valid_benchmark.json"
+      },
+      "benchmark_wrapper": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/benchmark_wrappers/stage185_rmd17_t3_cavity_vecq_benchmark_no_export.sbatch",
+      "capacity_allocation": "sparse_edge_relational_paths_after_l2_atomic_front",
+      "cost_proxy": {
+        "atomic_cross_radial_sketch_channels": 3,
+        "atomic_paths": 7,
+        "edge_paths": 2,
+        "local_l0_chemistry_rank": 4,
+        "moment_l_max": 2,
+        "num_radial": 10,
+        "scalar_paths": 9,
+        "species_basis_channels": 16
+      },
+      "dataset_role": "single_molecule_rmd17_temporal_generalization",
+      "engine": "rtece",
+      "marginal_paths": [
+        "edge.cavity.vector_dot",
+        "edge.cavity.quadrupole_frobenius"
+      ],
+      "model_artifact": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/results/stage185_rmd17_t3_cavity_vecq/rtece_scalar_best.pt",
+      "name": "stage185_rmd17_t3_cavity_vecq",
+      "rationale": "True rTECE increment: source-target cavity vector/quadrupole relations with no persistent high-l edge state.",
+      "representation_step": "cavity_vector_quadrupole_edge_relational_sketch",
+      "source_stage183_row": "stage183_t3_cavity_vecq",
+      "student_config": {
+        "atomic_cross_radial_projection": "learnable",
+        "atomic_cross_radial_sketch_channels": 3,
+        "hidden_channels": "64,64",
+        "local_l0_chemistry_rank": 4,
+        "moment_l_max": 2,
+        "num_radial": 10,
+        "scalar_path_ids": [
+          "atomic.radial_density",
+          "atomic.species_basis_density",
+          "atomic.local_l0_lowrank_density",
+          "atomic.vector_norm",
+          "atomic.vector_cross_radial_dot",
+          "atomic.quadrupole_norm",
+          "atomic.quadrupole_cross_radial_frobenius",
+          "edge.cavity.vector_dot",
+          "edge.cavity.quadrupole_frobenius"
+        ],
+        "species_basis_channels": 16,
+        "species_basis_mode": "learnable_embedding"
+      },
+      "tece_tier": "T3_sparse_cavity_edge_relational",
+      "train_dir": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/results/stage185_rmd17_t3_cavity_vecq",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/wrappers/stage185_rmd17_t3_cavity_vecq_no_export.sbatch"
+    }
+  ],
+  "schema_version": "rtece_stage185_rmd17_representation_ladder.v1",
+  "scientific_question": "Does the 3BPA-derived TECE semantic representation ladder behave consistently on a conventional single-molecule rMD17 trajectory once units and temporal splits are controlled?",
+  "split_policy": {
+    "indexing": "contiguous_time_ordered_blocks",
+    "rationale": "Use explicit contiguous blocks for the first rMD17 closure so train/valid/test membership is reproducible and does not silently mix kcal-source frames after conversion.  The train block respects the documented 1000-sample ceiling for highly correlated rMD17 trajectories.",
+    "test_count": 1000,
+    "train_count": 1000,
+    "valid_count": 1000
+  },
+  "stage": "stage185_rmd17_representation_ladder",
+  "theory_alignment": [
+    "TECE_design_space.md \u00a711/\u00a712: compare a tiered student family by physical error and hardware cost across deployment distributions.",
+    "TECE_design_space.md \u00a75: keep one low-order moment pass and scalarize sparse high-value paths before expensive persistent equivariant state.",
+    "rTECE_review.md P1: path IDs, held-out deployment splits, and comparable supervised/distilled students are prerequisites for real renormalization.",
+    "Stage184 result: L2 is the current 3BPA rTECE Pareto candidate; rMD17 checks whether that conclusion transfers to conventional molecular MD.",
+    "PyG MD17 documentation: original/revised MD17 energy and force labels are kcal/mol and kcal/mol/A, and highly correlated trajectories should use no more than about 1000 training samples."
+  ],
+  "train_contract": {
+    "batch_size": 32,
+    "bench_limit_configs": 1000,
+    "early_stopping_patience": 250,
+    "energy_key": "energy",
+    "energy_weight": 1.0,
+    "force_weight": 10.0,
+    "forces_key": "forces",
+    "limit_configs": 1000,
+    "lr": 0.001,
+    "lr_scheduler": "plateau",
+    "lr_warmup_steps": 500,
+    "max_steps": 20000,
+    "neighborlist_backend": "matscipy",
+    "per_element_e0_fit": true,
+    "rtece_entrypoint": "tace.scripts.rtece_train_scalar",
+    "train_file": "datasets/rMD17/converted_extxyz/rmd17_ethanol_train.extxyz",
+    "trainer_backend": "lightning",
+    "valid_file": "datasets/rMD17/converted_extxyz/rmd17_ethanol_valid.extxyz",
+    "valid_limit_configs": 1000
+  }
+}
