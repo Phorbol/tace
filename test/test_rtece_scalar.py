@@ -2863,6 +2863,80 @@ def test_rtece_projection_cli_adds_combined_energy_force_ranking_fields(tmp_path
     assert all("ef_pareto_dominated" in row for row in payload["rows"])
 
 
+def test_rtece_projection_cli_emits_active_set_candidate_rows(tmp_path):
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    configs = tmp_path / "h2_active_set.xyz"
+    output = tmp_path / "projection_active_set.json"
+    atoms_list = []
+    for idx, distance in enumerate([0.70, 0.80, 0.90, 1.00]):
+        atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [distance, 0.0, 0.0]])
+        atoms.info["teacher_energy"] = float(idx)
+        atoms.arrays["forces"] = np.zeros((2, 3), dtype=np.float64)
+        atoms.arrays["teacher_forces"] = np.full((2, 3), float(idx), dtype=np.float64)
+        atoms_list.append(atoms)
+    ase.io.write(configs, atoms_list, format="extxyz")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/oc20neb_tace_mace/analyze_rtece_projection_error.py",
+            "--configs",
+            str(configs),
+            "--output-json",
+            str(output),
+            "--reference-path-ids",
+            "atomic.radial_density,edge.direct.radial",
+            "--candidate",
+            "baseline:atomic.radial_density",
+            "--candidate",
+            "full_reference:atomic.radial_density,edge.direct.radial",
+            "--num-radial",
+            "3",
+            "--limit-configs",
+            "4",
+            "--neighborlist-backend",
+            "ase",
+            "--energy-target-key",
+            "teacher_energy",
+            "--force-target-key",
+            "teacher_forces",
+            "--active-set-baseline-candidate",
+            "baseline",
+            "--active-set-energy-weight",
+            "1.0",
+            "--active-set-force-weight",
+            "0.5",
+            "--active-set-projection-weight",
+            "10.0",
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=240,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["active_set"] == {
+        "baseline_candidate": "baseline",
+        "energy_weight": 1.0,
+        "force_weight": 0.5,
+        "projection_weight": 10.0,
+    }
+    assert [row["candidate"] for row in payload["active_set_rows"]] == ["full_reference"]
+    active_row = payload["active_set_rows"][0]
+    assert active_row["baseline_candidate"] == "baseline"
+    assert active_row["marginal_paths"] == ["edge.direct.radial"]
+    assert "marginal_cost_proxy" in active_row
+    assert "marginal_gain_per_cost" in active_row
+    assert "active_set_promoted" in active_row
+
+
 def test_rtece_projection_cli_generates_auto_candidates_and_ranks_rows(tmp_path):
     import numpy as np
     import ase.io

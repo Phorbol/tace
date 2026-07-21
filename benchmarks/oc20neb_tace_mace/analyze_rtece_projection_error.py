@@ -1184,6 +1184,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force-eval-offset", type=int, default=0)
     parser.add_argument("--focus-elements", default=None, help="Comma-separated element symbols or atomic numbers to upweight in projection rows.")
     parser.add_argument("--focus-weight", type=float, default=1.0)
+    parser.add_argument("--active-set-baseline-candidate", default=None, help="Optional candidate name used as the active-set baseline for marginal gain/cost ranking.")
+    parser.add_argument("--active-set-energy-weight", type=float, default=1.0)
+    parser.add_argument("--active-set-force-weight", type=float, default=1.0)
+    parser.add_argument("--active-set-projection-weight", type=float, default=0.0)
     return parser.parse_args()
 
 
@@ -1315,6 +1319,23 @@ def main() -> None:
         force_fit_indices=force_fit_indices,
         force_eval_indices=force_eval_indices,
     )
+    ranked_rows = rank_projection_rows(rows)
+    active_set_metadata = None
+    active_set_rows = []
+    if args.active_set_baseline_candidate:
+        active_set_metadata = {
+            "baseline_candidate": str(args.active_set_baseline_candidate),
+            "energy_weight": float(args.active_set_energy_weight),
+            "force_weight": float(args.active_set_force_weight),
+            "projection_weight": float(args.active_set_projection_weight),
+        }
+        active_set_rows = rank_active_set_candidate_rows(
+            ranked_rows,
+            baseline_candidate=str(args.active_set_baseline_candidate),
+            energy_weight=float(args.active_set_energy_weight),
+            force_weight=float(args.active_set_force_weight),
+            projection_weight=float(args.active_set_projection_weight),
+        )
     payload = {
         "schema_version": "rtece_projection_diagnostic.v1",
         "configs": str(args.configs),
@@ -1350,7 +1371,9 @@ def main() -> None:
         "auto_candidate_strategies": list(args.auto_candidate_strategy),
         "auto_candidate_count": int(len(auto_candidate_specs)),
         "rank_metrics": rank_metrics_summary(rows),
-        "rows": rank_projection_rows(rows),
+        "active_set": active_set_metadata,
+        "active_set_rows": active_set_rows,
+        "rows": ranked_rows,
     }
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
     args.output_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
