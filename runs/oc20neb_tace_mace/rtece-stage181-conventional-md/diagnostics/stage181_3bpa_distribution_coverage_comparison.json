@@ -1,0 +1,161 @@
+{
+  "benchmark_mixedT_job": "689302",
+  "controlled_architecture": {
+    "deleted_tece_groups": [
+      "persistent_equivariant_node_state",
+      "persistent_equivariant_edge_state",
+      "edge_tensor_product_channel_mixing",
+      "multi_layer_equivariant_message_passing"
+    ],
+    "descriptor_dim": 223,
+    "num_parameters": 21079,
+    "retained_tece_groups": [
+      "radial_density",
+      "low_order_vector_moment_norm",
+      "atomic_cross_radial_invariants",
+      "atomic_cross_radial_rank_3",
+      "learnable_atomic_cross_radial_projection",
+      "learnable_low_rank_species_basis",
+      "trainable_local_l0_chemistry_front",
+      "early_scalarized_local_l0_density"
+    ],
+    "semantic_tier": "T3_vector_moment_scalarization_learnable_species_basis_local_l0_lowrank"
+  },
+  "interpretation": {
+    "architecture_bottleneck_signal": "trainMixedT does not uniformly improve ID/600K and still leaves large force tails, so this does not prove the current T3 scalarized student is physically closed.",
+    "data_coverage_signal": "trainMixedT improves the strongest OOD force RMSE on test_1200K and test_dih, so deployment distribution coverage is a real part of the error budget.",
+    "next_priority": "Use this conventional benchmark as a small fast loop for teacher-residual/trajectory distillation and representation ladder tests before more kernel work."
+  },
+  "question": "Does broadening the training distribution from 300K to mixed 300/600/1200K fix OOD force errors without changing the rTECE student architecture?",
+  "rows": [
+    {
+      "ratios_mixedT_over_300K": {
+        "atoms_per_second": 1.068808466173697,
+        "e_rmse": 1.3909103146609514,
+        "f_max": 0.7755954900529278,
+        "f_rmse": 1.0254934047846718
+      },
+      "split": "test_300K",
+      "train300K": {
+        "atoms_per_second": 1648462.6210008617,
+        "e_mae_mev_atom": 3.3832893386394964,
+        "e_max_mev_atom": 11.441839294329165,
+        "e_rmse_mev_atom": 4.208790001097433,
+        "f_mae_mev_a": 98.87456864476337,
+        "f_max_mev_a": 1163.9533057113647,
+        "f_rmse_mev_a": 135.76741975582013,
+        "peak_allocated_mb": 618.65966796875
+      },
+      "trainMixedT": {
+        "atoms_per_second": 1761890.8054966033,
+        "e_mae_mev_atom": 4.687773824204345,
+        "e_max_mev_atom": 15.765365694716348,
+        "e_rmse_mev_atom": 5.854049424768296,
+        "f_mae_mev_a": 102.06633633800216,
+        "f_max_mev_a": 902.7569345419312,
+        "f_rmse_mev_a": 139.2285935442257,
+        "peak_allocated_mb": 618.65966796875
+      }
+    },
+    {
+      "ratios_mixedT_over_300K": {
+        "atoms_per_second": 1.1215081970361878,
+        "e_rmse": 1.4398796664557998,
+        "f_max": 0.3978368004242896,
+        "f_rmse": 0.9134200017090918
+      },
+      "split": "test_600K",
+      "train300K": {
+        "atoms_per_second": 1573111.7306788284,
+        "e_mae_mev_atom": 3.486832050199424,
+        "e_max_mev_atom": 16.352626179502327,
+        "e_rmse_mev_atom": 4.501703355863679,
+        "f_mae_mev_a": 150.90888706777457,
+        "f_max_mev_a": 3631.353812233887,
+        "f_rmse_mev_a": 211.2014569146738,
+        "peak_allocated_mb": 620.63330078125
+      },
+      "trainMixedT": {
+        "atoms_per_second": 1764257.70081009,
+        "e_mae_mev_atom": 5.479926562191782,
+        "e_max_mev_atom": 18.79464628951542,
+        "e_rmse_mev_atom": 6.481911126523949,
+        "f_mae_mev_a": 140.43054456419128,
+        "f_max_mev_a": 1444.686181867676,
+        "f_rmse_mev_a": 192.915635135964,
+        "peak_allocated_mb": 620.63330078125
+      }
+    },
+    {
+      "ratios_mixedT_over_300K": {
+        "atoms_per_second": 0.9984853587321812,
+        "e_rmse": 1.0341937469645104,
+        "f_max": 0.779292797129553,
+        "f_rmse": 0.8293078890949702
+      },
+      "split": "test_1200K",
+      "train300K": {
+        "atoms_per_second": 1800502.2703168914,
+        "e_mae_mev_atom": 6.872021093517457,
+        "e_max_mev_atom": 31.39875636932427,
+        "e_rmse_mev_atom": 8.900220768820907,
+        "f_mae_mev_a": 253.32740462859672,
+        "f_max_mev_a": 3290.784103460693,
+        "f_rmse_mev_a": 361.9803465445121,
+        "peak_allocated_mb": 606.08984375
+      },
+      "trainMixedT": {
+        "atoms_per_second": 1797775.155275468,
+        "e_mae_mev_atom": 7.300873426890346,
+        "e_max_mev_atom": 32.007212096720686,
+        "e_rmse_mev_atom": 9.204552665718248,
+        "f_mae_mev_a": 213.51358121400543,
+        "f_max_mev_a": 2564.484348735352,
+        "f_rmse_mev_a": 300.1931570866951,
+        "peak_allocated_mb": 606.08984375
+      }
+    },
+    {
+      "ratios_mixedT_over_300K": {
+        "atoms_per_second": 0.9971408979782185,
+        "e_rmse": 0.6010005547810309,
+        "f_max": 0.5951721162639783,
+        "f_rmse": 0.7098629503903144
+      },
+      "split": "test_dih",
+      "train300K": {
+        "atoms_per_second": 1774193.199827033,
+        "e_mae_mev_atom": 15.223297025644172,
+        "e_max_mev_atom": 28.69800111983312,
+        "e_rmse_mev_atom": 16.150556834462726,
+        "f_mae_mev_a": 134.86785058707375,
+        "f_max_mev_a": 1654.092889013672,
+        "f_rmse_mev_a": 212.4271861841165,
+        "peak_allocated_mb": 618.4130859375
+      },
+      "trainMixedT": {
+        "atoms_per_second": 1769120.6004623766,
+        "e_mae_mev_atom": 8.64921181151022,
+        "e_max_mev_atom": 14.903250339692157,
+        "e_rmse_mev_atom": 9.706493617534669,
+        "f_mae_mev_a": 100.58211981891226,
+        "f_max_mev_a": 984.4699652514648,
+        "f_rmse_mev_a": 150.79418912776958,
+        "peak_allocated_mb": 618.4130859375
+      }
+    }
+  ],
+  "schema_version": "rtece_stage181_3bpa_distribution_coverage_comparison.v1",
+  "stage": "stage181_conventional_md",
+  "train_mixedT_job": "689295",
+  "train_mixedT_summary": {
+    "best_step": 14096,
+    "best_valid_loss": 0.19310857355594635,
+    "steps": 18096,
+    "train_configs": 500,
+    "train_file": "datasets/3BPA/dataset_3BPA/train_mixedT.xyz",
+    "valid_configs": 64,
+    "valid_file": "datasets/3BPA/dataset_3BPA/test_300K.xyz",
+    "variant": "stage181_3bpa_mixedT_l1_local_l0_student"
+  }
+}
