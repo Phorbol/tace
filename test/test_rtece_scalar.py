@@ -8554,6 +8554,79 @@ def test_stage145_deepmd_converter_splits_mixed_atom_orders(tmp_path):
     assert payload["training"]["training_data"]["systems"] == ["mixed_000", "mixed_001"]
 
 
+def test_rtece_stage164_force_protected_uv_manifest_materializes_single_uv_row(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage164_force_protected_uv import (
+        audit_stage164_manifest,
+        make_stage164_manifest,
+        materialize_stage164,
+    )
+
+    payload = make_stage164_manifest(
+        output_root=tmp_path / "stage164",
+        train_file="mixed_train.extxyz",
+        train_valid_file="train_valid.extxyz",
+        dft_valid_file="dft_valid.extxyz",
+        teacher_valid_file="teacher_valid.extxyz",
+        limit_configs=2048,
+        valid_limit_configs=256,
+        bench_limit_configs=1024,
+        max_steps=20000,
+        lr_warmup_steps=500,
+        early_stopping_patience=400,
+    )
+
+    assert payload["schema_version"] == "rtece_stage164_force_protected_uv.v1"
+    assert payload["stage"] == "stage164_force_protected_uv_training"
+    assert payload["row_set"] == "stage164-force-protected-uv"
+    assert payload["distillation_semantics"] == "stage163_force_protected_uv_training"
+    assert payload["active_set_gate"]["max_force_regression_fraction"] == pytest.approx(0.10)
+    assert payload["active_set_gate"]["require_energy_gain"] is True
+    assert payload["relative_energy_weight"] == pytest.approx(0.25)
+    assert [row["variant"] for row in payload["rows"]] == ["stage164_uv_force_gate_rel0p25_b32"]
+
+    row = payload["rows"][0]
+    path_ids = tuple(part.strip() for part in row["scalar_path_ids"].split(",") if part.strip())
+    assert "edge.cavity.target_vector_projection" in path_ids
+    assert "edge.cavity.source_vector_projection" in path_ids
+    assert "edge.cavity.target_quadrupole_projection" not in path_ids
+    assert "edge.cavity.source_quadrupole_projection" not in path_ids
+    assert row["stage163_promoted_gate"] == "force_regression<=0.10_and_energy_gain"
+    assert row["stage164_isolated_increment"] == "edge.cavity.target/source_vector_projection"
+    assert row["hidden_channels"] == "64,64"
+    assert row["moment_l_max"] == 2
+    assert row["short_range_repulsion_potential"] == "zbl"
+
+    audit = audit_stage164_manifest(payload)
+    assert audit["contract_pass"] is True
+    assert audit["failed_checks"] == []
+
+    materialized = materialize_stage164(payload)
+    assert len(materialized["train_wrappers"]) == 1
+    train_text = Path(materialized["train_wrappers"][0]).read_text()
+    stage_plan = Path(materialized["artifacts"]["stage_plan"]).read_text()
+    combined = train_text + "\n" + stage_plan
+    assert "--export" not in combined
+    assert "--mem" not in combined
+    assert "--cpus-per-task" not in combined
+    assert "set -euo pipefail" not in train_text
+    assert "set -eo pipefail" in train_text
+    assert "TRAIN_FILE=mixed_train.extxyz" in train_text
+    assert "MAX_STEPS=20000" in train_text
+    assert "LR_WARMUP_STEPS=500" in train_text
+    assert "EARLY_STOPPING_PATIENCE=400" in train_text
+    assert "BATCH_SIZE=32" in train_text
+    assert "VALID_BATCH_SIZE=32" in train_text
+    assert "RELATIVE_ENERGY_WEIGHT=0.25" in train_text
+    assert "RELATIVE_ENERGY_GROUP_KEY=case_id" in train_text
+    assert "RELATIVE_ENERGY_IMAGE_KEY=source_frame" in train_text
+    assert "SCALAR_PATH_IDS=atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot,atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius,edge.cavity.vector_dot,edge.direct.radial,edge.cavity.target_vector_projection,edge.cavity.source_vector_projection" in train_text
+    assert "Stage163" in stage_plan
+    assert "force-protected" in stage_plan
+
+
+
 def test_stage145_summary_keeps_rmse_first_and_missing_outputs_explicit(tmp_path):
     import json
 

@@ -1,0 +1,30 @@
+{
+  "expected_outputs": [
+    "runs/oc20neb_tace_mace/rtece-stage164-force-protected-uv/uv_force_protected_runs/stage164_uv_force_gate_rel0p25_b32/stage164_uv_force_gate_rel0p25_b32/train_summary.json",
+    "runs/oc20neb_tace_mace/rtece-stage164-force-protected-uv/uv_force_protected_runs/stage164_uv_force_gate_rel0p25_b32/stage164_uv_force_gate_rel0p25_b32/stage164_uv_force_gate_rel0p25_b32_dft_benchmark.json",
+    "runs/oc20neb_tace_mace/rtece-stage164-force-protected-uv/uv_force_protected_runs/stage164_uv_force_gate_rel0p25_b32/stage164_uv_force_gate_rel0p25_b32/stage164_uv_force_gate_rel0p25_b32_teacher_benchmark.json"
+  ],
+  "initialization_evidence": {
+    "checkpoint_files_seen": [
+      "rtece-lightning-best.ckpt",
+      "last.ckpt"
+    ],
+    "log": "/home/gengjianrui/bin/logs/rtece-matrix-687573.err",
+    "node": "16v100n01",
+    "slurm_job_id": 687573,
+    "trainable_params_logged": "55.1K"
+  },
+  "job_id": 687573,
+  "run_root": "runs/oc20neb_tace_mace/rtece-stage164-force-protected-uv/uv_force_protected_runs/stage164_uv_force_gate_rel0p25_b32",
+  "schema_version": "rtece_stage164_status.v1",
+  "selection_contract": {
+    "candidate": "uv",
+    "max_sampled_force_regression_fraction": 0.1,
+    "require_energy_gain": true,
+    "source": "runs/oc20neb_tace_mace/rtece-stage163-force-protected-active-set/stage163_force_protected_active_set.json"
+  },
+  "stage": "stage164_force_protected_uv_training",
+  "state_observed": "RUNNING_AFTER_LIGHTNING_INIT",
+  "submit_command": "sbatch runs/oc20neb_tace_mace/rtece-stage164-force-protected-uv/uv_force_protected_wrappers/stage164_uv_force_gate_rel0p25_b32/rtece_scalar_matrix_no_export.sbatch",
+  "wrapper": "runs/oc20neb_tace_mace/rtece-stage164-force-protected-uv/uv_force_protected_wrappers/stage164_uv_force_gate_rel0p25_b32/rtece_scalar_matrix_no_export.sbatch"
+}
