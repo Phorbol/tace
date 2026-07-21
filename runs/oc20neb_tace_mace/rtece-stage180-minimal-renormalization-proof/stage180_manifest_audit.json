@@ -1,0 +1,17 @@
+{
+  "checks": {
+    "fixed_path_set": true,
+    "four_arms": true,
+    "no_forbidden_sbatch_flags": true,
+    "renorm_blockers": true,
+    "runnable_truth": true,
+    "schema": true,
+    "stage": true,
+    "success_claim": true,
+    "wrappers": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "no_forbidden_sbatch_flags": true,
+  "schema_version": "rtece_stage180_manifest_audit.v1"
+}
