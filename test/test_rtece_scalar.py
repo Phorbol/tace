@@ -8841,6 +8841,70 @@ def test_stage167_local_radial_proxy_extracts_pair_histograms_and_scores():
 
 
 
+def test_stage168_rtece_descriptor_proxy_scores_semantic_path_sets():
+    from ase import Atoms
+
+    from benchmarks.oc20neb_tace_mace.summarize_rtece_stage168_rtece_descriptor_proxy import (
+        case_rtece_descriptor_features_from_atoms,
+        rtece_descriptor_proxy_configs,
+        render_stage168_rtece_descriptor_proxy_markdown,
+        select_case_balanced_atoms,
+        summarize_rtece_descriptor_proxy_feature_sets,
+    )
+
+    atoms_a0 = Atoms(
+        numbers=[6, 8, 13],
+        positions=[[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 1.4, 0.0]],
+        cell=[8.0, 8.0, 8.0],
+        pbc=[False, False, False],
+    )
+    atoms_a0.info["case_id"] = "case-a"
+    atoms_a1 = atoms_a0.copy()
+    atoms_a1.positions[1, 0] = 1.1
+    atoms_a1.info["case_id"] = "case-a"
+    atoms_b = Atoms(
+        numbers=[6, 8, 13],
+        positions=[[0.0, 0.0, 0.0], [2.2, 0.0, 0.0], [0.0, 1.4, 0.0]],
+        cell=[8.0, 8.0, 8.0],
+        pbc=[False, False, False],
+    )
+    atoms_b.info["case_id"] = "case-b"
+    selected = select_case_balanced_atoms([atoms_a0, atoms_a1, atoms_b], group_key="case_id", max_configs_per_case=1)
+    assert [atoms.info["case_id"] for atoms in selected] == ["case-a", "case-b"]
+
+    configs = rtece_descriptor_proxy_configs(num_radial=4, hidden_channels=(4,))
+    assert "t4_pair_density" in configs
+    assert "t3_cavity_edge" in configs
+
+    features = case_rtece_descriptor_features_from_atoms(
+        [atoms_a0, atoms_a1, atoms_b],
+        configs={"pair": configs["t4_pair_density"]},
+        group_key="case_id",
+        neighborlist_backend="ase",
+    )
+    assert set(features) == {"case-a", "case-b"}
+    assert any(key.startswith("pair.mean.d") for key in features["case-a"])
+    assert any(key.startswith("pair.std.d") for key in features["case-a"])
+
+    case_offsets = {
+        case_id: 25.0 * row.get("pair.mean.d0", 0.0) - 10.0 * row.get("pair.mean.d1", 0.0)
+        for case_id, row in features.items()
+    }
+    summary = summarize_rtece_descriptor_proxy_feature_sets(
+        case_offsets_mev_atom=case_offsets,
+        case_features=features,
+        feature_groups={"pair": "pair."},
+        ridge=1.0e-8,
+    )
+
+    assert summary["schema_version"] == "rtece_stage168_rtece_descriptor_proxy.v1"
+    assert summary["rows"][0]["uses_case_id_as_feature"] is False
+    assert summary["best_train_rmse_feature_set"] == "pair"
+    markdown = render_stage168_rtece_descriptor_proxy_markdown(summary)
+    assert "Stage168 rTECE Descriptor Proxy" in markdown
+    assert "case_id is used only for grouping" in markdown
+
+
 def test_stage145_summary_keeps_rmse_first_and_missing_outputs_explicit(tmp_path):
     import json
 
