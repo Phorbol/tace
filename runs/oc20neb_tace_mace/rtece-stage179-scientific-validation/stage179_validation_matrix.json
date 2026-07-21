@@ -1,0 +1,315 @@
+{
+  "current_user_readiness": {
+    "not_yet_usable_for": [
+      "ordinary user deployment as a reliable production potential",
+      "claims of superiority over production NEP/DPA1-0-layer",
+      "long-time periodic MD with validated virial/stress semantics"
+    ],
+    "status": "research_prototype_not_user_ready",
+    "usable_for": [
+      "research experiments on scalar-sketched TECE student design",
+      "controlled training/benchmark/physical-diagnostic runs by developers"
+    ]
+  },
+  "nice_to_have_optimizations": [
+    {
+      "id": "triton_or_nvalchemi_kernel_fusion",
+      "reason": "Kernel fusion can improve throughput, but it does not prove TECE operator-space degradation or renormalized distillation.",
+      "status": "nice_to_have_after_science_closure"
+    },
+    {
+      "id": "multi_gpu_full_md_scaling",
+      "reason": "Multi-GPU scaling matters for deployment, but only after single-GPU semantics and matched baselines are scientifically clean.",
+      "status": "nice_to_have_after_single_gpu_protocol_alignment"
+    },
+    {
+      "id": "zbl_dispersion_electrostatic_baselines",
+      "reason": "Physical baselines can reduce residual burden, but the central claim is systematic TECE path downfolding.",
+      "status": "useful_physics_prior_not_core_proof"
+    }
+  ],
+  "purpose": "Separate the scientific claims required for the TECE/rTECE renormalization program from useful engineering optimizations.",
+  "rattle_relax_policy": "continuous_rmsd_after_relax_not_binary_gate",
+  "recommended_next_stage": {
+    "goal": "Prove or falsify that TECE-style renormalized initialization/distillation improves a fixed student path set over from-scratch training.",
+    "id": "stage180_minimal_renormalization_proof",
+    "must_compare": [
+      "same student architecture from scratch",
+      "teacher/truncated or ordinary supervised initialization",
+      "GN or Schur-style renormalized initialization",
+      "renormalized initialization plus teacher E/F residual distillation"
+    ],
+    "must_report": [
+      "E RMSE/MAE/max",
+      "F RMSE/MAE/max",
+      "relative image and barrier RMSE",
+      "dimer smoothness",
+      "rattle-relax RMSD and force tail",
+      "atoms/s and peak allocated/reserved memory under the same protocol"
+    ]
+  },
+  "required_scientific_hypotheses": [
+    {
+      "evidence": [
+        "TECE_design_space.md argues NEP/DPA1-0 are fast because geometry is compressed early into scalar sufficient statistics.",
+        "rTECE_review.md judged the current prototype as validating early scalarization as a throughput direction, while not full MD ready.",
+        "Stage178 L0 local/species endpoint reaches 1790966 atoms/s at limit1024 in the current protocol."
+      ],
+      "evidence_limits": [
+        "This is not full MD throughput: PBC, Verlet rebuild amortization, virial, integrator, output, and matched community engines remain unaligned.",
+        "The result supports the execution topology, not final production performance."
+      ],
+      "id": "early_scalarization_hardware_hypothesis",
+      "next_verification": "Promote throughput taxonomy to model-only, graph-amortized, full E/F/V, and full MD; then run matched NEP/DPA1-0-layer baselines.",
+      "question": "Can a TECE-derived student approach NEP/MTP/DPA1-0-style throughput by dropping persistent high-l edge state and scalarizing after one moment pass?",
+      "status": "supported",
+      "why_required": "This is the basic hardware premise of scalar-sketched rTECE; without it the program collapses into ordinary small equivariant GNN tuning."
+    },
+    {
+      "evidence": [
+        "Stage178 L0 local/species is best by current DFT F RMSE, E RMSE, force max, and throughput among Stage178 variants.",
+        "Stage178 L0 improves substantially over Stage176 local_l0_rank3 on energy and force errors under the available audit context."
+      ],
+      "evidence_limits": [
+        "This does not prove a unique optimal chemistry basis; it only supports trainable low-rank chemistry as a necessary direction.",
+        "The evidence is on OC20NEB-style data, not broad MD datasets."
+      ],
+      "id": "low_rank_chemistry_front_reduces_fixed_descriptor_bias",
+      "next_verification": "Run held-out composition/reaction splits and teacher fake-label augmentation to separate architecture bias from data scarcity.",
+      "question": "Does moving learnable capacity into the species/local L0 front help more than keeping a fixed tiny descriptor and only training a head?",
+      "status": "supported",
+      "why_required": "The review identified chemical collisions and fixed descriptors as likely causes of poor energy accuracy and weak extrapolation."
+    },
+    {
+      "evidence": [
+        "Stage178 T3 minimal cavity/direct worsens current F RMSE (121.277 vs 116.428) and E RMSE (165.541 vs 116.118) relative to the L0 local/species endpoint.",
+        "Stage178 T3 is also slower at limit1024 (782853 vs 1790966 atoms/s)."
+      ],
+      "evidence_limits": [
+        "This does not falsify edge-relational rTECE in general; it falsifies direct addition under the current training recipe.",
+        "The current T3 path lacks teacher-projected initialization and systematic path selection."
+      ],
+      "id": "edge_relational_rtece_advantage",
+      "next_verification": "Test edge paths only after semantic projection, cavity/direct separation, and renormalized initialization are available.",
+      "question": "Do TECE-specific edge-relational scalar sketches add a useful intermediate layer beyond NEP/MTP-like atomic scalar endpoints?",
+      "status": "contradicted_or_unrealized_current_recipe",
+      "why_required": "This is the main proposed uniqueness of rTECE over standard NEP/MTP/DPA1-0 endpoints."
+    },
+    {
+      "evidence": [
+        "TECE_design_space.md defines renormalization as retained coefficients plus a Gram/Schur correction from deleted paths.",
+        "rTECE_review.md states the current branch has scalar students and benchmarking infrastructure but not true renormalization/distillation."
+      ],
+      "evidence_limits": [
+        "No current stage proves pruning/downfolded initialization beats from-scratch for a fixed student architecture.",
+        "Teacher semantic path projections, Gram blocks, and GN updates are not yet a production training path."
+      ],
+      "id": "operator_space_renormalization_beats_from_scratch",
+      "next_verification": "Stage180 should compare from-scratch, teacher truncation, GN/Schur initialization, and full distillation for the same student path manifest.",
+      "question": "Does Schur/Gauss-Newton/operator-space downfolding outperform from-scratch training for the same retained TECE path set?",
+      "status": "missing",
+      "why_required": "This is the central claim that the project is a TECE renormalization compiler rather than an ad hoc student architecture search."
+    },
+    {
+      "evidence": [
+        "Stage178 records E/F RMSE, E/F max, relative image RMSE, barrier RMSE, dimer, rattle-relax RMSD, throughput, and memory.",
+        "The rattle-relax policy is now continuous RMSD/force-tail evidence, not a binary gate."
+      ],
+      "evidence_limits": [
+        "Virial/stress and Hessian-vector evidence are still missing.",
+        "Rattle-relax thresholds remain deployment-task dependent rather than universal."
+      ],
+      "id": "sobolev_physics_metric_is_needed",
+      "next_verification": "Add virial finite-strain tests and HVP or curvature probes before claiming long-time MD reliability.",
+      "question": "Are E/F RMSE alone insufficient, requiring relative NEB/barrier, force max tail, dimer smoothness, rattle-relax RMSD, and eventually virial/HVP?",
+      "status": "supported_but_incomplete",
+      "why_required": "The objective is accuracy, extrapolation, and physical reasonableness under deployment distributions, not leaderboard MAE alone."
+    },
+    {
+      "evidence": [
+        "Stage177 explicitly marks non-matching throughput protocols and incomplete physical triage as caveats.",
+        "Stage178 repeats that NEP/DPA rows are smoke baselines and cannot support a superiority claim."
+      ],
+      "evidence_limits": [
+        "Current NEP/DPA rows are useful context, not rankable production baselines.",
+        "The available atoms/s numbers mix community engine wall time, prebuilt graph model-only, and ASE/autograd protocols."
+      ],
+      "id": "matched_nep_dpa_protocol",
+      "next_verification": "Run matched NEP/DPA1-0-layer training, E/F/max/relative energy metrics, dimer/rattle tests, memory, and throughput scaling.",
+      "question": "Can rTECE be placed on a fair Pareto curve against NEP/DPA1-0-layer with matched data, hardware scope, metrics, physical tests, and throughput taxonomy?",
+      "status": "protocol_mismatched",
+      "why_required": "The project target is not just internal improvement; it must show where rTECE sits relative to standard high-throughput potentials."
+    },
+    {
+      "evidence": [
+        "rTECE_review.md scores PBC/virial/long-time MD completeness and true distillation as early-stage.",
+        "Current Stage178 evidence is useful research evidence but not full MD validation."
+      ],
+      "evidence_limits": [
+        "There is a production training entrypoint and ASE-oriented path, but production reliability requires geometry, stress, and long-run tests."
+      ],
+      "id": "user_ready_production_model",
+      "next_verification": "Close PBC edge-vector semantics, virial/stress tests, calculator contract, package entrypoints, and a documented user workflow before release.",
+      "question": "Is the current rTECE implementation ready for normal users as a reliable potential with training, inference, ASE, PBC, virial, and full MD semantics?",
+      "status": "not_ready",
+      "why_required": "A deployable model family must not remain a demo or benchmark-only prototype."
+    }
+  ],
+  "schema_version": "rtece_stage179_scientific_validation.v1",
+  "source_documents": [
+    "TECE_design_space.md",
+    "rTECE_review.md",
+    "runs/oc20neb_tace_mace/rtece-stage178-representation-upgrade/stage178_benchmark_analysis.json",
+    "runs/oc20neb_tace_mace/rtece-stage177-unified-pareto-audit/stage177_pareto_audit.json"
+  ],
+  "stage": "stage179_scientific_validation_matrix",
+  "stage177_context": {
+    "caveats": [
+      "non_matching_throughput_protocols",
+      "rankable_now_requires_matching_data_metric_physics_and_hardware_scope",
+      "physical_triage_not_complete_for_all_rtece_rows"
+    ],
+    "deepmd_dpa_like_mixed_smoke": {
+      "atoms_per_second": 10916.839598964832,
+      "benchmark_status": "found",
+      "best_step": 20000,
+      "candidate": "deepmd_dpa_like_mixed_smoke",
+      "descriptor_dim": null,
+      "descriptor_label": "dpa1_zero_attention",
+      "dft_barrier_rmse_mev_atom": 39.47442013488647,
+      "dft_e_mae_mev_atom": 253.37610861097858,
+      "dft_e_max_mev_atom": 867.3128633549553,
+      "dft_e_rmse_mev_atom": 325.28127548401045,
+      "dft_f_mae_mev_a": 29.236857807539458,
+      "dft_f_max_mev_a": 4429.18120761457,
+      "dft_f_rmse_mev_a": 109.85922351272542,
+      "dft_relative_image_rmse_mev_atom": 17.008579423402576,
+      "evidence_gaps": [
+        "matched_rtece_throughput_protocol"
+      ],
+      "family": "deepmd",
+      "num_parameters": null,
+      "physics_status": "found",
+      "rankable_now": true,
+      "semantic_tier": "community_baseline",
+      "tece_retained_groups": [],
+      "throughput_status": "community_engine_wall_time",
+      "training_status": "completed"
+    },
+    "nep4_mixed_smoke": {
+      "atoms_per_second": 103226.50050880814,
+      "benchmark_status": "found",
+      "best_step": 20000,
+      "candidate": "nep4_mixed_smoke",
+      "descriptor_dim": null,
+      "descriptor_label": "nep4",
+      "dft_barrier_rmse_mev_atom": 19.343980765308487,
+      "dft_e_mae_mev_atom": 17.639373451434125,
+      "dft_e_max_mev_atom": 81.01769683544278,
+      "dft_e_rmse_mev_atom": 23.846193555229316,
+      "dft_f_mae_mev_a": 63.71831257029057,
+      "dft_f_max_mev_a": 2867.3529900000003,
+      "dft_f_rmse_mev_a": 143.0374014464665,
+      "dft_relative_image_rmse_mev_atom": 10.067896680954268,
+      "evidence_gaps": [
+        "matched_rtece_throughput_protocol"
+      ],
+      "family": "nep",
+      "num_parameters": null,
+      "physics_status": "found",
+      "rankable_now": true,
+      "semantic_tier": "community_baseline",
+      "tece_retained_groups": [],
+      "throughput_status": "community_engine_wall_time",
+      "training_status": "completed"
+    },
+    "stage176": {
+      "atoms_per_second": 3988401.6058523064,
+      "benchmark_status": "found",
+      "best_step": 512,
+      "best_valid_loss": 0.2791953384876251,
+      "candidate": "stage176_local_l0_rank3",
+      "descriptor_dim": 32,
+      "descriptor_label": "local_l0_lowrank_density",
+      "dft_barrier_rmse_mev_atom": 37.369244048310264,
+      "dft_e_mae_mev_atom": 239.08703104451124,
+      "dft_e_max_mev_atom": 665.0075135445852,
+      "dft_e_rmse_mev_atom": 294.9309189282125,
+      "dft_f_mae_mev_a": 55.69015758540269,
+      "dft_f_max_mev_a": 5033.161039128113,
+      "dft_f_rmse_mev_a": 141.99724362460125,
+      "dft_relative_image_rmse_mev_atom": 16.464980769734524,
+      "dimer_gate_pass": true,
+      "evidence_gaps": [
+        "memory_scaling"
+      ],
+      "family": "rtece",
+      "focus_rattle_final_rmsd_a": 0.25448854351133715,
+      "focus_rattle_max_fmax_ev_a": 1.51450069482781,
+      "num_parameters": 7007,
+      "physical_gate_pass": false,
+      "physical_score": 7.157421359473226,
+      "physics_status": "found",
+      "rankable_now": false,
+      "rattle_gate_pass": false,
+      "scaling": [
+        {
+          "atoms": 1600,
+          "atoms_per_second": 418067.2593456006,
+          "configs": 32,
+          "cuda_max_memory_allocated_mb": null,
+          "limit_configs": 32,
+          "seconds_per_pass": 0.0038271353812888266
+        },
+        {
+          "atoms": 5298,
+          "atoms_per_second": 1326867.3087139018,
+          "configs": 128,
+          "cuda_max_memory_allocated_mb": null,
+          "limit_configs": 128,
+          "seconds_per_pass": 0.003992863465100527
+        },
+        {
+          "atoms": 31831,
+          "atoms_per_second": 3496729.3482919973,
+          "configs": 512,
+          "cuda_max_memory_allocated_mb": null,
+          "limit_configs": 512,
+          "seconds_per_pass": 0.009103077999316155
+        },
+        {
+          "atoms": 59193,
+          "atoms_per_second": 4101418.6920768176,
+          "configs": 1024,
+          "cuda_max_memory_allocated_mb": null,
+          "limit_configs": 1024,
+          "seconds_per_pass": 0.014432323165237904
+        }
+      ],
+      "semantic_tier": "T3_trainable_local_l0_lowrank_density",
+      "teacher_e_rmse_mev_atom": 276.9366485966331,
+      "teacher_f_rmse_mev_a": 143.39806585545193,
+      "tece_retained_groups": [
+        "radial_density",
+        "trainable_local_l0_chemistry_front",
+        "early_scalarized_local_l0_density"
+      ],
+      "throughput_status": "atom_count_scaling_found_memory_missing",
+      "train_steps": 2000,
+      "training_status": "train_smoke_completed"
+    }
+  },
+  "stage178_best_current_endpoint": "stage178_l0_local_species",
+  "stage178_delta": {
+    "l0_atoms_per_second_limit1024": 1790966.233007393,
+    "l0_e_rmse_mev_atom": 116.11783028345582,
+    "l0_f_rmse_mev_a": 116.42831465176229,
+    "l0_rattle_rmsd_a": 0.23445453096154717,
+    "l0_variant": "stage178_l0_local_species",
+    "t3_atoms_per_second_limit1024": 782853.1851296676,
+    "t3_e_rmse_mev_atom": 165.54111322911254,
+    "t3_f_rmse_mev_a": 121.27740301780308,
+    "t3_rattle_rmsd_a": 0.2998399990222553,
+    "t3_variant": "stage178_t3_minimal_cavity_direct"
+  }
+}
