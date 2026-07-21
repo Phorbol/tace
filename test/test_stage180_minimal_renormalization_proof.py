@@ -180,3 +180,67 @@ def test_stage180_initializer_uses_training_limit_for_matching_e0s(tmp_path):
 
     assert '--limit-configs "${LIMIT_CONFIGS}"' in text
     assert '--limit-configs "${PROJECTION_LIMIT_CONFIGS}"' not in text
+
+
+
+def test_teacher_residual_cache_record_contains_units_hash_and_residuals():
+    import numpy as np
+    from ase import Atoms
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_teacher_residual_cache import (
+        make_teacher_residual_cache_record,
+    )
+
+    dft = Atoms("CN", positions=[[0.0, 0.0, 0.0], [1.2, 0.0, 0.0]], cell=[8.0, 8.0, 8.0], pbc=True)
+    teacher = dft.copy()
+    dft.info["energy"] = -10.0
+    teacher.info["energy"] = -9.5
+    dft.arrays["forces"] = np.array([[0.1, 0.0, 0.0], [-0.1, 0.0, 0.0]])
+    teacher.arrays["forces"] = np.array([[0.2, 0.0, 0.0], [-0.2, 0.0, 0.0]])
+
+    record = make_teacher_residual_cache_record(
+        dft,
+        teacher,
+        index=7,
+        teacher_model_hash="teacher-sha256:abc",
+        cutoff=5.0,
+        pbc_convention="ase_cell_edge_shifts",
+    )
+
+    assert record["schema_version"] == "rtece_teacher_residual_cache_record.v1"
+    assert record["index"] == 7
+    assert record["teacher_model_hash"] == "teacher-sha256:abc"
+    assert record["units"] == {"energy": "eV", "forces": "eV/A", "distance": "A"}
+    assert record["cutoff"] == 5.0
+    assert record["pbc_convention"] == "ase_cell_edge_shifts"
+    assert record["source_structure_hash"]
+    assert record["teacher_structure_hash"] == record["source_structure_hash"]
+    assert record["energy_residual_eV"] == 0.5
+    assert record["force_residual_eV_per_A"] == [[0.1, 0.0, 0.0], [-0.1, 0.0, 0.0]]
+
+
+def test_teacher_residual_cache_rejects_mismatched_structures():
+    import numpy as np
+    import pytest
+    from ase import Atoms
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_teacher_residual_cache import (
+        make_teacher_residual_cache_record,
+    )
+
+    dft = Atoms("CN", positions=[[0.0, 0.0, 0.0], [1.2, 0.0, 0.0]])
+    teacher = Atoms("CO", positions=[[0.0, 0.0, 0.0], [1.2, 0.0, 0.0]])
+    dft.info["energy"] = -10.0
+    teacher.info["energy"] = -9.5
+    dft.arrays["forces"] = np.zeros((2, 3))
+    teacher.arrays["forces"] = np.zeros((2, 3))
+
+    with pytest.raises(ValueError, match="structure hash mismatch"):
+        make_teacher_residual_cache_record(
+            dft,
+            teacher,
+            index=0,
+            teacher_model_hash="teacher-sha256:abc",
+            cutoff=5.0,
+            pbc_convention="ase_cell_edge_shifts",
+        )
