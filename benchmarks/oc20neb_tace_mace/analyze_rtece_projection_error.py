@@ -236,6 +236,154 @@ def energy_label_projection_metrics(
     return payload
 
 
+def energy_group_loocv_projection_metrics(
+    source: torch.Tensor,
+    target: torch.Tensor,
+    *,
+    group_labels: list[str] | tuple[str, ...],
+    group_key: str | None = None,
+    ridge: float = 1.0e-12,
+    sample_weights: torch.Tensor | None = None,
+    atom_counts: torch.Tensor | None = None,
+    baseline_features: torch.Tensor | None = None,
+) -> dict[str, Any]:
+    import torch
+
+    x = _as_float64_matrix(source, "source")
+    y = target.detach().to(dtype=torch.float64, device="cpu")
+    if y.ndim == 1:
+        y = y.unsqueeze(-1)
+    y = _as_float64_matrix(y, "target")
+    if y.shape[0] != x.shape[0]:
+        raise ValueError(f"target rows must match source rows: {y.shape[0]} vs {x.shape[0]}")
+    labels = [str(label) for label in group_labels]
+    if len(labels) != int(x.shape[0]):
+        raise ValueError(f"group_labels must contain {x.shape[0]} values, got {len(labels)}")
+    unique_groups = _unique_in_order(labels)
+    if len(unique_groups) < 2:
+        raise ValueError("group-loocv requires at least two groups")
+
+    if baseline_features is None:
+        fit_x = x
+        baseline_dim = 0
+    else:
+        baseline = _as_float64_matrix(baseline_features, "baseline_features")
+        if baseline.shape[0] != x.shape[0]:
+            raise ValueError(f"baseline_features must contain {x.shape[0]} rows, got {baseline.shape[0]}")
+        fit_x = torch.cat([x, baseline], dim=-1)
+        baseline_dim = int(baseline.shape[1])
+    all_weights = _as_sample_weights(sample_weights, int(x.shape[0])) if sample_weights is not None else None
+
+    residual_chunks: list[torch.Tensor] = []
+    eval_target_chunks: list[torch.Tensor] = []
+    eval_index_chunks: list[torch.Tensor] = []
+    residual_norm_chunks: list[torch.Tensor] = []
+    target_norm_chunks: list[torch.Tensor] = []
+    fold_payloads: list[dict[str, float | int | str | bool]] = []
+    weight_sum = 0.0
+    min_fit_rows: int | None = None
+    any_underdetermined = False
+    for group in unique_groups:
+        eval_rows = torch.tensor([idx for idx, label in enumerate(labels) if label == group], dtype=torch.long)
+        fit_rows = torch.tensor([idx for idx, label in enumerate(labels) if label != group], dtype=torch.long)
+        if eval_rows.numel() < 1 or fit_rows.numel() < 1:
+            raise ValueError(f"group {group!r} does not leave non-empty fit/eval rows")
+        fit_weights = all_weights[fit_rows] if all_weights is not None else None
+        coeff, _fit_residual, _fit_scale, fold_weight_sum = _ridge_projection_residual(
+            fit_x[fit_rows],
+            y[fit_rows],
+            ridge=ridge,
+            sample_weights=fit_weights,
+        )
+        residual = y[eval_rows] - fit_x[eval_rows] @ coeff
+        residual_chunks.append(residual)
+        eval_target_chunks.append(y[eval_rows])
+        eval_index_chunks.append(eval_rows)
+        weight_sum += fold_weight_sum
+        min_fit_rows = int(fit_rows.numel()) if min_fit_rows is None else min(min_fit_rows, int(fit_rows.numel()))
+        any_underdetermined = any_underdetermined or bool(fit_x.shape[1] >= fit_rows.numel())
+        if all_weights is None:
+            residual_for_norm = residual
+            target_for_norm = y[eval_rows]
+        else:
+            eval_scale = torch.sqrt(all_weights[eval_rows]).unsqueeze(-1)
+            residual_for_norm = residual * eval_scale
+            target_for_norm = y[eval_rows] * eval_scale
+        residual_norm_chunks.append(residual_for_norm)
+        target_norm_chunks.append(target_for_norm)
+        flat = residual.flatten()
+        fold_payloads.append(
+            {
+                "group": str(group),
+                "fit_num_samples": int(fit_rows.numel()),
+                "eval_num_samples": int(eval_rows.numel()),
+                "energy_rmse": float(torch.sqrt(torch.mean(flat.square())).item()),
+                "energy_mae": float(torch.mean(torch.abs(flat)).item()),
+                "energy_max_abs": float(torch.max(torch.abs(flat)).item()),
+                "energy_underdetermined": bool(fit_x.shape[1] >= fit_rows.numel()),
+            }
+        )
+
+    residual_all = torch.cat(residual_chunks, dim=0)
+    target_all = torch.cat(eval_target_chunks, dim=0)
+    eval_rows_all = torch.cat(eval_index_chunks, dim=0)
+    residual_for_norm_all = torch.cat(residual_norm_chunks, dim=0)
+    target_for_norm_all = torch.cat(target_norm_chunks, dim=0)
+    residual_norm = torch.linalg.vector_norm(residual_for_norm_all)
+    target_norm = torch.linalg.vector_norm(target_for_norm_all)
+    relative = residual_norm / target_norm.clamp_min(torch.finfo(y.dtype).tiny)
+    flat_residual = residual_all.flatten()
+    min_fit = int(min_fit_rows or 0)
+    payload: dict[str, Any] = {
+        "energy_split_mode": "group-loocv",
+        "energy_group_holdout_key": group_key,
+        "energy_group_count": int(len(unique_groups)),
+        "energy_group_holdout_groups": list(unique_groups),
+        "energy_group_folds": fold_payloads,
+        "energy_uses_group_as_feature": False,
+        "energy_num_samples": int(residual_all.shape[0]),
+        "energy_fit_num_samples": int(sum(int(fold["fit_num_samples"]) for fold in fold_payloads)),
+        "energy_eval_num_samples": int(residual_all.shape[0]),
+        "energy_min_fit_num_samples": min_fit,
+        "energy_source_dim": int(x.shape[1]),
+        "energy_baseline_dim": int(baseline_dim),
+        "energy_fit_dim": int(fit_x.shape[1]),
+        "energy_degrees_of_freedom": int(min_fit - fit_x.shape[1]),
+        "energy_underdetermined": bool(any_underdetermined),
+        "energy_target_dim": int(y.shape[1]),
+        "energy_residual_frobenius": float(residual_norm.item()),
+        "energy_target_frobenius": float(target_norm.item()),
+        "relative_energy_residual": float(relative.item()),
+        "energy_rmse": float(torch.sqrt(torch.mean(flat_residual.square())).item()),
+        "energy_mae": float(torch.mean(torch.abs(flat_residual)).item()),
+        "energy_bias": float(torch.mean(flat_residual).item()),
+        "energy_max_abs": float(torch.max(torch.abs(flat_residual)).item()),
+        "energy_ridge": float(ridge),
+        "energy_weighted": sample_weights is not None,
+        "energy_weight_sum": float(weight_sum),
+        "energy_per_atom_rmse": None,
+        "energy_per_atom_mae": None,
+        "energy_per_atom_bias": None,
+        "energy_per_atom_max_abs": None,
+    }
+    if atom_counts is not None:
+        counts = atom_counts.detach().to(dtype=torch.float64, device="cpu").flatten()
+        if counts.numel() != int(x.shape[0]):
+            raise ValueError(f"atom_counts must contain {x.shape[0]} values, got {counts.numel()}")
+        if bool((counts <= 0.0).any().item()):
+            raise ValueError("atom_counts must be positive")
+        per_atom = residual_all.flatten() / counts[eval_rows_all]
+        payload.update(
+            {
+                "energy_per_atom_rmse": float(torch.sqrt(torch.mean(per_atom.square())).item()),
+                "energy_per_atom_mae": float(torch.mean(torch.abs(per_atom)).item()),
+                "energy_per_atom_bias": float(torch.mean(per_atom).item()),
+                "energy_per_atom_max_abs": float(torch.max(torch.abs(per_atom)).item()),
+            }
+        )
+    return payload
+
+
 def force_label_projection_metrics(
     source: torch.Tensor,
     target: torch.Tensor,
@@ -723,6 +871,8 @@ def make_projection_diagnostic_rows(
     energy_baseline_features: torch.Tensor | None = None,
     energy_fit_indices: torch.Tensor | list[int] | tuple[int, ...] | None = None,
     energy_eval_indices: torch.Tensor | list[int] | tuple[int, ...] | None = None,
+    energy_group_labels: list[str] | tuple[str, ...] | None = None,
+    energy_group_key: str | None = None,
     force_targets: torch.Tensor | None = None,
     force_fit_indices: torch.Tensor | list[int] | tuple[int, ...] | None = None,
     force_eval_indices: torch.Tensor | list[int] | tuple[int, ...] | None = None,
@@ -770,18 +920,32 @@ def make_projection_diagnostic_rows(
                 candidate_graph_descriptors = candidate_graph_from_reference
             if candidate_graph_descriptors is None:
                 _candidate_descriptors, candidate_graph_descriptors = _descriptor_matrices(graphs, candidate_config)
-            row.update(
-                energy_label_projection_metrics(
-                    candidate_graph_descriptors,
-                    energy_targets,
-                    ridge=ridge,
-                    sample_weights=graph_sample_weights,
-                    atom_counts=atom_counts,
-                    baseline_features=energy_baseline_features,
-                    fit_indices=energy_fit_indices,
-                    eval_indices=energy_eval_indices,
+            if energy_group_labels is not None:
+                row.update(
+                    energy_group_loocv_projection_metrics(
+                        candidate_graph_descriptors,
+                        energy_targets,
+                        group_labels=energy_group_labels,
+                        group_key=energy_group_key,
+                        ridge=ridge,
+                        sample_weights=graph_sample_weights,
+                        atom_counts=atom_counts,
+                        baseline_features=energy_baseline_features,
+                    )
                 )
-            )
+            else:
+                row.update(
+                    energy_label_projection_metrics(
+                        candidate_graph_descriptors,
+                        energy_targets,
+                        ridge=ridge,
+                        sample_weights=graph_sample_weights,
+                        atom_counts=atom_counts,
+                        baseline_features=energy_baseline_features,
+                        fit_indices=energy_fit_indices,
+                        eval_indices=energy_eval_indices,
+                    )
+                )
         if force_targets is not None:
             candidate_force_descriptors = candidate_descriptors_from_reference(
                 reference_force_descriptors,
@@ -1329,6 +1493,27 @@ def load_stage165_case_offset_residual_targets(
     )
 
 
+def load_config_group_labels(
+    configs: Path,
+    *,
+    group_key: str,
+    limit_configs: int,
+) -> list[str]:
+    import ase.io
+
+    atoms_list = ase.io.read(str(configs), index=f":{int(limit_configs)}")
+    if not isinstance(atoms_list, list):
+        atoms_list = [atoms_list]
+    labels: list[str] = []
+    for config_idx, atoms in enumerate(atoms_list):
+        if group_key not in atoms.info:
+            raise KeyError(f"configuration {config_idx} missing energy group key {group_key!r}")
+        labels.append(str(atoms.info[group_key]))
+    if len(set(labels)) < 2:
+        raise ValueError("energy group-loocv split requires at least two groups")
+    return labels
+
+
 def _read_atoms_forces(atoms: Any, key: str, config_idx: int) -> Any:
     if key in atoms.arrays:
         return atoms.arrays[key]
@@ -1424,6 +1609,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stage165-variant", default="stage157_direct_b32_rel0p25_mixed2048")
     parser.add_argument("--residual-group-key", default="case_id")
     parser.add_argument("--energy-baseline", choices=("element_counts", "none"), default="element_counts")
+    parser.add_argument("--energy-split-mode", choices=("stride", "group-loocv"), default="stride")
+    parser.add_argument("--energy-group-key", default=None, help="Extxyz info key used only to form group-heldout energy projection folds.")
     parser.add_argument("--energy-eval-stride", type=int, default=0, help="Use every Nth config as held-out energy projection evaluation; 0 disables split.")
     parser.add_argument("--energy-eval-offset", type=int, default=0)
     parser.add_argument("--force-target-key", default=None, help="Optional extxyz force array key for force/Jacobian label projection ranking.")
@@ -1491,6 +1678,8 @@ def main() -> None:
         sample_weights = None
         weight_source = None
     residual_target_metadata = None
+    energy_group_labels = None
+    energy_group_key = None
     if args.residual_target_mode != "none":
         if args.energy_target_key:
             raise ValueError("--energy-target-key and --residual-target-mode are mutually exclusive")
@@ -1508,11 +1697,21 @@ def main() -> None:
         else:
             energy_baseline_features = None
             energy_baseline_atomic_numbers = []
-        energy_fit_indices, energy_eval_indices = deterministic_eval_split(
-            int(energy_targets.numel()),
-            eval_stride=int(args.energy_eval_stride),
-            eval_offset=int(args.energy_eval_offset),
-        )
+        if args.energy_split_mode == "group-loocv":
+            energy_group_key = str(args.energy_group_key or args.residual_group_key)
+            energy_group_labels = load_config_group_labels(
+                args.configs,
+                group_key=energy_group_key,
+                limit_configs=int(args.limit_configs),
+            )
+            energy_fit_indices = None
+            energy_eval_indices = None
+        else:
+            energy_fit_indices, energy_eval_indices = deterministic_eval_split(
+                int(energy_targets.numel()),
+                eval_stride=int(args.energy_eval_stride),
+                eval_offset=int(args.energy_eval_offset),
+            )
     elif args.energy_target_key:
         energy_targets, atom_counts = _load_energy_targets(
             args.configs,
@@ -1524,11 +1723,23 @@ def main() -> None:
         else:
             energy_baseline_features = None
             energy_baseline_atomic_numbers = []
-        energy_fit_indices, energy_eval_indices = deterministic_eval_split(
-            int(energy_targets.numel()),
-            eval_stride=int(args.energy_eval_stride),
-            eval_offset=int(args.energy_eval_offset),
-        )
+        if args.energy_split_mode == "group-loocv":
+            if args.energy_group_key is None:
+                raise ValueError("--energy-group-key is required when --energy-split-mode=group-loocv")
+            energy_group_key = str(args.energy_group_key)
+            energy_group_labels = load_config_group_labels(
+                args.configs,
+                group_key=energy_group_key,
+                limit_configs=int(args.limit_configs),
+            )
+            energy_fit_indices = None
+            energy_eval_indices = None
+        else:
+            energy_fit_indices, energy_eval_indices = deterministic_eval_split(
+                int(energy_targets.numel()),
+                eval_stride=int(args.energy_eval_stride),
+                eval_offset=int(args.energy_eval_offset),
+            )
     else:
         energy_targets = None
         atom_counts = None
@@ -1536,6 +1747,8 @@ def main() -> None:
         energy_baseline_atomic_numbers = []
         energy_fit_indices = None
         energy_eval_indices = None
+        energy_group_labels = None
+        energy_group_key = None
     force_descriptor_indices = None
     force_sampled_num_components = 0
     if args.force_target_key:
@@ -1601,6 +1814,8 @@ def main() -> None:
         energy_baseline_features=energy_baseline_features,
         energy_fit_indices=energy_fit_indices,
         energy_eval_indices=energy_eval_indices,
+        energy_group_labels=energy_group_labels,
+        energy_group_key=energy_group_key,
         force_targets=force_targets,
         force_fit_indices=force_fit_indices,
         force_eval_indices=force_eval_indices,
@@ -1651,11 +1866,23 @@ def main() -> None:
         "residual_target_mode": str(args.residual_target_mode),
         "residual_target_metadata": residual_target_metadata,
         "energy_target_num_configs": int(energy_targets.numel()) if energy_targets is not None else 0,
-        "energy_fit_num_configs": int(energy_fit_indices.numel()) if energy_fit_indices is not None else 0,
-        "energy_eval_num_configs": int(energy_eval_indices.numel()) if energy_eval_indices is not None else 0,
-        "energy_eval_stride": int(args.energy_eval_stride) if args.energy_target_key else 0,
-        "energy_eval_offset": int(args.energy_eval_offset) if args.energy_target_key else 0,
-        "energy_baseline": str(args.energy_baseline) if args.energy_target_key else None,
+        "energy_split_mode": str(args.energy_split_mode) if energy_targets is not None else None,
+        "energy_group_key": energy_group_key,
+        "energy_group_count": int(len(set(energy_group_labels))) if energy_group_labels is not None else 0,
+        "energy_uses_group_as_feature": False if energy_group_labels is not None else None,
+        "energy_fit_num_configs": (
+            int(energy_targets.numel())
+            if energy_targets is not None and energy_group_labels is not None
+            else int(energy_fit_indices.numel()) if energy_fit_indices is not None else 0
+        ),
+        "energy_eval_num_configs": (
+            int(energy_targets.numel())
+            if energy_targets is not None and energy_group_labels is not None
+            else int(energy_eval_indices.numel()) if energy_eval_indices is not None else 0
+        ),
+        "energy_eval_stride": int(args.energy_eval_stride) if energy_targets is not None and energy_group_labels is None else 0,
+        "energy_eval_offset": int(args.energy_eval_offset) if energy_targets is not None and energy_group_labels is None else 0,
+        "energy_baseline": str(args.energy_baseline) if energy_targets is not None else None,
         "energy_baseline_atomic_numbers": [int(value) for value in energy_baseline_atomic_numbers],
         "force_target_key": str(args.force_target_key) if args.force_target_key else None,
         "force_target_num_configs": int(len(graphs)) if force_targets is not None else 0,

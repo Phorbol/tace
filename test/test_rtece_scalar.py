@@ -2564,6 +2564,31 @@ def test_rtece_energy_label_projection_metrics_reports_holdout_error():
     assert metrics["energy_max_abs"] == pytest.approx(7.0)
 
 
+def test_rtece_energy_group_loocv_projection_metrics_reports_unseen_group_error():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import energy_group_loocv_projection_metrics
+
+    source = torch.ones((4, 1), dtype=torch.float64)
+    target = torch.tensor([0.0, 0.0, 10.0, 10.0], dtype=torch.float64)
+    group_labels = ["case-a", "case-a", "case-b", "case-b"]
+
+    metrics = energy_group_loocv_projection_metrics(
+        source,
+        target,
+        group_labels=group_labels,
+        ridge=0.0,
+    )
+
+    assert metrics["energy_split_mode"] == "group-loocv"
+    assert metrics["energy_group_count"] == 2
+    assert metrics["energy_group_holdout_key"] is None
+    assert metrics["energy_uses_group_as_feature"] is False
+    assert metrics["energy_num_samples"] == 4
+    assert metrics["energy_eval_num_samples"] == 4
+    assert metrics["energy_rmse"] == pytest.approx(10.0)
+    assert metrics["energy_mae"] == pytest.approx(10.0)
+    assert [fold["group"] for fold in metrics["energy_group_folds"]] == ["case-a", "case-b"]
+
+
 def test_rtece_sampled_force_descriptor_rows_match_full_jacobian():
     from benchmarks.oc20neb_tace_mace import analyze_rtece_projection_error as mod
 
@@ -2887,6 +2912,75 @@ def test_rtece_projection_cli_adds_energy_holdout_split_metadata(tmp_path):
     assert payload["energy_eval_num_configs"] == 2
     assert payload["rows"][0]["energy_fit_num_samples"] == 2
     assert payload["rows"][0]["energy_eval_num_samples"] == 2
+
+
+def test_rtece_projection_cli_supports_energy_group_loocv_split(tmp_path):
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    configs = tmp_path / "h2_energy_group_split.xyz"
+    output = tmp_path / "projection_energy_group_split.json"
+    atoms_list = []
+    for idx, (case_id, distance, energy) in enumerate([
+        ("case-a", 0.70, 0.0),
+        ("case-a", 0.80, 0.0),
+        ("case-b", 0.90, 10.0),
+        ("case-b", 1.00, 10.0),
+    ]):
+        atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [distance, 0.0, 0.0]])
+        atoms.info["teacher_energy"] = float(energy)
+        atoms.info["case_id"] = case_id
+        atoms.arrays["forces"] = np.zeros((2, 3), dtype=np.float64)
+        atoms_list.append(atoms)
+    ase.io.write(configs, atoms_list, format="extxyz")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/oc20neb_tace_mace/analyze_rtece_projection_error.py",
+            "--configs",
+            str(configs),
+            "--output-json",
+            str(output),
+            "--reference-path-ids",
+            "atomic.radial_density,edge.direct.radial",
+            "--auto-candidate-strategy",
+            "single_delete",
+            "--num-radial",
+            "3",
+            "--limit-configs",
+            "4",
+            "--neighborlist-backend",
+            "ase",
+            "--energy-target-key",
+            "teacher_energy",
+            "--energy-baseline",
+            "none",
+            "--energy-split-mode",
+            "group-loocv",
+            "--energy-group-key",
+            "case_id",
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=240,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["energy_split_mode"] == "group-loocv"
+    assert payload["energy_group_key"] == "case_id"
+    assert payload["energy_group_count"] == 2
+    assert payload["energy_uses_group_as_feature"] is False
+    assert payload["energy_fit_num_configs"] == 4
+    assert payload["energy_eval_num_configs"] == 4
+    assert payload["rows"][0]["energy_split_mode"] == "group-loocv"
+    assert payload["rows"][0]["energy_group_holdout_key"] == "case_id"
+    assert payload["rows"][0]["energy_uses_group_as_feature"] is False
 
 
 def test_rtece_projection_cli_adds_force_label_projection_metrics(tmp_path):
@@ -9055,6 +9149,47 @@ def test_stage171_residual_active_set_manifest_is_tece_aligned_and_sbatch_safe(t
     text = wrapper.read_text()
     assert "set -eo pipefail" in text
     assert "--residual-target-mode stage165-case-offset" in text
+    assert "--active-set-baseline-candidate t1_l0_species_radial" in text
+    assert "--active-set-require-energy-gain" in text
+    assert "--export" not in text
+    assert "--mem" not in text
+    assert "--cpus-per-task" not in text
+    assert "set -u" not in text
+
+
+def test_stage172_group_holdout_residual_active_set_manifest_is_tece_aligned_and_sbatch_safe(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage172_group_holdout_active_set import (
+        audit_stage172_manifest,
+        make_stage172_manifest,
+        materialize_stage172,
+    )
+
+    manifest = make_stage172_manifest(
+        output_root=tmp_path / "stage172",
+        stage165_json="stage165.json",
+        configs="valid.extxyz",
+        limit_configs=64,
+    )
+    audit = audit_stage172_manifest(manifest)
+
+    assert audit["contract_pass"] is True
+    assert manifest["schema_version"] == "rtece_stage172_group_holdout_active_set.v1"
+    assert manifest["stage"] == "stage172_group_holdout_active_set"
+    assert manifest["diagnostic_semantics"] == "case_group_heldout_rtece_path_projection_against_stage170_low_frequency_energy_residual"
+    assert manifest["energy_split_mode"] == "group-loocv"
+    assert manifest["group_key"] == "case_id"
+    assert manifest["uses_case_id_as_feature"] is False
+    assert any("group-heldout" in item or "group heldout" in item for item in manifest["review_basis"])
+    assert any("Stage171" in item for item in manifest["review_basis"])
+
+    materialized = materialize_stage172(manifest)
+    wrapper = Path(materialized["artifacts"]["wrapper"])
+    text = wrapper.read_text()
+    assert "--residual-target-mode stage165-case-offset" in text
+    assert "--energy-split-mode group-loocv" in text
+    assert "--energy-group-key case_id" in text
     assert "--active-set-baseline-candidate t1_l0_species_radial" in text
     assert "--active-set-require-energy-gain" in text
     assert "--export" not in text
