@@ -1,0 +1,20 @@
+{
+  "checks": {
+    "artifacts": true,
+    "feature_families": true,
+    "fit_intercept": true,
+    "has_l2_family": true,
+    "local_tece_semantics": true,
+    "no_case_id_feature": true,
+    "ridge_grid": true,
+    "schema_version": true,
+    "split_mode": true,
+    "stage": true,
+    "standardize_features": true,
+    "target_semantics": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "no_forbidden_sbatch_flags": true,
+  "schema_version": "rtece_stage175_manifest_audit.v1"
+}

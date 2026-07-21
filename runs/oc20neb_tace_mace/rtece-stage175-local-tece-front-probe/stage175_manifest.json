@@ -1,0 +1,76 @@
+{
+  "artifacts": {
+    "manifest": "runs/oc20neb_tace_mace/rtece-stage175-local-tece-front-probe/stage175_manifest.json",
+    "manifest_audit": "runs/oc20neb_tace_mace/rtece-stage175-local-tece-front-probe/stage175_manifest_audit.json",
+    "results_json": "runs/oc20neb_tace_mace/rtece-stage175-local-tece-front-probe/stage175_results_summary.json",
+    "results_md": "runs/oc20neb_tace_mace/rtece-stage175-local-tece-front-probe/stage175_results_summary.md",
+    "stage_plan": "runs/oc20neb_tace_mace/rtece-stage175-local-tece-front-probe/stage175_plan.md",
+    "wrapper": "runs/oc20neb_tace_mace/rtece-stage175-local-tece-front-probe/stage175_local_tece_front_probe.sbatch"
+  },
+  "comparison_question": "After Stage174 rejected global composition/tag/geometry proxies, can a deployable local TECE-style species-conditioned moment scalar front provide an unseen-case energy-offset coordinate worth promoting?",
+  "configs": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "diagnostic_semantics": "local_tece_front_probe_after_stage174_global_proxy_rejection",
+  "energy_split_mode": "group-loocv",
+  "feature_families": [
+    {
+      "chemistry_rank": 3,
+      "l_max": 0,
+      "name": "local_l0_rank3",
+      "tece_front_semantics": "local_species_conditioned_cartesian_moment_scalar_contractions"
+    },
+    {
+      "chemistry_rank": 3,
+      "l_max": 1,
+      "name": "local_l0_l1_rank3",
+      "tece_front_semantics": "local_species_conditioned_cartesian_moment_scalar_contractions"
+    },
+    {
+      "chemistry_rank": 3,
+      "l_max": 2,
+      "name": "local_l0_l1_l2_rank3",
+      "tece_front_semantics": "local_species_conditioned_cartesian_moment_scalar_contractions"
+    },
+    {
+      "chemistry_rank": 4,
+      "l_max": 2,
+      "name": "local_l0_l1_l2_rank4",
+      "tece_front_semantics": "local_species_conditioned_cartesian_moment_scalar_contractions"
+    }
+  ],
+  "group_key": "case_id",
+  "limit_configs": 512,
+  "non_deployable_feature_policy": "case_id_source_key_source_frame_group_id_image_id_are_grouping_or_provenance_metadata_only",
+  "projection_diagnostics": {
+    "fit_intercept": true,
+    "intercept_baseline": "group_loocv_train_mean_per_atom_residual_times_eval_atom_count",
+    "promotion_gate": "candidate_energy_per_atom_rmse_must_beat_intercept_baseline",
+    "ridge_grid": [
+      1e-08,
+      1e-06,
+      0.0001,
+      0.01,
+      1.0,
+      100.0
+    ],
+    "standardize_features": true
+  },
+  "review_basis": [
+    "Stage174: global deployable composition/tag/geometry proxies did not beat the group-heldout intercept baseline.",
+    "TECE_design_space.md: rTECE should use one local moment pass, sparse atomic invariants, and selected low-cost scalar paths.",
+    "rTECE_review.md: low-rank species chemistry basis is required to avoid element-collision failures without returning to one-hot large channels.",
+    "Stage170/173: the raw energy issue is a low-frequency deployable representation problem, not a per-case metadata correction."
+  ],
+  "schema_version": "rtece_stage175_local_tece_front_probe.v1",
+  "shell_edges": [
+    0.0,
+    1.6,
+    2.6,
+    3.6,
+    5.0
+  ],
+  "stage": "stage175_local_tece_front_probe",
+  "stage165_json": "runs/oc20neb_tace_mace/rtece-stage165-energy-baseline-triage/stage165_energy_baseline_triage.json",
+  "stage165_variant": "stage157_direct_b32_rel0p25_mixed2048",
+  "target_semantics": "stage165_case_offset_residual_mev_atom",
+  "uses_case_id_as_feature": false
+}

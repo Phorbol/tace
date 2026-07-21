@@ -11179,3 +11179,135 @@ def test_stage174_lowfreq_feature_probe_manifest_is_tece_aligned_and_sbatch_safe
     assert "set -u" not in wrapper
     assert "--energy-ridge-grid 1e-08,1e-06,0.0001,0.01,1,100" in wrapper
 
+
+def test_stage175_local_front_feature_is_rotation_invariant_and_metadata_free():
+    from ase import Atoms
+
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_local_front_features import local_tece_front_feature_row_from_atoms
+
+    atoms = Atoms(
+        "CNOH",
+        positions=[
+            [0.0, 0.0, 0.0],
+            [1.1, 0.2, 0.0],
+            [0.1, 1.2, 0.3],
+            [0.2, 0.1, 1.0],
+        ],
+        cell=[8.0, 8.0, 8.0],
+        pbc=True,
+    )
+    atoms.info["case_id"] = "forbidden_case"
+    atoms.info["source_key"] = "forbidden_source"
+    rotated = atoms.copy()
+    rot = rotation_z(0.37).numpy()
+    rotated.positions = atoms.positions @ rot.T
+    rotated.info.update(atoms.info)
+
+    row, metadata = local_tece_front_feature_row_from_atoms(
+        atoms,
+        shell_edges=(0.0, 1.6, 2.8, 4.2),
+        chemistry_rank=3,
+        l_max=2,
+        center_condition=True,
+    )
+    rotated_row, rotated_metadata = local_tece_front_feature_row_from_atoms(
+        rotated,
+        shell_edges=(0.0, 1.6, 2.8, 4.2),
+        chemistry_rank=3,
+        l_max=2,
+        center_condition=True,
+    )
+
+    assert metadata["uses_forbidden_metadata_as_feature"] is False
+    assert set(metadata["rejected_metadata_keys"]) == {"case_id", "source_key"}
+    assert rotated_metadata["uses_forbidden_metadata_as_feature"] is False
+    assert any(name.startswith("local_l1_norm2_shell0_centerb0_neighb0") for name in row)
+    assert any(name.startswith("local_l2_frob2_shell0_centerb0_neighb0") for name in row)
+    assert not any("case_id" in name or "source_key" in name for name in row)
+    assert row.keys() == rotated_row.keys()
+    for key in row:
+        assert row[key] == pytest.approx(rotated_row[key], abs=1.0e-10, rel=1.0e-10)
+
+
+def test_stage175_local_front_probe_can_beat_intercept_on_shell_fixture():
+    from ase import Atoms
+
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_local_front_features import (
+        evaluate_local_front_feature_family,
+        local_tece_front_feature_matrix,
+    )
+
+    atoms_list = []
+    targets = []
+    atom_counts = []
+    group_labels = []
+    distances = [1.0, 1.2, 1.4, 1.55]
+    for group_idx, distance in enumerate(distances):
+        for copy_idx in range(2):
+            atoms = Atoms(
+                "CC",
+                positions=[[0.0, 0.0, 0.0], [distance, 0.0, 0.0]],
+                cell=[8.0, 8.0, 8.0],
+                pbc=True,
+            )
+            atoms.info["case_id"] = f"group_{group_idx}"
+            atoms.info["source_frame"] = copy_idx
+            atoms_list.append(atoms)
+            group_labels.append(f"group_{group_idx}")
+            atom_counts.append(float(len(atoms)))
+            targets.append((2.0 - distance) * 100.0 * float(len(atoms)))
+
+    features, feature_names, metadata = local_tece_front_feature_matrix(
+        atoms_list,
+        feature_family="local_l0_l1_l2_rank3",
+        shell_edges=(0.0, 1.1, 1.35, 1.7),
+    )
+    metrics = evaluate_local_front_feature_family(
+        features,
+        torch.tensor(targets, dtype=torch.float64),
+        atom_counts=torch.tensor(atom_counts, dtype=torch.float64),
+        group_labels=group_labels,
+        group_key="case_id",
+        feature_family="local_l0_l1_l2_rank3",
+        feature_names=feature_names,
+        feature_metadata=metadata,
+    )
+
+    assert metadata["tece_front_semantics"] == "local_species_conditioned_cartesian_moment_scalar_contractions"
+    assert metrics["energy_beats_intercept_baseline"] is True
+    assert metrics["energy_per_atom_rmse"] < metrics["energy_intercept_baseline_per_atom_rmse"]
+
+
+def test_stage175_local_tece_front_manifest_is_tece_aligned_and_sbatch_safe(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage175_local_tece_front_probe import (
+        audit_stage175_manifest,
+        make_stage175_manifest,
+        materialize_stage175,
+    )
+
+    manifest = make_stage175_manifest(
+        output_root=tmp_path / "stage175",
+        configs="/tmp/fake_valid.extxyz",
+        stage165_json="/tmp/stage165.json",
+        limit_configs=32,
+    )
+    audit = audit_stage175_manifest(manifest)
+
+    assert audit["contract_pass"] is True
+    assert manifest["schema_version"] == "rtece_stage175_local_tece_front_probe.v1"
+    assert manifest["stage"] == "stage175_local_tece_front_probe"
+    assert manifest["target_semantics"] == "stage165_case_offset_residual_mev_atom"
+    assert manifest["uses_case_id_as_feature"] is False
+    assert manifest["projection_diagnostics"]["ridge_grid"] == [1.0e-8, 1.0e-6, 1.0e-4, 1.0e-2, 1.0, 100.0]
+    assert "Stage174" in "\n".join(manifest["review_basis"])
+    assert any(family["tece_front_semantics"].startswith("local_species_conditioned") for family in manifest["feature_families"])
+
+    materialized = materialize_stage175(manifest)
+    wrapper = (tmp_path / "stage175" / "stage175_local_tece_front_probe.sbatch").read_text(encoding="utf-8")
+    assert materialized["stage"] == "stage175_local_tece_front_probe"
+    assert "--export" not in wrapper
+    assert "--mem" not in wrapper
+    assert "--cpus-per-task" not in wrapper
+    assert "set -u" not in wrapper
+    assert "--energy-ridge-grid 1e-08,1e-06,0.0001,0.01,1,100" in wrapper
+
