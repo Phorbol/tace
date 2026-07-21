@@ -8627,6 +8627,73 @@ def test_rtece_stage164_force_protected_uv_manifest_materializes_single_uv_row(t
 
 
 
+def test_stage164_results_summary_reports_pending_and_metric_deltas(tmp_path):
+    import json
+
+    from benchmarks.oc20neb_tace_mace.summarize_rtece_stage164_results import (
+        render_stage164_results_markdown,
+        summarize_stage164_results,
+    )
+
+    baseline = tmp_path / "baseline_dft.json"
+    baseline.write_text(json.dumps({
+        "rmse_e_mev_atom": 52.0,
+        "mae_e_mev_atom": 35.0,
+        "max_abs_e_mev_atom": 205.0,
+        "group_mean_offset_rmse_mev_atom": 4.8,
+        "first_image_anchor_rmse_mev_atom": 11.4,
+        "relative_image_rmse_mev_atom": 7.1,
+        "barrier_rmse_mev_atom": 11.4,
+        "rmse_f_mev_a": 94.0,
+        "mae_f_mev_a": 42.0,
+        "max_abs_f_mev_a": 2093.0,
+        "atoms_per_second": 500000.0,
+    }))
+    run_dir = tmp_path / "run"
+    variant = "stage164_uv_force_gate_rel0p25_b32"
+    manifest = {
+        "stage": "stage164_force_protected_uv_training",
+        "rows": [{"variant": variant}],
+        "artifacts": {"run_root": str(run_dir)},
+        "active_set_gate": {"max_force_regression_fraction": 0.10},
+    }
+
+    pending = summarize_stage164_results(manifest, baseline_dft_benchmark=baseline)
+    assert pending["rows"][0]["artifact_status"] == "pending"
+    assert pending["rows"][0]["dft_benchmark_status"] == "missing"
+    assert pending["rows"][0]["baseline_dft_f_rmse_mev_a"] == pytest.approx(94.0)
+
+    out_dir = run_dir / variant
+    out_dir.mkdir(parents=True)
+    (out_dir / f"{variant}_dft_benchmark.json").write_text(json.dumps({
+        "rmse_e_mev_atom": 40.0,
+        "mae_e_mev_atom": 28.0,
+        "max_abs_e_mev_atom": 150.0,
+        "group_mean_offset_rmse_mev_atom": 5.5,
+        "first_image_anchor_rmse_mev_atom": 10.0,
+        "relative_image_rmse_mev_atom": 6.5,
+        "barrier_rmse_mev_atom": 10.5,
+        "rmse_f_mev_a": 100.0,
+        "mae_f_mev_a": 45.0,
+        "max_abs_f_mev_a": 2200.0,
+        "atoms_per_second": 470000.0,
+    }))
+
+    summary = summarize_stage164_results(manifest, baseline_dft_benchmark=baseline)
+    row = summary["rows"][0]
+    assert row["artifact_status"] == "complete"
+    assert row["dft_e_rmse_delta_mev_atom"] == pytest.approx(-12.0)
+    assert row["dft_f_rmse_delta_mev_a"] == pytest.approx(6.0)
+    assert row["force_rmse_regression_fraction"] == pytest.approx(6.0 / 94.0)
+    assert row["force_gate_passed"] is True
+    assert row["energy_rmse_improved"] is True
+    markdown = render_stage164_results_markdown(summary)
+    assert "force gate" in markdown
+    assert "stage164_uv_force_gate_rel0p25_b32" in markdown
+    assert "complete" in markdown
+
+
+
 def test_stage145_summary_keeps_rmse_first_and_missing_outputs_explicit(tmp_path):
     import json
 
