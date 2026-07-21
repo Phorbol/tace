@@ -28,6 +28,7 @@ DEFAULT_OUTPUT_ROOT = Path("runs/oc20neb_tace_mace/rtece-stage185-rmd17-represen
 DEFAULT_RMD17_ROOT = Path("datasets/rMD17")
 DEFAULT_PYTHON = Path("/home/gengjianrui/bin/.venvs/tace-mace-cu126/bin/python")
 RMD17_ARCHIVE_URL = "https://figshare.com/ndownloader/articles/12672038/versions/4"
+RMD17_ETHANOL_NPZ_URL = "https://ndownloader.figshare.com/files/62265733"
 DEFAULT_MOLECULE = "ethanol"
 RMD17_SPLITS = ("train", "valid", "test")
 
@@ -171,6 +172,10 @@ def make_stage185_manifest(
                 "figshare_article": "12672038",
                 "version": 4,
                 "archive_url": RMD17_ARCHIVE_URL,
+                "molecule_npz_url": RMD17_ETHANOL_NPZ_URL if str(molecule) == DEFAULT_MOLECULE else None,
+                "molecule_file_id": 62265733 if str(molecule) == DEFAULT_MOLECULE else None,
+                "molecule_file_size_bytes": 67201791 if str(molecule) == DEFAULT_MOLECULE else None,
+                "molecule_file_md5": "eb837fb8deb27d4e0d52f71a03aff776" if str(molecule) == DEFAULT_MOLECULE else None,
                 "source_npz": str(rmd17 / f"rmd17_{molecule}.npz"),
             },
             "source_units": {"energy": "kcal/mol", "forces": "kcal/mol/A", "distance": "A"},
@@ -276,21 +281,18 @@ def _write_prep_wrapper(payload: dict[str, Any]) -> str:
     rmd17_root = dataset["root"]
     molecule = dataset["molecule"]
     source_npz = dataset["source"]["source_npz"]
-    archive = str(Path(rmd17_root) / "rMD17_v4.zip")
+    npz_url = dataset["source"].get("molecule_npz_url") or dataset["source"]["archive_url"]
     lines = _header("rtece-st185-rmd17-prep", time_limit="03:55:00")
     lines.extend([
         f"RMD17_ROOT={shlex.quote(rmd17_root)}",
-        f"RMD17_ARCHIVE_URL={shlex.quote(dataset['source']['archive_url'])}",
-        f"RMD17_ARCHIVE={shlex.quote(archive)}",
-        "RMD17_ARCHIVE_TMP=${RMD17_ARCHIVE}.tmp",
+        f"RMD17_NPZ_URL={shlex.quote(str(npz_url))}",
         f"RMD17_NPZ={shlex.quote(source_npz)}",
         "mkdir -p ${RMD17_ROOT} ${RMD17_ROOT}/converted_extxyz",
         "if [ ! -f ${RMD17_NPZ} ]; then",
-        "  if [ ! -s ${RMD17_ARCHIVE} ]; then",
-        "    curl -fL --retry 3 --noproxy '*' ${RMD17_ARCHIVE_URL} -o ${RMD17_ARCHIVE_TMP}",
-        "    mv ${RMD17_ARCHIVE_TMP} ${RMD17_ARCHIVE}",
-        "  fi",
-        f"  unzip -j -o ${{RMD17_ARCHIVE}} rmd17_{shlex.quote(molecule)}.npz -d ${{RMD17_ROOT}}",
+        "  echo Missing local rMD17 source npz: ${RMD17_NPZ} >&2",
+        "  echo Run this on a login node before submitting this wrapper. >&2",
+        "  echo Download URL: ${RMD17_NPZ_URL} >&2",
+        "  exit 12",
         "fi",
         "PYTHONPATH=${TACE_ROOT}:${PYTHONPATH:-} ${TACE_PYTHON} benchmarks/oc20neb_tace_mace/prepare_stage181_conventional_datasets.py rmd17-npz-to-splits "
         f"--source-npz {shlex.quote(source_npz)} --output-dir {shlex.quote(str(Path(rmd17_root) / 'converted_extxyz'))} "
@@ -422,7 +424,12 @@ def audit_stage185_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         "nested_paths": nested,
         "fixed_head": all((row.get("student_config") or {}).get("hidden_channels") == "64,64" for row in rows),
         "no_forbidden_sbatch_tokens": not any(token in wrapper_text for token in FORBIDDEN_SBATCH_TOKENS),
-        "prep_command": "rmd17-npz-to-splits" in wrapper_text and RMD17_ARCHIVE_URL in wrapper_text,
+        "prep_command": (
+            "rmd17-npz-to-splits" in wrapper_text
+            and "Missing local rMD17 source npz" in wrapper_text
+            and RMD17_ETHANOL_NPZ_URL in wrapper_text
+            and "curl " not in wrapper_text
+        ),
         "train_and_benchmark": "tace.scripts.rtece_train_scalar" in wrapper_text and "benchmark_rtece_scalar.py" in wrapper_text,
         "metric_contract": "rmse_f_mev_a" == (payload.get("comparison_contract") or {}).get("primary_ranking_metric"),
     }

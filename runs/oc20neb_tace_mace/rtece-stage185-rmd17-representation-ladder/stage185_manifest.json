@@ -49,6 +49,10 @@
     "source": {
       "archive_url": "https://figshare.com/ndownloader/articles/12672038/versions/4",
       "figshare_article": "12672038",
+      "molecule_file_id": 62265733,
+      "molecule_file_md5": "eb837fb8deb27d4e0d52f71a03aff776",
+      "molecule_file_size_bytes": 67201791,
+      "molecule_npz_url": "https://ndownloader.figshare.com/files/62265733",
       "source_npz": "datasets/rMD17/rmd17_ethanol.npz",
       "version": 4
     },

@@ -642,7 +642,8 @@ def test_stage185_rmd17_wrappers_are_sai_safe_and_include_download_convert_train
 
     for forbidden in FORBIDDEN_SBATCH_TOKENS:
         assert forbidden not in wrapper_text
-    assert "https://figshare.com/ndownloader/articles/12672038/versions/4" in wrapper_text
+    assert "Missing local rMD17 source npz" in wrapper_text
+    assert "https://ndownloader.figshare.com/files/62265733" in json.dumps(payload)
     assert "rmd17-npz-to-splits" in wrapper_text
     assert "converted_extxyz/rmd17_ethanol_train.extxyz" in wrapper_text
     assert "converted_extxyz/rmd17_ethanol_valid.extxyz" in wrapper_text
@@ -696,7 +697,7 @@ def test_stage185_prep_wrapper_uses_sai_accepted_short_walltime(tmp_path):
     assert "#SBATCH --time=05:55:00" not in prep_text
 
 
-def test_stage185_prep_wrapper_curl_bypasses_inherited_localhost_proxy(tmp_path):
+def test_stage185_prep_wrapper_is_compute_node_offline_and_points_to_login_download(tmp_path):
     from pathlib import Path
     from benchmarks.oc20neb_tace_mace.make_rtece_stage185_rmd17_representation_ladder import (
         make_stage185_manifest,
@@ -707,7 +708,8 @@ def test_stage185_prep_wrapper_curl_bypasses_inherited_localhost_proxy(tmp_path)
     result = materialize_stage185(payload)
     prep_text = Path(result["prep_wrapper"]).read_text(encoding="utf-8")
 
-    assert "curl -fL --retry 3 --noproxy '*'" in prep_text
-    assert "RMD17_ARCHIVE_TMP=" in prep_text
-    assert "[ ! -s ${RMD17_ARCHIVE} ]" in prep_text
+    assert "curl " not in prep_text
+    assert "Missing local rMD17 source npz" in prep_text
+    assert "https://ndownloader.figshare.com/files/62265733" in prep_text
+    assert "Run this on a login node" in prep_text
 

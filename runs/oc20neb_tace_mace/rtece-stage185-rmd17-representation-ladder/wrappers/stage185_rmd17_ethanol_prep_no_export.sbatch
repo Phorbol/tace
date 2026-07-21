@@ -19,16 +19,13 @@ cd ${TACE_ROOT}
 ${TACE_PYTHON} -V
 
 RMD17_ROOT=datasets/rMD17
-RMD17_ARCHIVE_URL=https://figshare.com/ndownloader/articles/12672038/versions/4
-RMD17_ARCHIVE=datasets/rMD17/rMD17_v4.zip
-RMD17_ARCHIVE_TMP=${RMD17_ARCHIVE}.tmp
+RMD17_NPZ_URL=https://ndownloader.figshare.com/files/62265733
 RMD17_NPZ=datasets/rMD17/rmd17_ethanol.npz
 mkdir -p ${RMD17_ROOT} ${RMD17_ROOT}/converted_extxyz
 if [ ! -f ${RMD17_NPZ} ]; then
-  if [ ! -s ${RMD17_ARCHIVE} ]; then
-    curl -fL --retry 3 --noproxy '*' ${RMD17_ARCHIVE_URL} -o ${RMD17_ARCHIVE_TMP}
-    mv ${RMD17_ARCHIVE_TMP} ${RMD17_ARCHIVE}
-  fi
-  unzip -j -o ${RMD17_ARCHIVE} rmd17_ethanol.npz -d ${RMD17_ROOT}
+  echo Missing local rMD17 source npz: ${RMD17_NPZ} >&2
+  echo Run this on a login node before submitting this wrapper. >&2
+  echo Download URL: ${RMD17_NPZ_URL} >&2
+  exit 12
 fi
 PYTHONPATH=${TACE_ROOT}:${PYTHONPATH:-} ${TACE_PYTHON} benchmarks/oc20neb_tace_mace/prepare_stage181_conventional_datasets.py rmd17-npz-to-splits --source-npz datasets/rMD17/rmd17_ethanol.npz --output-dir datasets/rMD17/converted_extxyz --molecule ethanol --train-count 1000 --valid-count 1000 --test-count 1000 --summary-json runs/oc20neb_tace_mace/rtece-stage185-rmd17-representation-ladder/diagnostics/rmd17_split_conversion_summary.json
