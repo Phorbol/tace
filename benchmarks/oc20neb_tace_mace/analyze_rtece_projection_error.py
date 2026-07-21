@@ -1812,6 +1812,7 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--configs", type=Path, required=True)
     parser.add_argument("--output-json", type=Path, required=True)
+    parser.add_argument("--operator-manifest", type=Path, default=None)
     parser.add_argument("--reference-path-ids", type=_parse_path_ids, required=True)
     parser.add_argument("--candidate", action="append", type=_parse_candidate, default=[])
     parser.add_argument(
@@ -1867,6 +1868,33 @@ def parse_args() -> argparse.Namespace:
 def main() -> None:
     args = parse_args()
 
+    operator_manifest = None
+    operator_binding = None
+    if args.operator_manifest is not None:
+        from tace.models.rtece_protocol import (
+            load_operator_manifest,
+            validate_projection_operator_binding,
+        )
+
+        operator_manifest = load_operator_manifest(args.operator_manifest)
+        operator_binding = {
+            "operator_manifest_schema": operator_manifest.schema_version,
+            "operator_manifest_hash": operator_manifest.operator_manifest_hash,
+            "operator_path_ids": list(operator_manifest.operator_path_ids),
+        }
+        validate_projection_operator_binding(
+            {
+                **operator_binding,
+                "reference_path_ids": list(args.reference_path_ids),
+            },
+            operator_manifest,
+        )
+        if str(args.default_dtype) != operator_manifest.feature_dtype:
+            raise ValueError(
+                "projection feature dtype does not match operator manifest: "
+                f"{args.default_dtype} != {operator_manifest.feature_dtype}"
+            )
+
     import torch
 
     dtype = torch.float64 if args.default_dtype == "float64" else torch.float32
@@ -1882,6 +1910,15 @@ def main() -> None:
         if args.candidate_atomic_cross_radial_sketch_channels is not None
         else int(args.atomic_cross_radial_sketch_channels)
     )
+    if (
+        operator_manifest is not None
+        and candidate_cross_radial_sketch_channels
+        != reference_cross_radial_sketch_channels
+    ):
+        raise ValueError(
+            "candidate and reference cross-radial ranks must match when an "
+            "operator manifest is bound"
+        )
     reference_config = build_projection_config(
         "rtece_projection_reference",
         args.reference_path_ids,
@@ -1892,6 +1929,20 @@ def main() -> None:
         local_l0_chemistry_rank=int(args.local_l0_chemistry_rank),
         atomic_cross_radial_sketch_channels=reference_cross_radial_sketch_channels,
     )
+    if operator_manifest is not None:
+        from tace.models.rtece_scalar import rtece_path_manifest
+
+        reference_legacy_manifest = rtece_path_manifest(reference_config)
+        if (
+            reference_legacy_manifest["schema_version"]
+            != operator_manifest.legacy_path_manifest_schema
+            or reference_legacy_manifest["manifest_hash"]
+            != operator_manifest.legacy_path_manifest_hash
+        ):
+            raise ValueError(
+                "projection config does not match the operator manifest legacy "
+                "path manifest"
+            )
     graphs = _load_graphs(
         args.configs,
         cutoff=float(args.cutoff),
@@ -2030,6 +2081,17 @@ def main() -> None:
         strategies=tuple(args.auto_candidate_strategy),
     ) if args.auto_candidate_strategy else []
     candidate_specs.extend(auto_candidate_specs)
+    if operator_manifest is not None:
+        validate_projection_operator_binding(
+            {
+                **operator_binding,
+                "rows": [
+                    {"path_ids": list(candidate_path_ids)}
+                    for _, candidate_path_ids in candidate_specs
+                ],
+            },
+            operator_manifest,
+        )
     candidate_configs = []
     for candidate_name, candidate_path_ids in candidate_specs:
         candidate_config = build_projection_config(
@@ -2093,6 +2155,9 @@ def main() -> None:
             require_energy_gain=bool(args.active_set_require_energy_gain),
             require_beat_intercept=bool(args.active_set_require_beat_intercept),
         )
+    if operator_binding is not None:
+        for row in active_set_rows:
+            row.update(operator_binding)
     payload = {
         "schema_version": "rtece_projection_diagnostic.v1",
         "configs": str(args.configs),
@@ -2156,6 +2221,9 @@ def main() -> None:
         "active_set_rows": active_set_rows,
         "rows": ranked_rows,
     }
+    if operator_binding is not None:
+        payload.update(operator_binding)
+        validate_projection_operator_binding(payload, operator_manifest)
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
     args.output_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     print(args.output_json)

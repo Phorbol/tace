@@ -3369,6 +3369,7 @@ def test_rtece_projection_cli_emits_active_set_candidate_rows(tmp_path):
         "gain_mode": "absolute",
         "max_force_regression_fraction": None,
         "require_energy_gain": False,
+        "require_beat_intercept": False,
     }
     assert [row["candidate"] for row in payload["active_set_rows"]] == ["full_reference"]
     active_row = payload["active_set_rows"][0]
