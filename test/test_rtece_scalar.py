@@ -8694,6 +8694,51 @@ def test_stage164_results_summary_reports_pending_and_metric_deltas(tmp_path):
 
 
 
+def test_stage165_energy_baseline_triage_summarizes_case_offsets(tmp_path):
+    import json
+
+    from benchmarks.oc20neb_tace_mace.summarize_rtece_stage165_energy_baseline_triage import (
+        render_stage165_energy_baseline_markdown,
+        summarize_stage165_energy_baseline_triage,
+    )
+
+    first = tmp_path / "rel0_dft.json"
+    first.write_text(json.dumps({
+        "variant": "rel0",
+        "rmse_e_mev_atom": 50.0,
+        "group_mean_offset_rmse_mev_atom": 10.0,
+        "group_mean_offsets_eV_per_atom": {
+            "dissociation_id_1_neb1.0": 0.020,
+            "dissociation_id_2_neb1.0": -0.010,
+            "adsorption_id_3_neb1.0": 0.005,
+        },
+    }))
+    second = tmp_path / "rel025_dft.json"
+    second.write_text(json.dumps({
+        "variant": "rel0p25",
+        "rmse_e_mev_atom": 40.0,
+        "group_mean_offset_rmse_mev_atom": 8.0,
+        "group_mean_offsets_eV_per_atom": {
+            "dissociation_id_1_neb1.0": 0.016,
+            "adsorption_id_3_neb1.0": -0.004,
+        },
+    }))
+
+    summary = summarize_stage165_energy_baseline_triage([first, second], top_k=2)
+    assert summary["schema_version"] == "rtece_stage165_energy_baseline_triage.v1"
+    assert summary["rows"][0]["case_offset_explained_raw_rmse_fraction"] == pytest.approx(0.96)
+    assert summary["rows"][0]["max_case_offset_abs_mev_atom"] == pytest.approx(20.0)
+    assert summary["rows"][0]["top_case_offsets"][0]["case_id"] == "dissociation_id_1_neb1.0"
+    assert summary["rows"][0]["family_offset_summary"][0]["family"] == "dissociation"
+    assert summary["rows"][1]["case_offset_explained_raw_rmse_fraction"] == pytest.approx(0.96)
+
+    markdown = render_stage165_energy_baseline_markdown(summary)
+    assert "Stage165 Energy Baseline Triage" in markdown
+    assert "not a deployable correction" in markdown
+    assert "dissociation_id_1_neb1.0" in markdown
+
+
+
 def test_stage145_summary_keeps_rmse_first_and_missing_outputs_explicit(tmp_path):
     import json
 
