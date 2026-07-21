@@ -1,0 +1,177 @@
+{
+  "artifacts": {
+    "benchmark_wrapper": "runs/oc20neb_tace_mace/rtece-stage178-representation-upgrade/wrappers/stage178_benchmark_ladder_no_export.sbatch",
+    "diagnostics_root": "runs/oc20neb_tace_mace/rtece-stage178-representation-upgrade/diagnostics",
+    "manifest": "runs/oc20neb_tace_mace/rtece-stage178-representation-upgrade/stage178_manifest.json",
+    "manifest_audit": "runs/oc20neb_tace_mace/rtece-stage178-representation-upgrade/stage178_manifest_audit.json",
+    "physical_wrapper": "runs/oc20neb_tace_mace/rtece-stage178-representation-upgrade/wrappers/stage178_physical_ladder_no_export.sbatch",
+    "results_root": "runs/oc20neb_tace_mace/rtece-stage178-representation-upgrade/results",
+    "stage_plan": "runs/oc20neb_tace_mace/rtece-stage178-representation-upgrade/stage178_plan.md",
+    "train_wrapper": "runs/oc20neb_tace_mace/rtece-stage178-representation-upgrade/wrappers/stage178_train_ladder_no_export.sbatch"
+  },
+  "benchmark_protocol": {
+    "community_baseline_alignment": "compare_only_after_matching_data_hardware_physics_protocol",
+    "memory_required": true,
+    "physical_tests": [
+      "dimer_scan",
+      "rattle_relax",
+      "physical_pareto_summary"
+    ],
+    "primary_error_metric": "dft_f_rmse_mev_a",
+    "required_error_metrics": [
+      "dft_e_mae_mev_atom",
+      "dft_e_rmse_mev_atom",
+      "dft_e_max_mev_atom",
+      "dft_f_mae_mev_a",
+      "dft_f_rmse_mev_a",
+      "dft_f_max_mev_a"
+    ],
+    "throughput_tests": [
+      "valid_limit64",
+      "scaling_limit32",
+      "scaling_limit128",
+      "scaling_limit512",
+      "scaling_limit1024"
+    ]
+  },
+  "candidates": [
+    {
+      "atomic_cross_radial_projection": "fixed_shell_mean",
+      "atomic_cross_radial_sketch_channels": 0,
+      "capacity_allocation": "trainable_species_and_local_l0_front_before_head",
+      "cost_proxy": {
+        "atomic_cross_radial_sketch_channels": 0,
+        "atomic_paths": 3,
+        "edge_paths": 0,
+        "local_l0_chemistry_rank": 4,
+        "moment_l_max": 0,
+        "num_radial": 10,
+        "scalar_paths": 3,
+        "species_basis_channels": 16
+      },
+      "hidden_channels": "64,64",
+      "local_l0_chemistry_rank": 4,
+      "marginal_paths": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.local_l0_lowrank_density"
+      ],
+      "moment_l_max": 0,
+      "name": "stage178_l0_local_species",
+      "num_radial": 10,
+      "rationale": "Fast Stage176-like endpoint, but removes fixed chemistry collisions with a learnable low-rank species basis and a rank-4 local L0 front.",
+      "representation_step": "l0_local_lowrank_species_front",
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.local_l0_lowrank_density"
+      ],
+      "species_basis_channels": 16,
+      "species_basis_mode": "learnable_embedding",
+      "tece_tier": "T1_scalar_endpoint_with_trainable_local_chemistry"
+    },
+    {
+      "atomic_cross_radial_projection": "learnable",
+      "atomic_cross_radial_sketch_channels": 3,
+      "capacity_allocation": "learnable_radial_projection_and_sparse_l1_power_spectrum",
+      "cost_proxy": {
+        "atomic_cross_radial_sketch_channels": 3,
+        "atomic_paths": 5,
+        "edge_paths": 0,
+        "local_l0_chemistry_rank": 4,
+        "moment_l_max": 1,
+        "num_radial": 10,
+        "scalar_paths": 5,
+        "species_basis_channels": 16
+      },
+      "hidden_channels": "64,64",
+      "local_l0_chemistry_rank": 4,
+      "marginal_paths": [
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot"
+      ],
+      "moment_l_max": 1,
+      "name": "stage178_l1_atomic_cross",
+      "num_radial": 10,
+      "rationale": "Adds the review-recommended sparse cross-radial L=1 power-spectrum information before any edge-relational cost.",
+      "representation_step": "l1_sparse_cross_radial_invariants",
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.local_l0_lowrank_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot"
+      ],
+      "species_basis_channels": 16,
+      "species_basis_mode": "learnable_embedding",
+      "tece_tier": "T2_atomic_scalarized_cross_radial"
+    },
+    {
+      "atomic_cross_radial_projection": "learnable",
+      "atomic_cross_radial_sketch_channels": 3,
+      "capacity_allocation": "minimal_edge_relational_sketch_after_atomic_cross_radial_front",
+      "cost_proxy": {
+        "atomic_cross_radial_sketch_channels": 3,
+        "atomic_paths": 5,
+        "edge_paths": 2,
+        "local_l0_chemistry_rank": 4,
+        "moment_l_max": 1,
+        "num_radial": 10,
+        "scalar_paths": 7,
+        "species_basis_channels": 16
+      },
+      "hidden_channels": "64,64",
+      "local_l0_chemistry_rank": 4,
+      "marginal_paths": [
+        "edge.cavity.vector_dot",
+        "edge.direct.radial"
+      ],
+      "moment_l_max": 1,
+      "name": "stage178_t3_minimal_cavity_direct",
+      "num_radial": 10,
+      "rationale": "First true rTECE increment after Stage176: cavity vector relation plus separately accounted direct radial edge baseline.",
+      "representation_step": "minimal_cavity_edge_relational_sketch",
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.local_l0_lowrank_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "edge.cavity.vector_dot",
+        "edge.direct.radial"
+      ],
+      "species_basis_channels": 16,
+      "species_basis_mode": "learnable_embedding",
+      "tece_tier": "T3_minimal_rtece_edge_relational"
+    }
+  ],
+  "limit_configs": 2048,
+  "max_steps": 20000,
+  "question": "After Stage176 proved a very fast but inaccurate local-L0 endpoint, which front-loaded TECE/rTECE representation increments recover E/F RMSE and physical behavior at tolerable throughput cost?",
+  "review_basis": [
+    "TECE_design_space.md: rank candidates by retained/deleted TECE path sets, Sobolev E/F evidence, and hardware cost rather than MAE alone.",
+    "rTECE_review.md \u00a7P1: prioritize radial POD/low-rank sketches, sparse cross-radial invariants, explicit path registry, and cavity edge kernels.",
+    "rTECE_review.md: chemical collisions should be addressed by low-rank species bases, not by non-deployable C/N-specialized corrections.",
+    "Stage177: Stage176 reaches high ASE/autograd atoms/s but fails E RMSE and rattle physical triage, so the next move is representation capacity before final-head width."
+  ],
+  "schema_version": "rtece_stage178_representation_upgrade.v1",
+  "stage": "stage178_representation_upgrade_after_local_l0_endpoint",
+  "teacher_valid_file": "runs/oc20neb_tace_mace/tece-distill-20260717/mixed_valid_tw0.75_regen.extxyz",
+  "train_file": "runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz",
+  "training_config": {
+    "batch_size": 32,
+    "early_stopping_patience": 250,
+    "energy_weight": 1.0,
+    "force_weight": 10.0,
+    "lr": 0.001,
+    "lr_scheduler": "plateau",
+    "lr_warmup_steps": 500,
+    "neighborlist_backend": "matscipy",
+    "per_element_e0_fit": true,
+    "trainer_backend": "lightning"
+  },
+  "training_entrypoint": "tace.scripts.rtece_train_scalar",
+  "uses_production_training_framework": true,
+  "valid_file": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "valid_limit_configs": 256
+}

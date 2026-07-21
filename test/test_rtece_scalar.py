@@ -11361,6 +11361,38 @@ def test_stage176_local_l0_lowrank_front_is_rotation_invariant_and_trainable():
     assert any("local_l0_chemistry_front" in name for name, _param in model.named_parameters())
 
 
+
+def test_stage178_local_l0_front_can_be_combined_with_edge_relational_paths():
+    config = build_rtece_config_from_path_ids(
+        "stage178_local_l0_plus_edge",
+        (
+            "atomic.radial_density",
+            "atomic.local_l0_lowrank_density",
+            "atomic.vector_norm",
+            "edge.cavity.vector_dot",
+            "edge.direct.radial",
+        ),
+        cutoff=2.0,
+        num_radial=6,
+        hidden_channels=(8,),
+        local_l0_chemistry_rank=3,
+        moment_l_max=1,
+    )
+    z = torch.tensor([6, 8, 1], dtype=torch.long)
+    pos = torch.tensor(
+        [[0.0, 0.0, 0.0], [0.7, 0.1, 0.0], [-0.2, 0.6, 0.1]],
+        dtype=torch.float64,
+    )
+    graph = RTECEGraph(z=z, pos=pos, edge_index=complete_directed_edges(3), batch=torch.zeros(3, dtype=torch.long))
+    model = RTECEScalarModel(config).double()
+
+    out = model(graph)
+    out["energy"].sum().backward()
+
+    assert torch.isfinite(out["energy"]).all()
+    assert any(param.grad is not None for name, param in model.named_parameters() if "local_l0_chemistry_front" in name)
+
+
 def test_stage176_local_l0_manifest_exposes_tece_degradation_contract():
     config = build_rtece_config_from_path_ids(
         "stage176_local_l0_rank3",
@@ -11676,3 +11708,82 @@ def test_stage177_unified_pareto_audit_marks_stage176_missing_and_normalizes_bas
     markdown = Path(materialized["markdown"]).read_text(encoding="utf-8")
     assert "Stage177 Unified Pareto Audit" in markdown
     assert "stage176_local_l0_rank3" in markdown
+
+
+
+def test_stage178_representation_upgrade_manifest_builds_doc_grounded_ladder_and_safe_wrappers(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage178_representation_upgrade import (
+        audit_stage178_manifest,
+        make_stage178_manifest,
+        materialize_stage178,
+    )
+
+    manifest = make_stage178_manifest(
+        output_root=tmp_path / "stage178",
+        train_file="/tmp/fake_train.extxyz",
+        valid_file="/tmp/fake_valid.extxyz",
+        teacher_valid_file="/tmp/fake_teacher_valid.extxyz",
+        limit_configs=64,
+        valid_limit_configs=32,
+        max_steps=120,
+    )
+    audit = audit_stage178_manifest(manifest)
+    rows = {row["name"]: row for row in manifest["candidates"]}
+
+    assert audit["contract_pass"], audit["failed_checks"]
+    assert manifest["schema_version"] == "rtece_stage178_representation_upgrade.v1"
+    assert manifest["stage"] == "stage178_representation_upgrade_after_local_l0_endpoint"
+    assert manifest["training_entrypoint"] == "tace.scripts.rtece_train_scalar"
+    assert manifest["benchmark_protocol"]["primary_error_metric"] == "dft_f_rmse_mev_a"
+    assert manifest["benchmark_protocol"]["required_error_metrics"] == [
+        "dft_e_mae_mev_atom",
+        "dft_e_rmse_mev_atom",
+        "dft_e_max_mev_atom",
+        "dft_f_mae_mev_a",
+        "dft_f_rmse_mev_a",
+        "dft_f_max_mev_a",
+    ]
+    assert set(rows) == {
+        "stage178_l0_local_species",
+        "stage178_l1_atomic_cross",
+        "stage178_t3_minimal_cavity_direct",
+    }
+    assert rows["stage178_l0_local_species"]["representation_step"] == "l0_local_lowrank_species_front"
+    assert rows["stage178_l1_atomic_cross"]["atomic_cross_radial_projection"] == "learnable"
+    assert "edge.cavity.vector_dot" in rows["stage178_t3_minimal_cavity_direct"]["scalar_path_ids"]
+    assert "edge.direct.radial" in rows["stage178_t3_minimal_cavity_direct"]["scalar_path_ids"]
+    assert all(row["capacity_allocation"] != "widen_final_head_only" for row in manifest["candidates"])
+    assert "rTECE_review.md §P1" in "\n".join(manifest["review_basis"])
+
+    materialized = materialize_stage178(manifest)
+    assert Path(materialized["artifacts"]["manifest"]).exists()
+    assert Path(materialized["artifacts"]["train_wrapper"]).exists()
+    assert Path(materialized["artifacts"]["benchmark_wrapper"]).exists()
+    assert Path(materialized["artifacts"]["physical_wrapper"]).exists()
+    train_wrapper = Path(materialized["artifacts"]["train_wrapper"]).read_text(encoding="utf-8")
+    benchmark_wrapper = Path(materialized["artifacts"]["benchmark_wrapper"]).read_text(encoding="utf-8")
+    physical_wrapper = Path(materialized["artifacts"]["physical_wrapper"]).read_text(encoding="utf-8")
+
+    for text in (train_wrapper, benchmark_wrapper, physical_wrapper):
+        assert "--export" not in text
+        assert "#SBATCH --mem" not in text
+        assert "#SBATCH --cpus-per-task" not in text
+        assert "set -u" not in text
+        assert "export " not in text
+    assert "#SBATCH --array=0-2" in train_wrapper
+    assert "#SBATCH --qos=flood-1o2gpu" in train_wrapper
+    assert 'TASK_ID="${SLURM_ARRAY_TASK_ID:-0}"' in train_wrapper
+    assert "python -m tace.scripts.rtece_train_scalar" in train_wrapper
+    assert "--species-basis-mode learnable_embedding" in train_wrapper
+    assert "--atomic-cross-radial-projection learnable" in train_wrapper
+    assert "--local-l0-chemistry-rank 4" in train_wrapper
+    assert "benchmark_rtece_scalar.py" in benchmark_wrapper
+    assert "rtece_scalar_best.pt" in benchmark_wrapper
+    assert "rtece_scalar_best.pt" in physical_wrapper
+    assert "stage178_l1_atomic_cross_dft_benchmark.json" in benchmark_wrapper
+    assert "stage178_t3_minimal_cavity_direct_scaling_limit1024.json" in benchmark_wrapper
+    assert "dimer_scan_rtece.py" in physical_wrapper
+    assert "rattle_relax_rtece.py" in physical_wrapper
+    assert "summarize_rtece_physical_pareto.py" in physical_wrapper

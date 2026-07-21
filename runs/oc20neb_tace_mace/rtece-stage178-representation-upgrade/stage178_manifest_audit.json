@@ -1,0 +1,24 @@
+{
+  "checks": {
+    "artifacts": true,
+    "candidate_names": true,
+    "contains_edge_relational": true,
+    "contains_learnable_cross_radial": true,
+    "contains_learnable_species": true,
+    "has_early_stopping": true,
+    "has_warmup": true,
+    "l0_to_t3_ladder": true,
+    "max_errors_required": true,
+    "memory_required": true,
+    "not_head_only": true,
+    "physical_required": true,
+    "production_entrypoint": true,
+    "rmse_primary": true,
+    "schema_version": true,
+    "stage": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "no_forbidden_sbatch_flags": true,
+  "schema_version": "rtece_stage178_manifest_audit.v1"
+}

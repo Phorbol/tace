@@ -2001,6 +2001,7 @@ def edge_relational_sketches(
         max_ell=required_ell,
         species_basis_embedding=species_basis_embedding,
         radial_species_adapter=radial_species_adapter,
+        local_l0_chemistry_front=local_l0_chemistry_front,
     )
     src, dst = graph.edge_index
     vector_channels = moments["vector"]
@@ -2178,6 +2179,7 @@ def rtece_descriptors(
         radial_mixing,
         species_basis_embedding=species_basis_embedding,
         radial_species_adapter=edge_radial_species_adapter,
+        local_l0_chemistry_front=local_l0_chemistry_front,
     )
     return torch.cat([atomic, sketches], dim=-1)
 
