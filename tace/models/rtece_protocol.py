@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import re
 from pathlib import Path
 from typing import Mapping
 
@@ -22,6 +23,10 @@ _COMPATIBILITY_SCHEMA_FIELD = "schema_version"
 _COMPATIBILITY_KEYS = frozenset(
     (*COMPATIBILITY_FIELDS, _COMPATIBILITY_HASH_FIELD, _COMPATIBILITY_SCHEMA_FIELD)
 )
+_SEMANTIC_HASH_FIELDS = frozenset(
+    field for field in COMPATIBILITY_FIELDS if field.endswith("_hash")
+)
+_SHA256_PATTERN = re.compile(r"sha256:[0-9a-fA-F]{64}")
 
 
 def canonical_json_bytes(value: object) -> bytes:
@@ -80,8 +85,12 @@ def validate_compatibility_tuple(
 ) -> dict[str, str]:
     validated = _validate_compatibility_payload(payload)
     if expected is not None:
-        expected_values = _validate_compatibility_payload(expected, verify_hash=False)
-        for field in (_COMPATIBILITY_SCHEMA_FIELD, *COMPATIBILITY_FIELDS):
+        expected_values = _validate_compatibility_payload(expected)
+        for field in (
+            _COMPATIBILITY_SCHEMA_FIELD,
+            *COMPATIBILITY_FIELDS,
+            _COMPATIBILITY_HASH_FIELD,
+        ):
             if validated[field] != expected_values[field]:
                 raise ValueError(f"compatibility mismatch for {field}")
     return validated
@@ -126,7 +135,7 @@ def _validate_compatibility_payload(
 
     values = {field: payload[field] for field in COMPATIBILITY_FIELDS}
     _validate_compatibility_values(values)
-    compatibility_hash = _require_nonblank_string(
+    compatibility_hash = _require_sha256_string(
         payload[_COMPATIBILITY_HASH_FIELD], _COMPATIBILITY_HASH_FIELD
     )
     validated = {
@@ -148,7 +157,17 @@ def _validate_compatibility_payload(
 
 def _validate_compatibility_values(values: Mapping[str, object]) -> None:
     for field in COMPATIBILITY_FIELDS:
-        _require_nonblank_string(values[field], field)
+        if field in _SEMANTIC_HASH_FIELDS:
+            _require_sha256_string(values[field], field)
+        else:
+            _require_nonblank_string(values[field], field)
+
+
+def _require_sha256_string(value: object, field: str) -> str:
+    value = _require_nonblank_string(value, field)
+    if _SHA256_PATTERN.fullmatch(value) is None:
+        raise ValueError(f"{field} must be a sha256:<64 hex digits> string")
+    return value
 
 
 def _require_nonblank_string(value: object, field: str) -> str:
