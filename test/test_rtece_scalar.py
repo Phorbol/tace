@@ -11939,3 +11939,56 @@ def test_stage145_community_memory_payload_marks_external_nep_memory_unmeasured(
     assert payload["peak_allocated_mb"] is None
     assert payload["peak_reserved_mb"] is None
     assert payload["memory_measurement_protocol"] == "external_nep_process_not_captured"
+
+
+def test_rtece_init_state_enforces_stage186_compatibility_before_copy(tmp_path):
+    from tace.lightning.rtece import load_rtece_init_state
+    from tace.models.rtece_protocol import build_compatibility_tuple
+    from tace.models.rtece_workflow import save_checkpoint
+
+    compatibility = build_compatibility_tuple(
+        operator_manifest_hash="sha256:" + "1" * 64,
+        feature_schema_hash="sha256:" + "2" * 64,
+        model_config_hash="sha256:" + "3" * 64,
+        implementation_revision="git:test",
+        teacher_checkpoint_hash="sha256:" + "4" * 64,
+        teacher_config_hash="sha256:" + "5" * 64,
+        data_manifest_hash="sha256:" + "6" * 64,
+    )
+    mismatched = build_compatibility_tuple(
+        operator_manifest_hash="sha256:" + "1" * 64,
+        feature_schema_hash="sha256:" + "2" * 64,
+        model_config_hash="sha256:" + "3" * 64,
+        implementation_revision="git:test",
+        teacher_checkpoint_hash="sha256:" + "4" * 64,
+        teacher_config_hash="sha256:" + "5" * 64,
+        data_manifest_hash="sha256:" + "9" * 64,
+    )
+    config = build_rtece_config("rtece_pair")
+    source = RTECEScalarModel(config).double()
+    target = RTECEScalarModel(config).double()
+    path = tmp_path / "init.pt"
+    save_checkpoint(path, source, config, compatibility=compatibility)
+    target_before = {key: value.clone() for key, value in target.state_dict().items()}
+
+    with pytest.raises(ValueError, match="compatibility mismatch"):
+        load_rtece_init_state(
+            path,
+            target,
+            config,
+            dtype=torch.float64,
+            expected_compatibility=mismatched,
+        )
+    assert all(
+        torch.equal(value, target_before[key])
+        for key, value in target.state_dict().items()
+    )
+
+    metadata = load_rtece_init_state(
+        path,
+        target,
+        config,
+        dtype=torch.float64,
+        expected_compatibility=compatibility,
+    )
+    assert metadata["stage186_compatibility"] == compatibility

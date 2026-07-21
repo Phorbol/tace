@@ -2,10 +2,11 @@ from __future__ import annotations
 
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import torch
 
+from .rtece_protocol import validate_compatibility_tuple
 from .rtece_scalar import (
     RTECEGraph,
     RTECEScalarConfig,
@@ -24,6 +25,7 @@ def save_checkpoint(
     graph_construction_backend: str | None = None,
     graph_update_backend: str | None = None,
     metadata: dict[str, Any] | None = None,
+    compatibility: Mapping[str, str] | None = None,
 ) -> None:
     target = Path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -46,6 +48,10 @@ def save_checkpoint(
         "tece_path_manifest": path_manifest,
         "metadata": dict(metadata or {}),
     }
+    if compatibility is not None:
+        payload["stage186_compatibility"] = validate_compatibility_tuple(
+            compatibility
+        )
     torch.save(payload, target)
 
 
@@ -54,8 +60,21 @@ def load_checkpoint(
     *,
     dtype: torch.dtype = torch.float32,
     device: str | torch.device = "cpu",
+    expected_compatibility: Mapping[str, str] | None = None,
 ) -> tuple[RTECEScalarModel, RTECEScalarConfig, dict[str, Any]]:
     payload = torch.load(Path(path), map_location=device)
+    expected = (
+        validate_compatibility_tuple(expected_compatibility)
+        if expected_compatibility is not None
+        else None
+    )
+    raw_compatibility = payload.get("stage186_compatibility")
+    if raw_compatibility is None:
+        if expected is not None:
+            raise ValueError("missing Stage186 compatibility in checkpoint")
+        compatibility = None
+    else:
+        compatibility = validate_compatibility_tuple(raw_compatibility, expected)
     config_payload = dict(payload["config"])
     if config_payload.get("atomic_energies") is not None:
         config_payload["atomic_energies"] = {int(k): float(v) for k, v in config_payload["atomic_energies"].items()}
@@ -66,6 +85,8 @@ def load_checkpoint(
     metadata = dict(payload.get("metadata") or {})
     metadata["tece_route"] = payload.get("tece_route") or rtece_route_contract(config)
     metadata["tece_path_manifest"] = payload.get("tece_path_manifest") or rtece_path_manifest(config)
+    if compatibility is not None:
+        metadata["stage186_compatibility"] = compatibility
     return model, config, metadata
 
 

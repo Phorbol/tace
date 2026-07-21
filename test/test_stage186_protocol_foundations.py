@@ -5,6 +5,7 @@ import json
 import math
 
 import pytest
+import torch
 
 from tace.models.rtece_protocol import (
     build_compatibility_tuple,
@@ -18,7 +19,12 @@ from tace.models.rtece_protocol import (
     write_canonical_json,
     write_operator_manifest,
 )
-from tace.models.rtece_scalar import build_rtece_config, build_rtece_config_from_path_ids
+from tace.models.rtece_scalar import (
+    RTECEScalarModel,
+    build_rtece_config,
+    build_rtece_config_from_path_ids,
+)
+from tace.models.rtece_workflow import load_checkpoint, save_checkpoint
 from benchmarks.oc20neb_tace_mace.prepare_rtece_stage186_data import (
     _fit_training_e0,
     materialize_stage186_3bpa_split,
@@ -473,3 +479,40 @@ def test_stage186_rank_deficient_e0_uses_weighted_minimum_norm_solution():
     assert metadata["elementwise_e0_identifiable"] is False
     assert metadata["solver"] == "weighted_minimum_norm_lstsq_rank_deficient"
     assert np.allclose(actual, expected)
+
+
+def test_stage186_checkpoint_recomputes_and_rejects_compatibility_tamper(tmp_path):
+    compatibility = _compatibility_payload()
+    config = build_rtece_config("rtece_pair")
+    model = RTECEScalarModel(config).double()
+    path = tmp_path / "model.pt"
+
+    save_checkpoint(path, model, config, compatibility=compatibility)
+    _, _, metadata = load_checkpoint(
+        path,
+        dtype=torch.float64,
+        expected_compatibility=compatibility,
+    )
+    assert metadata["stage186_compatibility"] == compatibility
+
+    payload = torch.load(path, weights_only=False)
+    payload["stage186_compatibility"]["data_manifest_hash"] = "sha256:" + "0" * 64
+    torch.save(payload, path)
+    with pytest.raises(ValueError, match="compatibility"):
+        load_checkpoint(path, dtype=torch.float64)
+
+
+def test_legacy_checkpoint_load_remains_supported_without_stage186_expectation(tmp_path):
+    compatibility = _compatibility_payload()
+    config = build_rtece_config("rtece_pair")
+    model = RTECEScalarModel(config).double()
+    path = tmp_path / "legacy.pt"
+
+    save_checkpoint(path, model, config)
+    load_checkpoint(path, dtype=torch.float64)
+    with pytest.raises(ValueError, match="missing Stage186 compatibility"):
+        load_checkpoint(
+            path,
+            dtype=torch.float64,
+            expected_compatibility=compatibility,
+        )

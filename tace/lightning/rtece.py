@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 from dataclasses import asdict, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Mapping
 
 import numpy as np
 import torch
@@ -578,10 +578,16 @@ def load_rtece_init_state(
     expected_config: RTECEScalarConfig,
     *,
     dtype: torch.dtype = torch.float32,
+    expected_compatibility: Mapping[str, str] | None = None,
 ) -> dict[str, Any]:
     """Load a portable rTECE init-state into an existing model before optimizer creation."""
 
-    source_model, source_config, source_metadata = load_checkpoint(path, dtype=dtype, device="cpu")
+    source_model, source_config, source_metadata = load_checkpoint(
+        path,
+        dtype=dtype,
+        device="cpu",
+        expected_compatibility=expected_compatibility,
+    )
     expected_payload = _config_payload_for_init_compare(expected_config)
     source_payload = _config_payload_for_init_compare(source_config)
     if source_payload != expected_payload:
@@ -591,10 +597,15 @@ def load_rtece_init_state(
             f"{Path(path)} is not compatible with the requested rTECE config; mismatched keys: {mismatch_keys}"
         )
     model.load_state_dict(source_model.state_dict())
-    return {
+    metadata = {
         "init_state": str(path),
         "init_metadata": dict(source_metadata),
     }
+    if "stage186_compatibility" in source_metadata:
+        metadata["stage186_compatibility"] = source_metadata[
+            "stage186_compatibility"
+        ]
+    return metadata
 
 
 def _load_lightning_model_state(path: str | Path, config: RTECEScalarConfig, *, dtype: torch.dtype) -> RTECEScalarModel:
