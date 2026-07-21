@@ -11490,3 +11490,189 @@ def test_stage176_train_smoke_manifest_uses_production_cli_and_safe_sbatch(tmp_p
     assert "--mem" not in wrapper
     assert "--cpus-per-task" not in wrapper
     assert "set -u" not in wrapper
+
+
+def test_stage177_unified_pareto_audit_marks_stage176_missing_and_normalizes_baselines(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage177_unified_pareto_audit import (
+        audit_stage177_payload,
+        make_stage177_audit,
+        materialize_stage177,
+    )
+
+    stage176_root = tmp_path / "stage176"
+    (stage176_root / "train_smoke").mkdir(parents=True)
+    (stage176_root / "stage176_manifest.json").write_text(
+        json.dumps(
+            {
+                "schema_version": "rtece_stage176_production_local_l0_front.v1",
+                "stage": "stage176_production_local_l0_front",
+                "model_config": {
+                    "variant": "stage176_local_l0_rank3",
+                    "scalar_path_ids": ["atomic.radial_density", "atomic.local_l0_lowrank_density"],
+                    "local_l0_chemistry_rank": 3,
+                },
+                "model_manifest": {
+                    "route": {
+                        "semantic_tier": "T3_trainable_local_l0_lowrank_density",
+                        "descriptor_dim": 32,
+                        "retained_tece_groups": [
+                            "radial_density",
+                            "trainable_local_l0_chemistry_front",
+                            "early_scalarized_local_l0_density",
+                        ],
+                    }
+                },
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    (stage176_root / "train_smoke" / "train_summary.json").write_text(
+        json.dumps(
+            {
+                "variant": "stage176_local_l0_rank3",
+                "steps": 2000,
+                "best_step": 512,
+                "best_valid_loss": 0.2791953384876251,
+                "local_l0_chemistry_rank": 3,
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    stage157_metrics = tmp_path / "stage157_metrics.json"
+    stage157_metrics.write_text(
+        json.dumps(
+            {
+                "schema_version": "rtece_stage157_relative_neb_loss.v1",
+                "rows": [
+                    {
+                        "variant": "stage157_direct_b32_rel0p25_mixed2048",
+                        "num_parameters": 54886,
+                        "best_step": 16896,
+                        "dft": {
+                            "rmse_e_mev_atom": 52.538,
+                            "mae_e_mev_atom": 35.443,
+                            "max_abs_e_mev_atom": 204.986,
+                            "rmse_f_mev_a": 94.159,
+                            "mae_f_mev_a": 41.823,
+                            "max_abs_f_mev_a": 2092.961,
+                            "relative_image_rmse_mev_atom": 7.104,
+                            "barrier_rmse_mev_atom": 11.403,
+                            "atoms_per_second": 500402.226,
+                        },
+                    }
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    stage145_summary = tmp_path / "stage145_results_summary.json"
+    stage145_summary.write_text(
+        json.dumps(
+            {
+                "schema_version": "community_baselines_stage145_results.v1",
+                "rows": [
+                    {
+                        "name": "nep4_mixed_smoke",
+                        "engine": "nep",
+                        "descriptor_label": "nep4",
+                        "dft_e_rmse_mev_atom": 23.846,
+                        "dft_e_mae_mev_atom": 17.639,
+                        "dft_e_max_mev_atom": 81.018,
+                        "dft_f_rmse_mev_a": 143.037,
+                        "dft_f_mae_mev_a": 63.718,
+                        "dft_f_max_mev_a": 2867.353,
+                        "dft_relative_image_rmse_mev_atom": 10.068,
+                        "dft_barrier_rmse_mev_atom": 19.344,
+                        "atoms_per_second": 103226.501,
+                        "physical_status": "found",
+                        "training_status": "completed",
+                    },
+                    {
+                        "name": "deepmd_dpa_like_mixed_smoke",
+                        "engine": "deepmd",
+                        "descriptor_label": "dpa1_zero_attention",
+                        "dft_e_rmse_mev_atom": 325.281,
+                        "dft_e_mae_mev_atom": 253.376,
+                        "dft_e_max_mev_atom": 867.313,
+                        "dft_f_rmse_mev_a": 109.859,
+                        "dft_f_mae_mev_a": 29.237,
+                        "dft_f_max_mev_a": 4429.181,
+                        "dft_relative_image_rmse_mev_atom": 17.009,
+                        "dft_barrier_rmse_mev_atom": 39.474,
+                        "atoms_per_second": 10916.840,
+                        "physical_status": "found",
+                        "training_status": "completed",
+                    },
+                ],
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    payload = make_stage177_audit(
+        output_root=tmp_path / "stage177",
+        stage176_root=stage176_root,
+        stage157_metrics=stage157_metrics,
+        stage145_summary=stage145_summary,
+    )
+    audit = audit_stage177_payload(payload)
+    rows = {row["candidate"]: row for row in payload["rows"]}
+
+    assert audit["contract_pass"], audit["failed_checks"]
+    assert payload["schema_version"] == "rtece_stage177_unified_pareto_audit.v1"
+    assert set(rows) == {
+        "stage176_local_l0_rank3",
+        "stage157_direct_b32_rel0p25_mixed2048",
+        "nep4_mixed_smoke",
+        "deepmd_dpa_like_mixed_smoke",
+    }
+    assert rows["stage176_local_l0_rank3"]["rankable_now"] is False
+    assert rows["stage176_local_l0_rank3"]["benchmark_status"] == "missing_full_dft_teacher_benchmark"
+    assert rows["stage176_local_l0_rank3"]["physics_status"] == "missing_dimer_and_rattle_relax"
+    assert rows["stage176_local_l0_rank3"]["throughput_status"] == "missing_atom_count_scaling"
+    assert rows["stage157_direct_b32_rel0p25_mixed2048"]["dft_f_rmse_mev_a"] == pytest.approx(94.159)
+    assert rows["nep4_mixed_smoke"]["family"] == "nep"
+    assert rows["deepmd_dpa_like_mixed_smoke"]["descriptor_label"] == "dpa1_zero_attention"
+    assert "non_matching_throughput_protocols" in payload["comparison_caveats"]
+    assert "stage176_full_benchmark_missing" in payload["comparison_caveats"]
+
+    action_ids = {action["id"] for action in payload["next_required_actions"]}
+    assert {
+        "stage176_dft_teacher_benchmark",
+        "stage176_dimer_scan",
+        "stage176_rattle_relax",
+        "stage176_atom_count_throughput_scaling",
+        "community_baseline_protocol_alignment",
+    }.issubset(action_ids)
+
+    materialized = materialize_stage177(payload)
+    assert Path(materialized["json"]).exists()
+    assert Path(materialized["markdown"]).exists()
+    assert Path(materialized["wrappers"]["stage176_benchmark"]).exists()
+    assert Path(materialized["wrappers"]["stage176_physical"]).exists()
+    benchmark_wrapper = Path(materialized["wrappers"]["stage176_benchmark"]).read_text(encoding="utf-8")
+    physical_wrapper = Path(materialized["wrappers"]["stage176_physical"]).read_text(encoding="utf-8")
+    for text in (benchmark_wrapper, physical_wrapper):
+        assert "--export" not in text
+        assert "#SBATCH --mem" not in text
+        assert "#SBATCH --cpus-per-task" not in text
+        assert "set -u" not in text
+        assert "export " not in text
+    assert "benchmark_rtece_scalar.py" in benchmark_wrapper
+    assert "stage176_local_l0_rank3_dft_benchmark.json" in benchmark_wrapper
+    assert "stage176_local_l0_rank3_teacher_benchmark.json" in benchmark_wrapper
+    assert "stage176_local_l0_rank3_scaling_limit1024.json" in benchmark_wrapper
+    assert "dimer_scan_rtece.py" in physical_wrapper
+    assert "rattle_relax_rtece.py" in physical_wrapper
+    assert "summarize_rtece_physical_pareto.py" in physical_wrapper
+    markdown = Path(materialized["markdown"]).read_text(encoding="utf-8")
+    assert "Stage177 Unified Pareto Audit" in markdown
+    assert "stage176_local_l0_rank3" in markdown

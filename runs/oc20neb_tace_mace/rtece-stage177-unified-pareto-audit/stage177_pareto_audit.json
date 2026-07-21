@@ -1,0 +1,217 @@
+{
+  "artifacts": {
+    "json": "runs/oc20neb_tace_mace/rtece-stage177-unified-pareto-audit/stage177_pareto_audit.json",
+    "markdown": "runs/oc20neb_tace_mace/rtece-stage177-unified-pareto-audit/stage177_pareto_audit.md",
+    "stage176_benchmark_wrapper": "runs/oc20neb_tace_mace/rtece-stage177-unified-pareto-audit/wrappers/stage176_benchmark_no_export.sbatch",
+    "stage176_physical_wrapper": "runs/oc20neb_tace_mace/rtece-stage177-unified-pareto-audit/wrappers/stage176_physical_no_export.sbatch"
+  },
+  "comparison_caveats": [
+    "non_matching_throughput_protocols",
+    "rankable_now_requires_matching_data_metric_physics_and_hardware_scope",
+    "physical_triage_not_complete_for_all_rtece_rows"
+  ],
+  "next_required_actions": [
+    {
+      "id": "stage176_atom_count_throughput_scaling",
+      "priority": "P0",
+      "reason": "TECE design-space ranking requires hardware cost across atom counts and memory; current Stage176 CUDA memory fields are missing.",
+      "status": "memory_metrics_incomplete"
+    },
+    {
+      "id": "stage178_representation_upgrade_after_local_l0_endpoint",
+      "priority": "P0",
+      "reason": "Stage176 proves a fast local-L0 endpoint but fails force/energy/physical gates; next algorithm step should add document-grounded representation capacity, not final-head width.",
+      "status": "design_required"
+    },
+    {
+      "id": "community_baseline_protocol_alignment",
+      "priority": "P1",
+      "reason": "Stage145 community atoms/s, Stage157 prebuilt-graph atoms/s, and Stage176 ASE/autograd atoms/s are not directly comparable yet.",
+      "status": "analysis_required"
+    }
+  ],
+  "output_root": "runs/oc20neb_tace_mace/rtece-stage177-unified-pareto-audit",
+  "primary_ranking_metric": "dft_f_rmse_mev_a",
+  "rows": [
+    {
+      "atoms_per_second": 3988401.6058523064,
+      "benchmark_status": "found",
+      "best_step": 512,
+      "best_valid_loss": 0.2791953384876251,
+      "candidate": "stage176_local_l0_rank3",
+      "descriptor_dim": 32,
+      "descriptor_label": "local_l0_lowrank_density",
+      "dft_barrier_rmse_mev_atom": 37.369244048310264,
+      "dft_e_mae_mev_atom": 239.08703104451124,
+      "dft_e_max_mev_atom": 665.0075135445852,
+      "dft_e_rmse_mev_atom": 294.9309189282125,
+      "dft_f_mae_mev_a": 55.69015758540269,
+      "dft_f_max_mev_a": 5033.161039128113,
+      "dft_f_rmse_mev_a": 141.99724362460125,
+      "dft_relative_image_rmse_mev_atom": 16.464980769734524,
+      "dimer_gate_pass": true,
+      "evidence_gaps": [
+        "memory_scaling"
+      ],
+      "family": "rtece",
+      "focus_rattle_final_rmsd_a": 0.25448854351133715,
+      "focus_rattle_max_fmax_ev_a": 1.51450069482781,
+      "num_parameters": 7007,
+      "physical_gate_pass": false,
+      "physical_score": 7.157421359473226,
+      "physics_status": "found",
+      "rankable_now": false,
+      "rattle_gate_pass": false,
+      "scaling": [
+        {
+          "atoms": 1600,
+          "atoms_per_second": 418067.2593456006,
+          "configs": 32,
+          "cuda_max_memory_allocated_mb": null,
+          "limit_configs": 32,
+          "seconds_per_pass": 0.0038271353812888266
+        },
+        {
+          "atoms": 5298,
+          "atoms_per_second": 1326867.3087139018,
+          "configs": 128,
+          "cuda_max_memory_allocated_mb": null,
+          "limit_configs": 128,
+          "seconds_per_pass": 0.003992863465100527
+        },
+        {
+          "atoms": 31831,
+          "atoms_per_second": 3496729.3482919973,
+          "configs": 512,
+          "cuda_max_memory_allocated_mb": null,
+          "limit_configs": 512,
+          "seconds_per_pass": 0.009103077999316155
+        },
+        {
+          "atoms": 59193,
+          "atoms_per_second": 4101418.6920768176,
+          "configs": 1024,
+          "cuda_max_memory_allocated_mb": null,
+          "limit_configs": 1024,
+          "seconds_per_pass": 0.014432323165237904
+        }
+      ],
+      "semantic_tier": "T3_trainable_local_l0_lowrank_density",
+      "teacher_e_rmse_mev_atom": 276.9366485966331,
+      "teacher_f_rmse_mev_a": 143.39806585545193,
+      "tece_retained_groups": [
+        "radial_density",
+        "trainable_local_l0_chemistry_front",
+        "early_scalarized_local_l0_density"
+      ],
+      "throughput_status": "atom_count_scaling_found_memory_missing",
+      "train_steps": 2000,
+      "training_status": "train_smoke_completed"
+    },
+    {
+      "atoms_per_second": 500402.22630368394,
+      "benchmark_status": "found",
+      "best_step": 16896,
+      "best_valid_loss": 0.0759364441037178,
+      "candidate": "stage157_direct_b32_rel0p25_mixed2048",
+      "descriptor_dim": null,
+      "descriptor_label": "stage157_direct_t3_cavity_vector",
+      "dft_barrier_rmse_mev_atom": 11.402551116757193,
+      "dft_e_mae_mev_atom": 35.442889350217385,
+      "dft_e_max_mev_atom": 204.98604174742866,
+      "dft_e_rmse_mev_atom": 52.53824210343257,
+      "dft_f_mae_mev_a": 41.82262941676011,
+      "dft_f_max_mev_a": 2092.9614936904904,
+      "dft_f_rmse_mev_a": 94.15889889773099,
+      "dft_relative_image_rmse_mev_atom": 7.10409388625699,
+      "evidence_gaps": [
+        "physical_triage",
+        "matched_community_throughput_protocol"
+      ],
+      "family": "rtece",
+      "num_parameters": 54886,
+      "physics_status": "missing_or_not_in_stage157_summary",
+      "rankable_now": false,
+      "semantic_tier": "T3_direct_edge_relational_scalar",
+      "tece_retained_groups": [
+        "direct_edge_relational_scalar",
+        "zbl_short_range_prior"
+      ],
+      "throughput_status": "prebuilt_graph_model_only",
+      "training_status": "completed"
+    },
+    {
+      "atoms_per_second": 103226.50050880814,
+      "benchmark_status": "found",
+      "best_step": 20000,
+      "candidate": "nep4_mixed_smoke",
+      "descriptor_dim": null,
+      "descriptor_label": "nep4",
+      "dft_barrier_rmse_mev_atom": 19.343980765308487,
+      "dft_e_mae_mev_atom": 17.639373451434125,
+      "dft_e_max_mev_atom": 81.01769683544278,
+      "dft_e_rmse_mev_atom": 23.846193555229316,
+      "dft_f_mae_mev_a": 63.71831257029057,
+      "dft_f_max_mev_a": 2867.3529900000003,
+      "dft_f_rmse_mev_a": 143.0374014464665,
+      "dft_relative_image_rmse_mev_atom": 10.067896680954268,
+      "evidence_gaps": [
+        "matched_rtece_throughput_protocol"
+      ],
+      "family": "nep",
+      "num_parameters": null,
+      "physics_status": "found",
+      "rankable_now": true,
+      "semantic_tier": "community_baseline",
+      "tece_retained_groups": [],
+      "throughput_status": "community_engine_wall_time",
+      "training_status": "completed"
+    },
+    {
+      "atoms_per_second": 10916.839598964832,
+      "benchmark_status": "found",
+      "best_step": 20000,
+      "candidate": "deepmd_dpa_like_mixed_smoke",
+      "descriptor_dim": null,
+      "descriptor_label": "dpa1_zero_attention",
+      "dft_barrier_rmse_mev_atom": 39.47442013488647,
+      "dft_e_mae_mev_atom": 253.37610861097858,
+      "dft_e_max_mev_atom": 867.3128633549553,
+      "dft_e_rmse_mev_atom": 325.28127548401045,
+      "dft_f_mae_mev_a": 29.236857807539458,
+      "dft_f_max_mev_a": 4429.18120761457,
+      "dft_f_rmse_mev_a": 109.85922351272542,
+      "dft_relative_image_rmse_mev_atom": 17.008579423402576,
+      "evidence_gaps": [
+        "matched_rtece_throughput_protocol"
+      ],
+      "family": "deepmd",
+      "num_parameters": null,
+      "physics_status": "found",
+      "rankable_now": true,
+      "semantic_tier": "community_baseline",
+      "tece_retained_groups": [],
+      "throughput_status": "community_engine_wall_time",
+      "training_status": "completed"
+    }
+  ],
+  "schema_version": "rtece_stage177_unified_pareto_audit.v1",
+  "secondary_metrics": [
+    "dft_e_rmse_mev_atom",
+    "dft_e_max_mev_atom",
+    "dft_f_max_mev_a",
+    "dft_relative_image_rmse_mev_atom",
+    "dft_barrier_rmse_mev_atom",
+    "atoms_per_second",
+    "physical_status"
+  ],
+  "source_artifacts": {
+    "dft_valid_file": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+    "stage145_summary": "runs/oc20neb_tace_mace/community-baselines-stage145/stage145_results_summary.json",
+    "stage157_metrics": "runs/oc20neb_tace_mace/rtece-stage157-relative-neb-loss/stage157_metrics.json",
+    "stage176_manifest": "runs/oc20neb_tace_mace/rtece-stage176-production-local-l0-front/stage176_manifest.json",
+    "stage176_train_summary": "runs/oc20neb_tace_mace/rtece-stage176-production-local-l0-front/train_smoke/train_summary.json",
+    "teacher_valid_file": "runs/oc20neb_tace_mace/tece-distill-20260717/teacher_valid.extxyz"
+  },
+  "stage": "stage177_unified_pareto_audit"
+}
