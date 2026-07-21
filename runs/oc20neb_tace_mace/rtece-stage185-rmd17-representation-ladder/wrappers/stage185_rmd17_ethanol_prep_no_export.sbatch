@@ -21,11 +21,13 @@ ${TACE_PYTHON} -V
 RMD17_ROOT=datasets/rMD17
 RMD17_ARCHIVE_URL=https://figshare.com/ndownloader/articles/12672038/versions/4
 RMD17_ARCHIVE=datasets/rMD17/rMD17_v4.zip
+RMD17_ARCHIVE_TMP=${RMD17_ARCHIVE}.tmp
 RMD17_NPZ=datasets/rMD17/rmd17_ethanol.npz
 mkdir -p ${RMD17_ROOT} ${RMD17_ROOT}/converted_extxyz
 if [ ! -f ${RMD17_NPZ} ]; then
-  if [ ! -f ${RMD17_ARCHIVE} ]; then
-    curl -L ${RMD17_ARCHIVE_URL} -o ${RMD17_ARCHIVE}
+  if [ ! -s ${RMD17_ARCHIVE} ]; then
+    curl -fL --retry 3 --noproxy '*' ${RMD17_ARCHIVE_URL} -o ${RMD17_ARCHIVE_TMP}
+    mv ${RMD17_ARCHIVE_TMP} ${RMD17_ARCHIVE}
   fi
   unzip -j -o ${RMD17_ARCHIVE} rmd17_ethanol.npz -d ${RMD17_ROOT}
 fi
