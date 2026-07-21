@@ -2283,6 +2283,51 @@ def test_rtece_active_set_ranking_uses_marginal_gain_per_cost():
     assert worse["marginal_gain_per_cost"] < 0.0
 
 
+def test_rtece_active_set_ranking_can_use_relative_metric_gains():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import rank_active_set_candidate_rows
+
+    rows = [
+        {
+            "candidate": "baseline",
+            "path_ids": ["atomic.radial_density"],
+            "energy_per_atom_rmse": 40.0,
+            "force_rmse": 80.0,
+            "candidate_dim": 4,
+        },
+        {
+            "candidate": "energy_only",
+            "path_ids": ["atomic.radial_density", "edge.cavity.target_vector_projection"],
+            "energy_per_atom_rmse": 20.0,
+            "force_rmse": 120.0,
+            "candidate_dim": 6,
+        },
+        {
+            "candidate": "balanced",
+            "path_ids": ["atomic.radial_density", "edge.direct.radial"],
+            "energy_per_atom_rmse": 32.0,
+            "force_rmse": 72.0,
+            "candidate_dim": 6,
+        },
+    ]
+
+    ranked = rank_active_set_candidate_rows(
+        rows,
+        baseline_candidate="baseline",
+        energy_weight=1.0,
+        force_weight=1.0,
+        gain_mode="relative",
+    )
+
+    assert [row["candidate"] for row in ranked] == ["balanced", "energy_only"]
+    assert ranked[0]["energy_marginal_gain"] == pytest.approx(0.2)
+    assert ranked[0]["force_marginal_gain"] == pytest.approx(0.1)
+    assert ranked[0]["active_set_gain_mode"] == "relative"
+    assert ranked[0]["active_set_promoted"] is True
+    assert ranked[1]["energy_marginal_gain"] == pytest.approx(0.5)
+    assert ranked[1]["force_marginal_gain"] == pytest.approx(-0.5)
+    assert ranked[1]["active_set_promoted"] is False
+
+
 def test_rtece_projection_rows_cache_reference_descriptors(monkeypatch):
     from benchmarks.oc20neb_tace_mace import analyze_rtece_projection_error as mod
 
@@ -2432,6 +2477,29 @@ def test_rtece_energy_label_projection_metrics_reports_holdout_error():
     assert metrics["energy_mae"] == pytest.approx(7.0)
     assert metrics["energy_bias"] == pytest.approx(7.0)
     assert metrics["energy_max_abs"] == pytest.approx(7.0)
+
+
+def test_rtece_sampled_force_descriptor_rows_match_full_jacobian():
+    from benchmarks.oc20neb_tace_mace import analyze_rtece_projection_error as mod
+
+    graph = RTECEGraph(
+        z=torch.tensor([1, 1], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.8, 0.1, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(2),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+    config = mod.build_projection_config(
+        "sampled_force",
+        ("atomic.radial_density", "atomic.vector_norm", "edge.direct.radial"),
+        num_radial=2,
+    )
+    sampled_rows = torch.tensor([0, 2, 5], dtype=torch.long)
+
+    full = mod._force_descriptor_matrix([graph], config)
+    sampled = mod._force_descriptor_matrix([graph], config, force_row_indices=sampled_rows)
+
+    assert sampled.shape == (3, full.shape[1])
+    assert torch.allclose(sampled, full[sampled_rows], atol=1e-8, rtol=1e-6)
 
 
 def test_rtece_force_label_projection_metrics_reports_holdout_error():
@@ -2799,6 +2867,78 @@ def test_rtece_projection_cli_adds_force_label_projection_metrics(tmp_path):
     assert "force_max_abs" in payload["rows"][0]
 
 
+def test_rtece_projection_cli_samples_force_components(tmp_path):
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    configs = tmp_path / "h2_force_sample.xyz"
+    output = tmp_path / "projection_force_sample.json"
+    atoms_list = []
+    for idx, distance in enumerate([0.70, 0.80, 0.90, 1.00]):
+        atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [distance, 0.0, 0.0]])
+        atoms.info["energy"] = 0.0
+        atoms.arrays["forces"] = np.zeros((2, 3), dtype=np.float64)
+        atoms.arrays["teacher_forces"] = np.full((2, 3), float(idx), dtype=np.float64)
+        atoms_list.append(atoms)
+    ase.io.write(configs, atoms_list, format="extxyz")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "benchmarks/oc20neb_tace_mace/analyze_rtece_projection_error.py",
+            "--configs",
+            str(configs),
+            "--output-json",
+            str(output),
+            "--reference-path-ids",
+            "atomic.radial_density,edge.direct.radial",
+            "--candidate",
+            "baseline:atomic.radial_density",
+            "--candidate",
+            "full_reference:atomic.radial_density,edge.direct.radial",
+            "--num-radial",
+            "3",
+            "--limit-configs",
+            "4",
+            "--neighborlist-backend",
+            "ase",
+            "--force-target-key",
+            "teacher_forces",
+            "--force-eval-stride",
+            "2",
+            "--force-eval-offset",
+            "1",
+            "--force-component-sample-count",
+            "6",
+            "--active-set-baseline-candidate",
+            "baseline",
+            "--active-set-energy-weight",
+            "0.0",
+            "--active-set-force-weight",
+            "1.0",
+        ],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=240,
+    )
+
+    assert result.returncode == 0, result.stderr
+    payload = json.loads(output.read_text(encoding="utf-8"))
+    assert payload["force_component_sample_count"] == 6
+    assert payload["force_component_sampled"] is True
+    assert payload["force_target_num_components"] == 24
+    assert payload["force_sampled_num_components"] == 6
+    assert payload["force_fit_num_components"] == 3
+    assert payload["force_eval_num_components"] == 3
+    assert all(row["force_fit_num_samples"] == 3 for row in payload["rows"])
+    assert all(row["force_eval_num_samples"] == 3 for row in payload["rows"])
+    assert payload["active_set_rows"][0]["active_set_force_metric"] == "force_rmse"
+
+
 def test_rtece_projection_cli_adds_combined_energy_force_ranking_fields(tmp_path):
     import numpy as np
     import ase.io
@@ -2927,6 +3067,7 @@ def test_rtece_projection_cli_emits_active_set_candidate_rows(tmp_path):
         "energy_weight": 1.0,
         "force_weight": 0.5,
         "projection_weight": 10.0,
+        "gain_mode": "absolute",
     }
     assert [row["candidate"] for row in payload["active_set_rows"]] == ["full_reference"]
     active_row = payload["active_set_rows"][0]

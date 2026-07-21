@@ -304,16 +304,27 @@ def force_label_projection_metrics(
     }
 
 
-def _force_descriptor_matrix(graphs: list[RTECEGraph], config: RTECEScalarConfig) -> torch.Tensor:
+def _force_descriptor_matrix(
+    graphs: list[RTECEGraph],
+    config: RTECEScalarConfig,
+    *,
+    force_row_indices: torch.Tensor | list[int] | tuple[int, ...] | None = None,
+) -> torch.Tensor:
     import torch
     from tace.models.rtece_scalar import RTECEGraph, rtece_descriptors
 
     if not graphs:
         raise ValueError("force projection diagnostic requires at least one graph")
-    matrices = []
-    for graph in graphs:
-        pos = graph.pos.detach().clone().requires_grad_(True)
-        graph_with_grad = RTECEGraph(
+
+    total_force_rows = sum(int(graph.pos.numel()) for graph in graphs)
+    selected_rows = (
+        None
+        if force_row_indices is None
+        else _normalize_row_indices(force_row_indices, total_force_rows, "force_row_indices")
+    )
+
+    def descriptor_sum(graph: RTECEGraph, pos: torch.Tensor) -> torch.Tensor:
+        graph_with_pos = RTECEGraph(
             z=graph.z,
             pos=pos,
             edge_index=graph.edge_index,
@@ -322,26 +333,65 @@ def _force_descriptor_matrix(graphs: list[RTECEGraph], config: RTECEScalarConfig
             edge_shifts=graph.edge_shifts,
             edge_batch=graph.edge_batch,
         )
-        phi = rtece_descriptors(graph_with_grad, config).sum(dim=0)
-        columns = []
-        for column_idx in range(int(phi.numel())):
-            if not phi[column_idx].requires_grad:
-                grad = torch.zeros_like(pos)
-            else:
-                grad = torch.autograd.grad(
-                    phi[column_idx],
-                    pos,
-                    retain_graph=True,
-                    allow_unused=True,
-                )[0]
-                if grad is None:
+        return rtece_descriptors(graph_with_pos, config).sum(dim=0)
+
+    if selected_rows is None:
+        matrices = []
+        for graph in graphs:
+            pos = graph.pos.detach().clone().requires_grad_(True)
+            phi = descriptor_sum(graph, pos)
+            columns = []
+            for column_idx in range(int(phi.numel())):
+                if not phi[column_idx].requires_grad:
                     grad = torch.zeros_like(pos)
-            columns.append((-grad).reshape(-1))
-        if columns:
-            matrices.append(torch.stack(columns, dim=1).detach().cpu())
-        else:
-            matrices.append(pos.new_zeros((int(pos.numel()), 0)).detach().cpu())
-    return torch.cat(matrices, dim=0)
+                else:
+                    grad = torch.autograd.grad(
+                        phi[column_idx],
+                        pos,
+                        retain_graph=True,
+                        allow_unused=True,
+                    )[0]
+                    if grad is None:
+                        grad = torch.zeros_like(pos)
+                columns.append((-grad).reshape(-1))
+            if columns:
+                matrices.append(torch.stack(columns, dim=1).detach().cpu())
+            else:
+                matrices.append(pos.new_zeros((int(pos.numel()), 0)).detach().cpu())
+        return torch.cat(matrices, dim=0)
+
+    graph_offsets: list[int] = []
+    offset = 0
+    for graph in graphs:
+        graph_offsets.append(offset)
+        offset += int(graph.pos.numel())
+    rows_by_graph: dict[int, list[int]] = {idx: [] for idx in range(len(graphs))}
+    for row in selected_rows.tolist():
+        row_int = int(row)
+        for graph_idx, graph_offset in enumerate(graph_offsets):
+            graph_end = graph_offset + int(graphs[graph_idx].pos.numel())
+            if graph_offset <= row_int < graph_end:
+                rows_by_graph[graph_idx].append(row_int - graph_offset)
+                break
+
+    sampled_rows = []
+    for graph_idx, local_rows in rows_by_graph.items():
+        if not local_rows:
+            continue
+        graph = graphs[graph_idx]
+        base_pos = graph.pos.detach().clone()
+
+        def fn(pos: torch.Tensor) -> torch.Tensor:
+            return descriptor_sum(graph, pos)
+
+        for local_row in local_rows:
+            tangent = torch.zeros_like(base_pos)
+            tangent.reshape(-1)[int(local_row)] = 1.0
+            _value, jvp = torch.autograd.functional.jvp(fn, (base_pos,), (tangent,), create_graph=False, strict=False)
+            sampled_rows.append((-jvp).detach().cpu())
+    if not sampled_rows:
+        raise ValueError("force_row_indices selected no force rows")
+    return torch.stack(sampled_rows, dim=0)
 
 
 def _force_row_indices_from_config_indices(
@@ -362,6 +412,57 @@ def _force_row_indices_from_config_indices(
         end = start + int(graphs[int(graph_idx)].z.numel()) * 3
         rows.append(torch.arange(start, end, dtype=torch.long))
     return torch.cat(rows, dim=0)
+
+
+def _take_evenly_spaced_rows(rows: torch.Tensor, count: int) -> torch.Tensor:
+    import torch
+
+    values = rows.detach().to(dtype=torch.long, device="cpu").flatten()
+    if values.numel() < 1:
+        raise ValueError("cannot sample from an empty row set")
+    take = min(int(count), int(values.numel()))
+    if take < 1:
+        raise ValueError("sample count must be positive")
+    if take == int(values.numel()):
+        return values
+    positions = torch.linspace(0, int(values.numel()) - 1, steps=take, dtype=torch.float64).round().to(dtype=torch.long)
+    return values[positions]
+
+
+def deterministic_force_component_sample(
+    force_fit_indices: torch.Tensor | list[int] | tuple[int, ...],
+    force_eval_indices: torch.Tensor | list[int] | tuple[int, ...],
+    *,
+    sample_count: int,
+) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    import torch
+
+    fit = torch.as_tensor(force_fit_indices, dtype=torch.long, device="cpu").flatten()
+    eval_rows = torch.as_tensor(force_eval_indices, dtype=torch.long, device="cpu").flatten()
+    count = int(sample_count)
+    if count < 1:
+        raise ValueError("force component sample count must be positive")
+    if fit.numel() < 1 or eval_rows.numel() < 1:
+        raise ValueError("force component sampling requires non-empty fit and eval rows")
+    if fit.numel() == eval_rows.numel() and bool(torch.equal(fit, eval_rows)):
+        sampled = _take_evenly_spaced_rows(fit, count)
+        remap = torch.arange(int(sampled.numel()), dtype=torch.long)
+        return sampled, remap, remap
+
+    fit_count = max(1, count // 2)
+    eval_count = max(1, count - fit_count)
+    sampled_fit = _take_evenly_spaced_rows(fit, fit_count)
+    sampled_eval = _take_evenly_spaced_rows(eval_rows, eval_count)
+    sampled_values: list[int] = []
+    for value in sampled_fit.tolist() + sampled_eval.tolist():
+        value_int = int(value)
+        if value_int not in sampled_values:
+            sampled_values.append(value_int)
+    sampled = torch.tensor(sampled_values, dtype=torch.long)
+    positions = {int(value): idx for idx, value in enumerate(sampled.tolist())}
+    remapped_fit = torch.tensor([positions[int(value)] for value in sampled_fit.tolist()], dtype=torch.long)
+    remapped_eval = torch.tensor([positions[int(value)] for value in sampled_eval.tolist()], dtype=torch.long)
+    return sampled, remapped_fit, remapped_eval
 
 
 def _force_component_weights_from_atom_weights(
@@ -625,13 +726,20 @@ def make_projection_diagnostic_rows(
     force_targets: torch.Tensor | None = None,
     force_fit_indices: torch.Tensor | list[int] | tuple[int, ...] | None = None,
     force_eval_indices: torch.Tensor | list[int] | tuple[int, ...] | None = None,
+    force_descriptor_indices: torch.Tensor | list[int] | tuple[int, ...] | None = None,
 ) -> list[dict[str, Any]]:
     reference_descriptors, reference_graph_descriptors = _descriptor_matrices(graphs, reference_config)
     if energy_targets is None:
         reference_graph_descriptors = None
-    reference_force_descriptors = _force_descriptor_matrix(graphs, reference_config) if force_targets is not None else None
+    reference_force_descriptors = (
+        _force_descriptor_matrix(graphs, reference_config, force_row_indices=force_descriptor_indices)
+        if force_targets is not None
+        else None
+    )
     graph_sample_weights = _graph_weights_from_atom_weights(graphs, sample_weights) if energy_targets is not None else None
     force_sample_weights = _force_component_weights_from_atom_weights(graphs, sample_weights) if force_targets is not None else None
+    if force_sample_weights is not None and force_descriptor_indices is not None:
+        force_sample_weights = force_sample_weights[_normalize_row_indices(force_descriptor_indices, int(force_sample_weights.numel()), "force_descriptor_indices")]
     rows = []
     for candidate_name, candidate_config in candidate_configs:
         candidate_descriptors = candidate_descriptors_from_reference(
@@ -681,7 +789,11 @@ def make_projection_diagnostic_rows(
                 reference_config=reference_config,
             ) if reference_force_descriptors is not None else None
             if candidate_force_descriptors is None:
-                candidate_force_descriptors = _force_descriptor_matrix(graphs, candidate_config)
+                candidate_force_descriptors = _force_descriptor_matrix(
+                    graphs,
+                    candidate_config,
+                    force_row_indices=force_descriptor_indices,
+                )
             row.update(
                 force_label_projection_metrics(
                     candidate_force_descriptors,
@@ -859,12 +971,25 @@ def _row_path_ids(row: dict[str, Any]) -> tuple[str, ...]:
     return ()
 
 
-def _metric_gain(candidate: dict[str, Any], baseline: dict[str, Any], keys: tuple[str, ...]) -> tuple[float, str | None]:
+def _metric_gain(
+    candidate: dict[str, Any],
+    baseline: dict[str, Any],
+    keys: tuple[str, ...],
+    *,
+    gain_mode: str = "absolute",
+) -> tuple[float, str | None]:
+    mode = str(gain_mode)
+    if mode not in {"absolute", "relative"}:
+        raise ValueError(f"unsupported active-set gain mode {gain_mode!r}")
     for key in keys:
         baseline_value = _safe_float_metric(baseline, key)
         candidate_value = _safe_float_metric(candidate, key)
         if baseline_value < float("inf") and candidate_value < float("inf"):
-            return baseline_value - candidate_value, key
+            absolute_gain = baseline_value - candidate_value
+            if mode == "relative":
+                denom = max(abs(baseline_value), 1.0e-12)
+                return absolute_gain / denom, key
+            return absolute_gain, key
     return 0.0, None
 
 
@@ -892,6 +1017,7 @@ def rank_active_set_candidate_rows(
     energy_weight: float = 1.0,
     force_weight: float = 1.0,
     projection_weight: float = 0.0,
+    gain_mode: str = "absolute",
 ) -> list[dict[str, Any]]:
     baseline_rows = [row for row in rows if str(row.get("candidate")) == str(baseline_candidate)]
     if len(baseline_rows) != 1:
@@ -909,13 +1035,15 @@ def rank_active_set_candidate_rows(
             candidate,
             baseline,
             ("energy_per_atom_rmse", "raw_rmse_mev_atom", "rmse_e_mev_atom", "energy_rmse"),
+            gain_mode=gain_mode,
         )
         force_gain, force_metric = _metric_gain(
             candidate,
             baseline,
             ("force_rmse", "rmse_f_mev_a"),
+            gain_mode=gain_mode,
         )
-        projection_gain, projection_metric = _metric_gain(candidate, baseline, ("relative_residual",))
+        projection_gain, projection_metric = _metric_gain(candidate, baseline, ("relative_residual",), gain_mode=gain_mode)
         weighted_gain = (
             float(energy_weight) * energy_gain
             + float(force_weight) * force_gain
@@ -933,6 +1061,7 @@ def rank_active_set_candidate_rows(
                 "active_set_energy_metric": energy_metric,
                 "active_set_force_metric": force_metric,
                 "active_set_projection_metric": projection_metric,
+                "active_set_gain_mode": str(gain_mode),
                 "weighted_marginal_gain": float(weighted_gain),
                 "marginal_gain_per_cost": float(weighted_gain / max(cost, 1.0e-12)),
                 "active_set_promoted": bool(weighted_gain > 0.0),
@@ -1182,12 +1311,14 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--force-target-key", default=None, help="Optional extxyz force array key for force/Jacobian label projection ranking.")
     parser.add_argument("--force-eval-stride", type=int, default=0, help="Use every Nth config as held-out force projection evaluation; 0 disables split.")
     parser.add_argument("--force-eval-offset", type=int, default=0)
+    parser.add_argument("--force-component-sample-count", type=int, default=0, help="Sample this many force components for force projection; 0 uses all components.")
     parser.add_argument("--focus-elements", default=None, help="Comma-separated element symbols or atomic numbers to upweight in projection rows.")
     parser.add_argument("--focus-weight", type=float, default=1.0)
     parser.add_argument("--active-set-baseline-candidate", default=None, help="Optional candidate name used as the active-set baseline for marginal gain/cost ranking.")
     parser.add_argument("--active-set-energy-weight", type=float, default=1.0)
     parser.add_argument("--active-set-force-weight", type=float, default=1.0)
     parser.add_argument("--active-set-projection-weight", type=float, default=0.0)
+    parser.add_argument("--active-set-gain-mode", choices=("absolute", "relative"), default="absolute")
     return parser.parse_args()
 
 
@@ -1262,12 +1393,15 @@ def main() -> None:
         energy_baseline_atomic_numbers = []
         energy_fit_indices = None
         energy_eval_indices = None
+    force_descriptor_indices = None
+    force_sampled_num_components = 0
     if args.force_target_key:
         force_targets = _load_force_targets(
             args.configs,
             force_key=str(args.force_target_key),
             limit_configs=int(args.limit_configs),
         )
+        force_target_num_components = int(force_targets.numel())
         if int(args.force_eval_stride) > 0:
             force_fit_config_indices, force_eval_config_indices = deterministic_eval_split(
                 len(graphs),
@@ -1281,8 +1415,17 @@ def main() -> None:
             force_eval_config_indices = force_fit_config_indices
         force_fit_indices = _force_row_indices_from_config_indices(graphs, force_fit_config_indices)
         force_eval_indices = _force_row_indices_from_config_indices(graphs, force_eval_config_indices)
+        if int(args.force_component_sample_count) > 0:
+            force_descriptor_indices, force_fit_indices, force_eval_indices = deterministic_force_component_sample(
+                force_fit_indices,
+                force_eval_indices,
+                sample_count=int(args.force_component_sample_count),
+            )
+            force_targets = force_targets[force_descriptor_indices]
+        force_sampled_num_components = int(force_targets.numel())
     else:
         force_targets = None
+        force_target_num_components = 0
         force_fit_config_indices = None
         force_eval_config_indices = None
         force_fit_indices = None
@@ -1318,6 +1461,7 @@ def main() -> None:
         force_targets=force_targets,
         force_fit_indices=force_fit_indices,
         force_eval_indices=force_eval_indices,
+        force_descriptor_indices=force_descriptor_indices,
     )
     ranked_rows = rank_projection_rows(rows)
     active_set_metadata = None
@@ -1328,6 +1472,7 @@ def main() -> None:
             "energy_weight": float(args.active_set_energy_weight),
             "force_weight": float(args.active_set_force_weight),
             "projection_weight": float(args.active_set_projection_weight),
+            "gain_mode": str(args.active_set_gain_mode),
         }
         active_set_rows = rank_active_set_candidate_rows(
             ranked_rows,
@@ -1335,6 +1480,7 @@ def main() -> None:
             energy_weight=float(args.active_set_energy_weight),
             force_weight=float(args.active_set_force_weight),
             projection_weight=float(args.active_set_projection_weight),
+            gain_mode=str(args.active_set_gain_mode),
         )
     payload = {
         "schema_version": "rtece_projection_diagnostic.v1",
@@ -1360,7 +1506,12 @@ def main() -> None:
         "energy_baseline_atomic_numbers": [int(value) for value in energy_baseline_atomic_numbers],
         "force_target_key": str(args.force_target_key) if args.force_target_key else None,
         "force_target_num_configs": int(len(graphs)) if force_targets is not None else 0,
-        "force_target_num_components": int(force_targets.numel()) if force_targets is not None else 0,
+        "force_target_num_components": force_target_num_components,
+        "force_component_sample_count": int(args.force_component_sample_count) if args.force_target_key else 0,
+        "force_component_sampled": force_descriptor_indices is not None,
+        "force_sampled_num_components": force_sampled_num_components,
+        "force_fit_num_components": int(force_fit_indices.numel()) if force_fit_indices is not None else 0,
+        "force_eval_num_components": int(force_eval_indices.numel()) if force_eval_indices is not None else 0,
         "force_fit_num_configs": int(force_fit_config_indices.numel()) if force_fit_config_indices is not None else 0,
         "force_eval_num_configs": int(force_eval_config_indices.numel()) if force_eval_config_indices is not None else 0,
         "force_eval_stride": int(args.force_eval_stride) if args.force_target_key else 0,
