@@ -516,3 +516,149 @@ def test_legacy_checkpoint_load_remains_supported_without_stage186_expectation(t
             dtype=torch.float64,
             expected_compatibility=compatibility,
         )
+
+
+@pytest.mark.parametrize(
+    "line, token",
+    [
+        ("export FOO=bar", "shell export"),
+        ("set -u", "set -u"),
+        ("#SBATCH --export=ALL", "--export"),
+        ("#SBATCH --mem=8G", "--mem"),
+        ("#SBATCH --cpus-per-task=4", "--cpus-per-task"),
+        ("srun --mem=8G command", "--mem="),
+    ],
+)
+def test_stage186_wrapper_audit_rejects_forbidden_full_body_tokens(line, token):
+    from benchmarks.oc20neb_tace_mace.audit_rtece_wrapper_contract import (
+        forbidden_wrapper_tokens,
+    )
+
+    assert token in forbidden_wrapper_tokens("#!/bin/bash\n" + line + "\n")
+
+
+def test_stage186_wrapper_audit_requires_successful_test_only_record(tmp_path):
+    from benchmarks.oc20neb_tace_mace.audit_rtece_wrapper_contract import (
+        audit_wrapper_file,
+    )
+
+    wrapper = tmp_path / "ok.sbatch"
+    wrapper.write_text(
+        "#!/bin/bash\n#SBATCH --partition=16V100\npython -m x\n",
+        encoding="ascii",
+    )
+    result = {
+        "command": ["sbatch", "--test-only", str(wrapper)],
+        "returncode": 0,
+        "stdout": "ok",
+        "stderr": "",
+    }
+    row = audit_wrapper_file(
+        wrapper,
+        expected_exports={},
+        require_test_only=True,
+        test_only_result=result,
+    )
+    assert row["contract_pass"] is True
+    assert row["test_only_pass"] is True
+    assert row["test_only"] == result
+
+
+def test_stage186_sbatch_test_only_record_never_submits(tmp_path):
+    from benchmarks.oc20neb_tace_mace.audit_rtece_wrapper_contract import (
+        record_sbatch_test_only,
+    )
+
+    wrapper = tmp_path / "probe.sbatch"
+    wrapper.write_text("#!/bin/bash\n", encoding="ascii")
+    calls = []
+
+    def fake_runner(command, **kwargs):
+        calls.append((command, kwargs))
+        return type(
+            "Completed",
+            (),
+            {"returncode": 0, "stdout": "accepted", "stderr": ""},
+        )()
+
+    record = record_sbatch_test_only(wrapper, runner=fake_runner)
+
+    assert calls == [
+        (
+            ["sbatch", "--test-only", str(wrapper)],
+            {"capture_output": True, "text": True, "check": False},
+        )
+    ]
+    assert record["returncode"] == 0
+
+
+def test_stage186_wrapper_audit_ignores_explanatory_comments():
+    from benchmarks.oc20neb_tace_mace.audit_rtece_wrapper_contract import (
+        forbidden_wrapper_tokens,
+    )
+
+    text = "#!/bin/bash\n# Never use export FOO or srun --mem=8G here.\npython -m x\n"
+    assert forbidden_wrapper_tokens(text) == []
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        {
+            "command": ["sbatch", "wrapper.sbatch"],
+            "returncode": 0,
+            "stdout": "",
+            "stderr": "",
+        },
+        {
+            "command": ["sbatch", "--test-only", "PLACEHOLDER"],
+            "returncode": 1,
+            "stdout": "",
+            "stderr": "rejected",
+        },
+    ],
+)
+def test_stage186_wrapper_audit_rejects_invalid_test_only_evidence(tmp_path, result):
+    from benchmarks.oc20neb_tace_mace.audit_rtece_wrapper_contract import (
+        audit_wrapper_file,
+    )
+
+    wrapper = tmp_path / "wrapper.sbatch"
+    wrapper.write_text("#!/bin/bash\npython -m x\n", encoding="ascii")
+    if result["command"][-1] == "PLACEHOLDER":
+        result = {**result, "command": [*result["command"][:-1], str(wrapper)]}
+
+    row = audit_wrapper_file(
+        wrapper,
+        expected_exports={},
+        require_test_only=True,
+        test_only_result=result,
+    )
+
+    assert row["contract_pass"] is False
+    assert row["test_only_pass"] is False
+
+
+def test_stage186_wrapper_index_preserves_empty_export_contract(tmp_path):
+    from benchmarks.oc20neb_tace_mace.audit_rtece_wrapper_contract import (
+        audit_wrapper_index,
+    )
+
+    wrapper = tmp_path / "wrapper.sbatch"
+    wrapper.write_text("#!/bin/bash\npython -m x\n", encoding="ascii")
+    index = tmp_path / "index.json"
+    index.write_text(
+        json.dumps(
+            {
+                "row_set": "stage186",
+                "rows": [{"name": "row", "wrapper": str(wrapper)}],
+            }
+        ),
+        encoding="ascii",
+    )
+
+    payload = audit_wrapper_index(index, expected_exports={})
+
+    assert payload["expected_exports"] == {}
+    assert payload["contract_pass"] is True
+    assert payload["rows"][0]["missing_exports"] == []

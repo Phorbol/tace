@@ -5,6 +5,8 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
+import subprocess
 from pathlib import Path
 import shlex
 import sys
@@ -73,10 +75,87 @@ def forbidden_sbatch_options(text: str) -> list[str]:
     return found
 
 
+def forbidden_wrapper_tokens(text: str) -> list[str]:
+    found: list[str] = []
+
+    def add(token: str) -> None:
+        if token not in found:
+            found.append(token)
+
+    for raw_line in text.splitlines():
+        stripped = raw_line.strip()
+        if not stripped:
+            continue
+        is_sbatch = stripped.startswith("#SBATCH")
+        if stripped.startswith("#") and not is_sbatch:
+            continue
+        if not is_sbatch:
+            if re.search(r"(?:^|[;&|]\s*)export\s+", stripped):
+                add("shell export")
+            if re.search(r"(?:^|[;&|]\s*)set\s+-u(?:\s|$)", stripped):
+                add("set -u")
+        if is_sbatch:
+            for option in FORBIDDEN_SBATCH_OPTIONS:
+                if re.search(rf"{re.escape(option)}(?:=|\s|$)", stripped):
+                    add(option)
+            continue
+        if re.search(r"--export(?:=|\s|$)", stripped):
+            add("--export")
+        if re.search(r"--cpus-per-task(?:=|\s|$)", stripped):
+            add("--cpus-per-task")
+        if re.search(r"--mem=", stripped):
+            add("--mem=")
+        elif re.search(r"--mem(?:\s|$)", stripped):
+            add("--mem")
+    return found
+
+
+def record_sbatch_test_only(
+    wrapper: str | Path,
+    *,
+    runner: Any = subprocess.run,
+) -> dict[str, Any]:
+    command = ["sbatch", "--test-only", str(Path(wrapper))]
+    try:
+        completed = runner(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError as exc:
+        return {
+            "command": command,
+            "returncode": None,
+            "stdout": "",
+            "stderr": f"{type(exc).__name__}: {exc}",
+        }
+    return {
+        "command": command,
+        "returncode": int(completed.returncode),
+        "stdout": str(completed.stdout or ""),
+        "stderr": str(completed.stderr or ""),
+    }
+
+
+def _test_only_pass(
+    wrapper: Path,
+    result: dict[str, Any] | None,
+) -> bool:
+    if result is None:
+        return False
+    return (
+        result.get("command") == ["sbatch", "--test-only", str(wrapper)]
+        and result.get("returncode") == 0
+    )
+
+
 def audit_wrapper_file(
     wrapper_path: str | Path,
     *,
     expected_exports: dict[str, str],
+    require_test_only: bool = False,
+    test_only_result: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     path = Path(wrapper_path)
     text = path.read_text(encoding="utf-8")
@@ -87,15 +166,27 @@ def audit_wrapper_file(
         for key, expected in expected_exports.items()
         if key in exports and str(exports.get(key)) != str(expected)
     }
-    forbidden = forbidden_sbatch_options(text)
-    contract_pass = not missing and not mismatched and not forbidden
+    forbidden = forbidden_wrapper_tokens(text)
+    if expected_exports:
+        forbidden = [token for token in forbidden if token != "shell export"]
+    test_only = dict(test_only_result) if test_only_result is not None else None
+    test_only_pass = _test_only_pass(path, test_only)
+    contract_pass = (
+        not missing
+        and not mismatched
+        and not forbidden
+        and (test_only_pass or not require_test_only)
+    )
     return {
         "wrapper": str(path),
         "contract_pass": bool(contract_pass),
         "forbidden_sbatch_options": forbidden,
+        "forbidden_wrapper_tokens": forbidden,
         "missing_exports": missing,
         "mismatched_exports": mismatched,
         "checked_exports": {key: exports.get(key) for key in sorted(expected_exports)},
+        "test_only": test_only,
+        "test_only_pass": bool(test_only_pass),
     }
 
 
@@ -103,8 +194,14 @@ def audit_wrapper_index(
     index_path: str | Path,
     *,
     expected_exports: dict[str, str] | None = None,
+    require_test_only: bool = False,
+    test_only_runner: Any = subprocess.run,
 ) -> dict[str, Any]:
-    expected_exports = dict(expected_exports or DEFAULT_STAGE116_EXPECTED_EXPORTS)
+    expected_exports = dict(
+        DEFAULT_STAGE116_EXPECTED_EXPORTS
+        if expected_exports is None
+        else expected_exports
+    )
     index = load_json(index_path)
     rows: list[dict[str, Any]] = []
     for index_row in index.get("rows", []):
@@ -116,12 +213,25 @@ def audit_wrapper_index(
                 "contract_pass": False,
                 "wrapper": None,
                 "forbidden_sbatch_options": [],
+                "forbidden_wrapper_tokens": [],
                 "missing_exports": sorted(expected_exports),
                 "mismatched_exports": {},
                 "checked_exports": {},
+                "test_only": None,
+                "test_only_pass": False,
             }
         else:
-            row = audit_wrapper_file(wrapper, expected_exports=expected_exports)
+            test_only_result = (
+                record_sbatch_test_only(wrapper, runner=test_only_runner)
+                if require_test_only
+                else None
+            )
+            row = audit_wrapper_file(
+                wrapper,
+                expected_exports=expected_exports,
+                require_test_only=require_test_only,
+                test_only_result=test_only_result,
+            )
             row["name"] = name
             row["variant"] = index_row.get("variant") or name
             row["tece_axes"] = index_row.get("tece_axes", [])
@@ -137,9 +247,18 @@ def audit_wrapper_index(
         "contract_pass": not failed,
         "failed_rows": failed,
         "expected_exports": expected_exports,
+        "require_test_only": bool(require_test_only),
         "forbidden_sbatch_options": list(FORBIDDEN_SBATCH_OPTIONS),
+        "forbidden_wrapper_tokens": [
+            "shell export",
+            "set -u",
+            "--export",
+            "--mem",
+            "--mem=",
+            "--cpus-per-task",
+        ],
         "review_basis": [
-            "SAI: no sbatch --export, --mem, or --cpus-per-task in wrappers",
+            "Stage186 SAI: no shell export, set -u, --export, --mem, or --cpus-per-task",
             "TECE_design_space Stage E: comparable hardware Pareto rows require identical data/training/evaluation contracts",
             "rTECE_review: report E/F RMSE, high-force tails, physical diagnostics only after contract-equivalent runs",
         ],
@@ -164,17 +283,18 @@ def format_markdown(payload: dict[str, Any]) -> str:
         f"- contract pass: `{payload.get('contract_pass')}`",
         f"- failed rows: {', '.join(payload.get('failed_rows') or []) if payload.get('failed_rows') else 'None'}",
         "",
-        "| row | pass | forbidden sbatch | missing exports | mismatched exports | hidden | Lmax |",
-        "|---|---|---|---|---|---:|---:|",
+        "| row | pass | test-only | forbidden tokens | missing exports | mismatched exports | hidden | Lmax |",
+        "|---|---|---|---|---|---|---:|---:|",
     ]
     for row in payload.get("rows", []):
         mismatched = ", ".join(sorted((row.get("mismatched_exports") or {}).keys())) or "None"
         missing = ", ".join(row.get("missing_exports") or []) or "None"
         forbidden = ", ".join(row.get("forbidden_sbatch_options") or []) or "None"
         lines.append(
-            "| {name} | {passed} | {forbidden} | {missing} | {mismatched} | {hidden} | {lmax} |".format(
+            "| {name} | {passed} | {test_only} | {forbidden} | {missing} | {mismatched} | {hidden} | {lmax} |".format(
                 name=row.get("name"),
                 passed=row.get("contract_pass"),
+                test_only=row.get("test_only_pass"),
                 forbidden=forbidden,
                 missing=missing,
                 mismatched=mismatched,
@@ -193,6 +313,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-json", type=Path, required=True)
     parser.add_argument("--output-md", type=Path, required=True)
     parser.add_argument("--stage116-defaults", action="store_true", help="Use the current Stage116 capacity-ladder contract defaults.")
+    parser.add_argument(
+        "--require-test-only",
+        action="store_true",
+        help="Run and require sbatch --test-only evidence for every wrapper.",
+    )
     parser.add_argument("--expect-export", action="append", default=[], help="Expected wrapper export in KEY=VALUE form; can be repeated.")
     return parser.parse_args()
 
@@ -205,7 +330,11 @@ def main() -> None:
         expected = DEFAULT_STAGE116_EXPECTED_EXPORTS
     else:
         expected = {}
-    payload = audit_wrapper_index(args.index, expected_exports=expected)
+    payload = audit_wrapper_index(
+        args.index,
+        expected_exports=expected,
+        require_test_only=bool(args.require_test_only),
+    )
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
     args.output_md.parent.mkdir(parents=True, exist_ok=True)
     args.output_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
