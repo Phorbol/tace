@@ -1,0 +1,125 @@
+{
+  "active_set_rows": [
+    {
+      "candidate": "t2_cavity_quadrupole",
+      "energy_marginal_gain_mev_atom": 1549.7928245674377,
+      "marginal_gain_per_cost": 48.431787123083524,
+      "promoted_vs_t1_l0": true,
+      "rank": 1
+    },
+    {
+      "candidate": "t2_edge_frame_projection",
+      "energy_marginal_gain_mev_atom": 1706.9454630578648,
+      "marginal_gain_per_cost": 47.415902392640966,
+      "promoted_vs_t1_l0": true,
+      "rank": 2
+    },
+    {
+      "candidate": "t2_edge_frame_plus_direct",
+      "energy_marginal_gain_mev_atom": 1705.4215598351852,
+      "marginal_gain_per_cost": 44.880225866666855,
+      "promoted_vs_t1_l0": true,
+      "rank": 3
+    },
+    {
+      "candidate": "t1_l2_atomic_cross",
+      "energy_marginal_gain_mev_atom": 1345.6904812921362,
+      "marginal_gain_per_cost": 44.85715703242742,
+      "promoted_vs_t1_l0": true,
+      "rank": 4
+    },
+    {
+      "candidate": "t2_cavity_vector",
+      "energy_marginal_gain_mev_atom": 1352.4805174967867,
+      "marginal_gain_per_cost": 43.62918793148956,
+      "promoted_vs_t1_l0": true,
+      "rank": 5
+    },
+    {
+      "candidate": "t1_l1_atomic_cross",
+      "energy_marginal_gain_mev_atom": 435.2987917269247,
+      "marginal_gain_per_cost": 29.021269327804767,
+      "promoted_vs_t1_l0": true,
+      "rank": 6
+    }
+  ],
+  "candidate_rows": [
+    {
+      "candidate": "t2_edge_frame_projection",
+      "descriptor_relative_residual": 2.757535764935609e-07,
+      "dim": 336,
+      "energy_per_atom_mae_mev_atom": 449.9702999934699,
+      "energy_per_atom_max_mev_atom": 4562.047577072698,
+      "energy_per_atom_rmse_mev_atom": 1234.9260741749313
+    },
+    {
+      "candidate": "t2_edge_frame_plus_direct",
+      "descriptor_relative_residual": 1.9197312055892566e-07,
+      "dim": 338,
+      "energy_per_atom_mae_mev_atom": 450.41742017294325,
+      "energy_per_atom_max_mev_atom": 4567.714139243092,
+      "energy_per_atom_rmse_mev_atom": 1236.4499773976108
+    },
+    {
+      "candidate": "t2_cavity_quadrupole",
+      "descriptor_relative_residual": 0.010639099654038666,
+      "dim": 332,
+      "energy_per_atom_mae_mev_atom": 503.2776657760486,
+      "energy_per_atom_max_mev_atom": 5125.8340087925235,
+      "energy_per_atom_rmse_mev_atom": 1392.0787126653584
+    },
+    {
+      "candidate": "t2_cavity_vector",
+      "descriptor_relative_residual": 0.010859067034732344,
+      "dim": 331,
+      "energy_per_atom_mae_mev_atom": 561.9197806324157,
+      "energy_per_atom_max_mev_atom": 5867.335276045467,
+      "energy_per_atom_rmse_mev_atom": 1589.3910197360094
+    },
+    {
+      "candidate": "t1_l2_atomic_cross",
+      "descriptor_relative_residual": 0.011173861847081645,
+      "dim": 330,
+      "energy_per_atom_mae_mev_atom": 564.0853748927915,
+      "energy_per_atom_max_mev_atom": 5894.601861080263,
+      "energy_per_atom_rmse_mev_atom": 1596.18105594066
+    },
+    {
+      "candidate": "t1_l1_atomic_cross",
+      "descriptor_relative_residual": 0.027099824006928827,
+      "dim": 315,
+      "energy_per_atom_mae_mev_atom": 839.4532780992553,
+      "energy_per_atom_max_mev_atom": 9347.984222559468,
+      "energy_per_atom_rmse_mev_atom": 2506.5727455058714
+    },
+    {
+      "candidate": "t1_l0_species_radial",
+      "descriptor_relative_residual": 0.10809258459405417,
+      "dim": 300,
+      "energy_per_atom_mae_mev_atom": 974.4064626424458,
+      "energy_per_atom_max_mev_atom": 10951.202563526218,
+      "energy_per_atom_rmse_mev_atom": 2941.871537232796
+    }
+  ],
+  "interpretation": {
+    "caveat": "The absolute LOOCV errors are far worse than the known intercept-only Stage169 LOOCV scale, so the next diagnostic must include intercept/standardization/ridge sweeps before using active-set promotion as architecture selection.",
+    "headline": "Stage172 rejects the Stage171 config-heldout result as a deployable unseen-case energy-baseline solution.",
+    "next_priority": "Stage173 should add robust group-LOOCV projection with intercept baseline, feature standardization, ridge sweep, and a beat-intercept promotion gate; if it still fails, architecture work should move to learnable low-frequency chemical/site representations rather than training the Stage171 winner.",
+    "stage171_contrast": "Stage171 config-heldout best was about 0.47 meV/atom on the same residual target; Stage172 group-LOOCV best is about 1235 meV/atom.",
+    "why_it_matters": "case_id is not used as a feature, so this tests whether deployable rTECE scalar/edge path descriptors can extrapolate the low-frequency case/site/adsorbate offset to unseen cases."
+  },
+  "projection_json": "runs/oc20neb_tace_mace/rtece-stage172-group-holdout-active-set/projection_outputs/stage172_limit512_group_holdout_active_set_projection.json",
+  "schema_version": "rtece_stage172_results_summary.v1",
+  "slurm_elapsed": "00:03:16",
+  "slurm_exit_code": "0:0",
+  "slurm_job": 688116,
+  "slurm_state": "COMPLETED",
+  "split": {
+    "group_count": 11,
+    "group_key": "case_id",
+    "mode": "group-loocv",
+    "target_num_configs": 512,
+    "uses_group_as_feature": false
+  },
+  "stage": "stage172_group_holdout_active_set"
+}
