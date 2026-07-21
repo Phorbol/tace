@@ -8739,6 +8739,47 @@ def test_stage165_energy_baseline_triage_summarizes_case_offsets(tmp_path):
 
 
 
+def test_stage166_deployable_proxy_baseline_scores_feature_sets():
+    from benchmarks.oc20neb_tace_mace.summarize_rtece_stage166_deployable_proxy_baseline import (
+        fit_proxy_feature_sets,
+        render_stage166_proxy_baseline_markdown,
+    )
+
+    case_features = {
+        "case-a": {"natoms": 50.0, "frac_z6": 0.02, "volume_per_atom": 7.0},
+        "case-b": {"natoms": 50.0, "frac_z6": 0.04, "volume_per_atom": 7.2},
+        "case-c": {"natoms": 60.0, "frac_z6": 0.06, "volume_per_atom": 8.1},
+        "case-d": {"natoms": 60.0, "frac_z6": 0.08, "volume_per_atom": 8.4},
+    }
+    offsets = {
+        case_id: 100.0 * row["frac_z6"] + 2.0 * row["volume_per_atom"]
+        for case_id, row in case_features.items()
+    }
+    summary = fit_proxy_feature_sets(
+        case_offsets_mev_atom=offsets,
+        case_features=case_features,
+        feature_sets={
+            "intercept_only": [],
+            "composition": ["frac_z6"],
+            "composition_cell": ["frac_z6", "volume_per_atom"],
+        },
+        ridge=1.0e-8,
+    )
+
+    assert summary["schema_version"] == "rtece_stage166_deployable_proxy_baseline.v1"
+    assert summary["best_train_rmse_feature_set"] == "composition_cell"
+    assert summary["rows"][0]["uses_case_id_as_feature"] is False
+    best = {row["feature_set"]: row for row in summary["rows"]}["composition_cell"]
+    assert best["train_rmse_mev_atom"] < 1.0e-3
+    assert best["feature_count"] == 2
+
+    markdown = render_stage166_proxy_baseline_markdown(summary)
+    assert "Stage166 Deployable Proxy Baseline" in markdown
+    assert "case_id is used only for grouping" in markdown
+    assert "composition_cell" in markdown
+
+
+
 def test_stage145_summary_keeps_rmse_first_and_missing_outputs_explicit(tmp_path):
     import json
 
