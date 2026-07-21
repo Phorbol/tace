@@ -73,6 +73,8 @@ def test_stage181_manifest_and_wrappers_are_sai_safe(tmp_path):
     assert set(wrappers) == {
         "train_3bpa_300k",
         "benchmark_3bpa",
+        "train_3bpa_mixedT",
+        "benchmark_3bpa_mixedT",
         "train_rmd17_ethanol",
         "benchmark_rmd17_ethanol",
     }
@@ -152,6 +154,8 @@ def test_stage181_manifest_includes_rmd17_smoke_wrappers(tmp_path):
     assert set(wrappers) == {
         "train_3bpa_300k",
         "benchmark_3bpa",
+        "train_3bpa_mixedT",
+        "benchmark_3bpa_mixedT",
         "train_rmd17_ethanol",
         "benchmark_rmd17_ethanol",
     }
@@ -209,3 +213,32 @@ def test_rmd17_npz_to_extxyz_splits_uses_ev_units_and_contiguous_disjoint_splits
     assert valid[0].info["source_frame"] == 3
     assert test[1].get_potential_energy() == pytest.approx(6.0 * KCAL_MOL_TO_EV)
     assert test[1].get_forces()[0, 0] == pytest.approx(6.0 * KCAL_MOL_TO_EV)
+
+
+
+def test_stage181_manifest_includes_3bpa_mixed_temperature_comparison(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage181_conventional_md import (
+        audit_stage181_manifest,
+        make_stage181_manifest,
+        materialize_stage181,
+    )
+
+    payload = make_stage181_manifest(output_root=tmp_path / "stage181", dataset_root=tmp_path / "dataset_3BPA")
+    materialize_stage181(payload)
+    audit = audit_stage181_manifest(payload)
+
+    assert audit["contract_pass"], audit["failed_checks"]
+    assert payload["distribution_coverage_comparison"]["baseline_train_split"] == "train_300K"
+    assert payload["distribution_coverage_comparison"]["coverage_train_split"] == "train_mixedT"
+    assert "test_1200K" in payload["distribution_coverage_comparison"]["ood_splits"]
+    wrappers = payload["artifacts"]["wrappers"]
+    assert "train_3bpa_mixedT" in wrappers
+    assert "benchmark_3bpa_mixedT" in wrappers
+    wrapper_text = "\n".join(Path(path).read_text(encoding="utf-8") for path in wrappers.values())
+    assert '"${DATASET_ROOT}/train_mixedT.xyz"' in wrapper_text
+    assert "stage181_3bpa_trainMixedT" in wrapper_text
+    assert "stage181_3bpa_trainMixedT/test_1200K_benchmark.json" in wrapper_text
+    assert "--export" not in wrapper_text
+    assert "#SBATCH --mem" not in wrapper_text
+    assert "--cpus-per-task" not in wrapper_text
+    assert "set -u" not in wrapper_text

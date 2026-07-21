@@ -56,6 +56,8 @@ def _artifacts(root: Path) -> dict[str, Any]:
         "wrappers": {
             "train_3bpa_300k": str(root / "wrappers" / "stage181_train_3bpa_300k_no_export.sbatch"),
             "benchmark_3bpa": str(root / "wrappers" / "stage181_benchmark_3bpa_no_export.sbatch"),
+            "train_3bpa_mixedT": str(root / "wrappers" / "stage181_train_3bpa_mixedT_no_export.sbatch"),
+            "benchmark_3bpa_mixedT": str(root / "wrappers" / "stage181_benchmark_3bpa_mixedT_no_export.sbatch"),
             "train_rmd17_ethanol": str(root / "wrappers" / "stage181_train_rmd17_ethanol_no_export.sbatch"),
             "benchmark_rmd17_ethanol": str(root / "wrappers" / "stage181_benchmark_rmd17_ethanol_no_export.sbatch"),
         },
@@ -95,6 +97,22 @@ def make_stage181_manifest(
             "test_file": str(Path(rmd17_root) / "converted_extxyz" / "rmd17_ethanol_test.extxyz"),
             "source_units": {"energy": "kcal/mol", "forces": "kcal/mol/A", "distance": "A"},
             "target_units": {"energy": "eV", "forces": "eV/A", "distance": "A"},
+        },
+        "distribution_coverage_comparison": {
+            "baseline_train_split": "train_300K",
+            "coverage_train_split": "train_mixedT",
+            "id_split": "test_300K",
+            "ood_splits": ["test_600K", "test_1200K", "test_dih"],
+            "controlled_variables": [
+                "same rTECE student path set",
+                "same optimizer schedule",
+                "same benchmark splits",
+                "same energy/force units",
+            ],
+            "interpretation": (
+                "If train_mixedT reduces high-temperature/dihedral F RMSE at similar throughput, the present "
+                "failure mode is at least partly deployment-distribution coverage rather than only student capacity."
+            ),
         },
         "train_split": "train_300K",
         "valid_split": "test_300K",
@@ -181,7 +199,13 @@ def _split_path(dataset_root: str | Path, split: str) -> str:
     return str(Path(dataset_root) / filename)
 
 
-def _student_train_command(payload: dict[str, Any], *, output_dir: str) -> str:
+def _student_train_command(
+    payload: dict[str, Any],
+    *,
+    output_dir: str,
+    train_split: str,
+    variant: str,
+) -> str:
     cfg = payload["student_config"]
     train = payload["training_config"]
     parts = [
@@ -190,11 +214,11 @@ def _student_train_command(payload: dict[str, Any], *, output_dir: str) -> str:
         "-m",
         "tace.scripts.rtece_train_scalar",
         "--variant",
-        cfg["variant"],
+        variant,
         "--scalar-path-ids",
         _path_csv(payload["student_path_ids"]),
         "--train-file",
-        '"${DATASET_ROOT}/train_300K.xyz"',
+        f'"${{DATASET_ROOT}}/{train_split}.xyz"',
         "--valid-file",
         '"${DATASET_ROOT}/test_300K.xyz"',
         "--output-dir",
@@ -244,28 +268,69 @@ def _student_train_command(payload: dict[str, Any], *, output_dir: str) -> str:
     return " ".join(parts)
 
 
-def write_train_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
+def _write_3bpa_train_wrapper(
+    path: str | Path,
+    payload: dict[str, Any],
+    *,
+    train_split: str,
+    output_name: str,
+    variant: str,
+    job_name: str,
+) -> Path:
     wrapper = Path(path)
-    body = _wrapper_header(payload, job_name="rtece-st181-3bpa-train", time_limit="03:55:00")
-    out = str(Path(payload["artifacts"]["results_root"]) / "stage181_3bpa_train300K")
-    body.extend([f"mkdir -p {shlex.quote(out)}", _student_train_command(payload, output_dir=out), ""])
+    body = _wrapper_header(payload, job_name=job_name, time_limit="03:55:00")
+    out = str(Path(payload["artifacts"]["results_root"]) / output_name)
+    body.extend([
+        f"mkdir -p {shlex.quote(out)}",
+        _student_train_command(payload, output_dir=out, train_split=train_split, variant=variant),
+        "",
+    ])
     wrapper.parent.mkdir(parents=True, exist_ok=True)
     wrapper.write_text("\n".join(body), encoding="utf-8")
     return wrapper
 
 
-def write_benchmark_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
+def write_train_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
+    return _write_3bpa_train_wrapper(
+        path,
+        payload,
+        train_split="train_300K",
+        output_name="stage181_3bpa_train300K",
+        variant=payload["student_config"]["variant"],
+        job_name="rtece-st181-3bpa-train",
+    )
+
+
+def write_mixedt_train_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
+    return _write_3bpa_train_wrapper(
+        path,
+        payload,
+        train_split="train_mixedT",
+        output_name="stage181_3bpa_trainMixedT",
+        variant="stage181_3bpa_mixedT_l1_local_l0_student",
+        job_name="rtece-st181-3bpa-mix-tr",
+    )
+
+
+def _write_3bpa_benchmark_wrapper(
+    path: str | Path,
+    payload: dict[str, Any],
+    *,
+    trained_output_name: str,
+    variant_prefix: str,
+    job_name: str,
+) -> Path:
     wrapper = Path(path)
-    body = _wrapper_header(payload, job_name="rtece-st181-3bpa-bench", time_limit="02:00:00")
-    checkpoint = str(Path(payload["artifacts"]["results_root"]) / "stage181_3bpa_train300K" / "rtece_scalar_best.pt")
-    out_root = Path(payload["artifacts"]["diagnostics_root"]) / "stage181_3bpa_train300K"
+    body = _wrapper_header(payload, job_name=job_name, time_limit="02:00:00")
+    checkpoint = str(Path(payload["artifacts"]["results_root"]) / trained_output_name / "rtece_scalar_best.pt")
+    out_root = Path(payload["artifacts"]["diagnostics_root"]) / trained_output_name
     body.append(f"mkdir -p {shlex.quote(str(out_root))}")
     for split in payload["benchmark_splits"]:
         output = out_root / f"{split}_benchmark.json"
         body.append(
             'PYTHONPATH="${TACE_ROOT}:${PYTHONPATH:-}" "${TACE_PYTHON}" benchmarks/oc20neb_tace_mace/benchmark_rtece_scalar.py '
             f"--model {shlex.quote(checkpoint)} --configs \"${{DATASET_ROOT}}/{split}.xyz\" "
-            f"--output {shlex.quote(str(output))} --variant stage181_3bpa_{split} "
+            f"--output {shlex.quote(str(output))} --variant {variant_prefix}_{split} "
             "--start-config 0 --limit-configs 512 --measure-passes 5 --device cuda --default-dtype float32 "
             "--force-mode autograd --graph-construction-backend matscipy_neighborlist"
         )
@@ -273,6 +338,26 @@ def write_benchmark_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
     wrapper.parent.mkdir(parents=True, exist_ok=True)
     wrapper.write_text("\n".join(body), encoding="utf-8")
     return wrapper
+
+
+def write_benchmark_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
+    return _write_3bpa_benchmark_wrapper(
+        path,
+        payload,
+        trained_output_name="stage181_3bpa_train300K",
+        variant_prefix="stage181_3bpa_train300K",
+        job_name="rtece-st181-3bpa-bench",
+    )
+
+
+def write_mixedt_benchmark_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
+    return _write_3bpa_benchmark_wrapper(
+        path,
+        payload,
+        trained_output_name="stage181_3bpa_trainMixedT",
+        variant_prefix="stage181_3bpa_trainMixedT",
+        job_name="rtece-st181-3bpa-mix-bn",
+    )
 
 
 def _rmd17_train_command(payload: dict[str, Any], *, output_dir: str) -> str:
@@ -377,6 +462,7 @@ def render_stage_plan(payload: dict[str, Any]) -> str:
         "- primary: 3BPA, eV/eV-A extxyz with 300K ID, 600K/1200K OOD, and dihedral PES splits",
         "- secondary: rMD17, npz source requiring kcal/mol to eV conversion before training",
         "- rMD17 smoke wrappers expect converted ethanol train/valid/test extxyz files under `converted_extxyz/`",
+        "- 3BPA distribution coverage check compares train_300K against train_mixedT with the same student",
         "",
         "## Student",
         "",
@@ -411,9 +497,14 @@ def audit_stage181_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         "wrappers": set(wrappers) == {
             "train_3bpa_300k",
             "benchmark_3bpa",
+            "train_3bpa_mixedT",
+            "benchmark_3bpa_mixedT",
             "train_rmd17_ethanol",
             "benchmark_rmd17_ethanol",
         },
+        "distribution_coverage_comparison": payload.get("distribution_coverage_comparison", {}).get(
+            "coverage_train_split"
+        ) == "train_mixedT",
         "rmd17_smoke_units": payload.get("rmd17_smoke", {}).get("target_units")
         == {"energy": "eV", "forces": "eV/A", "distance": "A"},
         "no_forbidden_sbatch_flags": not any(token in wrapper_text for token in forbidden),
@@ -442,6 +533,8 @@ def materialize_stage181(payload: dict[str, Any]) -> dict[str, Any]:
     )
     write_train_wrapper(artifacts["wrappers"]["train_3bpa_300k"], payload)
     write_benchmark_wrapper(artifacts["wrappers"]["benchmark_3bpa"], payload)
+    write_mixedt_train_wrapper(artifacts["wrappers"]["train_3bpa_mixedT"], payload)
+    write_mixedt_benchmark_wrapper(artifacts["wrappers"]["benchmark_3bpa_mixedT"], payload)
     write_rmd17_train_wrapper(artifacts["wrappers"]["train_rmd17_ethanol"], payload)
     write_rmd17_benchmark_wrapper(artifacts["wrappers"]["benchmark_rmd17_ethanol"], payload)
     audit = audit_stage181_manifest(payload)

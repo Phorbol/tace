@@ -7,6 +7,7 @@ This stage adds clean molecular MD deployment splits before continuing renormali
 - primary: 3BPA, eV/eV-A extxyz with 300K ID, 600K/1200K OOD, and dihedral PES splits
 - secondary: rMD17, npz source requiring kcal/mol to eV conversion before training
 - rMD17 smoke wrappers expect converted ethanol train/valid/test extxyz files under `converted_extxyz/`
+- 3BPA distribution coverage check compares train_300K against train_mixedT with the same student
 
 ## Student
 

@@ -11,8 +11,10 @@
     "stage_plan": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/stage181_plan.md",
     "wrappers": {
       "benchmark_3bpa": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/wrappers/stage181_benchmark_3bpa_no_export.sbatch",
+      "benchmark_3bpa_mixedT": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/wrappers/stage181_benchmark_3bpa_mixedT_no_export.sbatch",
       "benchmark_rmd17_ethanol": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/wrappers/stage181_benchmark_rmd17_ethanol_no_export.sbatch",
       "train_3bpa_300k": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/wrappers/stage181_train_3bpa_300k_no_export.sbatch",
+      "train_3bpa_mixedT": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/wrappers/stage181_train_3bpa_mixedT_no_export.sbatch",
       "train_rmd17_ethanol": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/wrappers/stage181_train_rmd17_ethanol_no_export.sbatch"
     }
   },
@@ -28,6 +30,23 @@
     "secondary": "rMD17"
   },
   "dataset_root": "datasets/3BPA/dataset_3BPA",
+  "distribution_coverage_comparison": {
+    "baseline_train_split": "train_300K",
+    "controlled_variables": [
+      "same rTECE student path set",
+      "same optimizer schedule",
+      "same benchmark splits",
+      "same energy/force units"
+    ],
+    "coverage_train_split": "train_mixedT",
+    "id_split": "test_300K",
+    "interpretation": "If train_mixedT reduces high-temperature/dihedral F RMSE at similar throughput, the present failure mode is at least partly deployment-distribution coverage rather than only student capacity.",
+    "ood_splits": [
+      "test_600K",
+      "test_1200K",
+      "test_dih"
+    ]
+  },
   "labels": {
     "energy_key": "energy",
     "forces_key": "forces"

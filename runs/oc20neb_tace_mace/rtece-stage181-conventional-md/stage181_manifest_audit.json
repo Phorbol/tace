@@ -1,6 +1,7 @@
 {
   "checks": {
     "benchmark_splits": true,
+    "distribution_coverage_comparison": true,
     "no_forbidden_sbatch_flags": true,
     "primary_dataset": true,
     "rmd17_smoke_units": true,
