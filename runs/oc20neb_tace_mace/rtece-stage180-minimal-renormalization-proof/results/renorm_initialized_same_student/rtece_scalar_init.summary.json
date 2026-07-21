@@ -1,0 +1,48 @@
+{
+  "init_energy_weight": 1.0,
+  "init_force_focus_atomic_numbers": [],
+  "init_force_focus_weight": 1.0,
+  "init_force_weight": 10.0,
+  "init_limit_configs": 2048,
+  "init_lr": 0.001,
+  "init_method": "projection_constrained_energy_force_prefit.v1",
+  "init_role": "stage180_renorm_initialized_same_student",
+  "init_steps": 512,
+  "init_summary": {
+    "best_step": null,
+    "best_valid_loss": null,
+    "final_loss": 1.4466845989227295,
+    "steps": 512
+  },
+  "init_train_file": "runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz",
+  "projection": {
+    "candidate_row": {
+      "candidate": "scratch_same_student",
+      "candidate_dim": 223,
+      "energy_beats_intercept_baseline": false,
+      "energy_per_atom_max_abs": 29.588632340465033,
+      "energy_per_atom_rmse": 2.790777441695363,
+      "energy_underdetermined": true,
+      "force_max_abs": 519.4106929421682,
+      "force_rmse": 129.40411768833064,
+      "force_underdetermined": true,
+      "reference_dim": 226,
+      "relative_energy_residual": 0.536392202075859,
+      "relative_force_residual": 302.7102298422436,
+      "relative_residual": 0.010015512646555052
+    },
+    "projection_configs": "runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz",
+    "projection_json": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/diagnostics/stage180_projection_diagnostic.json",
+    "projection_limit_configs": 256,
+    "projection_schema_version": "rtece_projection_diagnostic.v1",
+    "reference_path_ids": [
+      "atomic.radial_density",
+      "atomic.species_basis_density",
+      "atomic.local_l0_lowrank_density",
+      "atomic.vector_norm",
+      "atomic.vector_cross_radial_dot",
+      "edge.cavity.vector_dot",
+      "edge.direct.radial"
+    ]
+  }
+}

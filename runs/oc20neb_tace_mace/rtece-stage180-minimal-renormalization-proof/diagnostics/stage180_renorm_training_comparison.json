@@ -1,0 +1,53 @@
+{
+  "initializer": {
+    "final_loss": 1.4466845989227295,
+    "init_limit_configs": 2048,
+    "init_steps": 512,
+    "projection_candidate_row": {
+      "candidate": "scratch_same_student",
+      "candidate_dim": 223,
+      "energy_beats_intercept_baseline": false,
+      "energy_per_atom_max_abs": 29.588632340465033,
+      "energy_per_atom_rmse": 2.790777441695363,
+      "energy_underdetermined": true,
+      "force_max_abs": 519.4106929421682,
+      "force_rmse": 129.40411768833064,
+      "force_underdetermined": true,
+      "reference_dim": 226,
+      "relative_energy_residual": 0.536392202075859,
+      "relative_force_residual": 302.7102298422436,
+      "relative_residual": 0.010015512646555052
+    }
+  },
+  "interpretation": {
+    "not_yet_proven": "E/F benchmark, max errors, relative-energy, dimer, rattle-relax, throughput, and memory Pareto still need matched diagnostics before a scientific win claim",
+    "training_loss_claim": "renorm initialization improves matched validation loss versus scratch for the fixed Stage180 student"
+  },
+  "jobs": {
+    "initializer": "689028",
+    "renorm_train": "689033"
+  },
+  "renorm_initialized": {
+    "best_step": 19776,
+    "best_valid_loss": 0.10741329193115234,
+    "init_limit_configs": 2048,
+    "init_method": "projection_constrained_energy_force_prefit.v1",
+    "init_state": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/results/renorm_initialized_same_student/rtece_scalar_init.pt",
+    "max_steps": 20000,
+    "steps": 20000,
+    "train_configs": 2048,
+    "valid_configs": 256
+  },
+  "schema_version": "rtece_stage180_renorm_training_comparison.v1",
+  "scratch": {
+    "best_step": 64,
+    "best_valid_loss": 0.17195634543895721,
+    "max_steps": 20000,
+    "steps": 16064,
+    "train_configs": 2048,
+    "valid_configs": 256
+  },
+  "stage": "stage180_minimal_renormalization_proof",
+  "valid_loss_delta": -0.06454305350780487,
+  "valid_loss_ratio": 0.6246544241037211
+}
