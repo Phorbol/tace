@@ -19,6 +19,11 @@ from tace.models.rtece_protocol import (
     write_operator_manifest,
 )
 from tace.models.rtece_scalar import build_rtece_config, build_rtece_config_from_path_ids
+from benchmarks.oc20neb_tace_mace.prepare_rtece_stage186_data import (
+    _fit_training_e0,
+    materialize_stage186_3bpa_split,
+    split_stage186_indices,
+)
 
 
 def _compatibility_kwargs() -> dict[str, str]:
@@ -374,3 +379,97 @@ def test_stage186_protocol_cli_writes_loadable_operator_manifest(tmp_path):
         ("L0", ("atomic.radial_density",)),
         ("L1", ("atomic.radial_density", "edge.direct.radial")),
     )
+
+
+def _make_synthetic_3bpa_tree(root, *, num_train=500):
+    import numpy as np
+    import ase.io
+    from ase import Atoms
+
+    root.mkdir(parents=True)
+    frames = []
+    for index in range(num_train):
+        symbols = "H2" if index % 2 == 0 else "HHe"
+        atoms = Atoms(symbols, positions=[[0, 0, 0], [0.7 + index * 1e-4, 0, 0]])
+        atomic_energy = -2.0 if symbols == "H2" else -3.0
+        atoms.info["energy"] = atomic_energy + 0.01 * np.sin(index / 13.0)
+        atoms.info["energy_weight"] = 1.0 + 0.1 * (index % 3)
+        atoms.arrays["forces"] = np.full((2, 3), 0.001 * (1 + index % 5))
+        frames.append(atoms)
+    ase.io.write(root / "train_300K.xyz", frames, format="extxyz")
+    for name in ("test_300K.xyz", "test_600K.xyz", "test_1200K.xyz", "test_dih.xyz"):
+        (root / name).write_text(f"sentinel:{name}\n", encoding="ascii")
+    return root
+
+
+def test_stage186_split_uses_one_window_and_nonwrapping_embargo():
+    split = split_stage186_indices(500, "sha256:" + "a" * 64)
+    valid = split["validation_indices"]
+    train = split["training_indices"]
+    embargo = split["embargo_indices"]
+
+    assert len(valid) == 100
+    assert valid == list(range(valid[0], valid[0] + 100))
+    assert not set(train) & set(valid)
+    assert not set(train) & set(embargo)
+    assert not set(valid) & set(embargo)
+    assert min(train + valid + embargo) >= 0
+    assert max(train + valid + embargo) < 500
+
+
+def test_stage186_data_manifest_never_uses_named_test_files(tmp_path):
+    dataset = _make_synthetic_3bpa_tree(tmp_path / "3bpa")
+    test_paths = sorted(dataset.glob("test_*.xyz"))
+    hashes_before = {
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in test_paths
+    }
+
+    manifest = materialize_stage186_3bpa_split(dataset, tmp_path / "out")
+
+    hashes_after = {
+        path.name: hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in test_paths
+    }
+    assert hashes_after == hashes_before
+    assert manifest["source_split"] == "train_300K.xyz"
+    assert manifest["source_num_frames"] == 500
+    assert manifest["test_files_touched"] == []
+    assert manifest["e0_fit"]["source"] == "training_indices_only"
+    assert manifest["e0_fit"]["solver_rank"] == 2
+    assert manifest["normalization"]["energy_scale_mev_atom"] > 1.0
+    assert manifest["normalization"]["force_scale_mev_a"] > 1.0
+    assert (tmp_path / "out" / "train.extxyz").is_file()
+    assert (tmp_path / "out" / "valid.extxyz").is_file()
+    e0 = json.loads((tmp_path / "out" / "e0.json").read_text(encoding="ascii"))
+    assert set(e0["atomic_energies_ev"]) == {"1", "2"}
+    assert e0["training_indices"] == manifest["training_indices"]
+
+
+def test_stage186_rank_deficient_e0_uses_weighted_minimum_norm_solution():
+    import numpy as np
+    from ase import Atoms
+
+    frames = []
+    targets = []
+    weights = []
+    for index in range(12):
+        atoms = Atoms("HHCNO")
+        energy = -1000.0 + 0.2 * np.sin(index)
+        weight = 1.0 + 0.1 * (index % 3)
+        atoms.info["energy"] = energy
+        atoms.info["energy_weight"] = weight
+        frames.append(atoms)
+        targets.append(energy)
+        weights.append(weight)
+
+    atomic_energies, metadata = _fit_training_e0(frames, list(range(len(frames))))
+
+    weighted_mean = np.average(targets, weights=weights)
+    counts = np.asarray([2.0, 1.0, 1.0, 1.0])
+    expected = counts * weighted_mean / float(counts @ counts)
+    actual = np.asarray([atomic_energies[z] for z in (1, 6, 7, 8)])
+    assert metadata["solver_rank"] == 1
+    assert metadata["elementwise_e0_identifiable"] is False
+    assert metadata["solver"] == "weighted_minimum_norm_lstsq_rank_deficient"
+    assert np.allclose(actual, expected)
