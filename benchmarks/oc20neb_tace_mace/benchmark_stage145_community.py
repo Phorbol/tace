@@ -19,13 +19,47 @@ if str(REPO_ROOT) not in sys.path:
 
 import numpy as np
 
-from benchmarks.oc20neb_tace_mace.benchmark_models import reference_arrays, summarize_errors
+from benchmarks.oc20neb_tace_mace.benchmark_models import cuda_memory, reference_arrays, summarize_errors
 from benchmarks.oc20neb_tace_mace.relative_energy_metrics import (
     atoms_group_values,
     energy_error_decomposition_metrics,
     relative_energy_group_metrics,
 )
 
+
+
+def _empty_memory_payload() -> dict[str, float | None]:
+    return {"peak_allocated_mb": None, "peak_reserved_mb": None, "peak_memory_mb": None}
+
+
+def _memory_payload_from_torch(torch_module) -> dict[str, float | None]:
+    payload = cuda_memory(torch_module)
+    reserved = payload.get("peak_reserved_mb")
+    allocated = payload.get("peak_allocated_mb")
+    payload["peak_memory_mb"] = reserved if reserved is not None else allocated
+    return payload
+
+
+def _maybe_reset_cuda_peak_memory(device: str):
+    if str(device) != "cuda":
+        return None
+    try:
+        import torch
+    except Exception:
+        return None
+    if not torch.cuda.is_available():
+        return torch
+    torch.cuda.synchronize()
+    torch.cuda.reset_peak_memory_stats()
+    return torch
+
+
+def _maybe_collect_cuda_peak_memory(torch_module) -> dict[str, float | None]:
+    if torch_module is None:
+        return _empty_memory_payload()
+    if torch_module.cuda.is_available():
+        torch_module.cuda.synchronize()
+    return _memory_payload_from_torch(torch_module)
 
 def _flatten_relative_energy_metrics(metrics: dict[str, object]) -> dict[str, object]:
     flattened = dict(metrics)
@@ -200,6 +234,7 @@ def _write_error(output: Path, *, args: argparse.Namespace, message: str) -> Non
         "error": str(message),
         "model_artifact": str(args.model_artifact),
         "configs": str(args.configs),
+        **_empty_memory_payload(),
     }
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
@@ -208,6 +243,7 @@ def _write_error(output: Path, *, args: argparse.Namespace, message: str) -> Non
 def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
     atoms_list = _load_atoms(args.configs, start_config=args.start_config, limit_configs=args.limit_configs)
     ref_e, ref_f, natoms = reference_arrays(atoms_list, args.energy_key, args.forces_key)
+    torch_for_memory = _maybe_reset_cuda_peak_memory(args.device)
     total_atoms = int(natoms.sum())
     if args.engine == "deepmd":
         pred_e, pred_f, pass_times, metadata = run_deepmd_ase(
@@ -253,6 +289,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         image_indices=image_indices,
     )
     mean_time = float(np.mean(pass_times)) if pass_times else None
+    memory_payload = _maybe_collect_cuda_peak_memory(torch_for_memory)
     payload = {
         "schema_version": "community_baseline_dft_benchmark.v1",
         "row_name": str(args.row_name),
@@ -269,6 +306,8 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         "pass_times_s": [float(value) for value in pass_times],
         "mean_time_s": mean_time,
         "atoms_per_second": float(total_atoms / mean_time) if mean_time and mean_time > 0 else None,
+        **memory_payload,
+        "memory_measurement_protocol": "torch_cuda_peak_memory_for_inprocess_backends_or_null",
         "relative_energy_errors_available": True,
         **metrics,
         **_flatten_relative_energy_metrics(relative_metrics),

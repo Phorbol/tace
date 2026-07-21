@@ -1,0 +1,19 @@
+{
+  "checks": {
+    "benchmark_splits": true,
+    "dataset": true,
+    "no_forbidden_sbatch_tokens": true,
+    "required_metrics": true,
+    "rmse_primary": true,
+    "rows": true,
+    "schema_version": true,
+    "split_complete": true,
+    "stage": true,
+    "units": true,
+    "wrapper_names": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "no_forbidden_sbatch_tokens": true,
+  "schema_version": "rtece_stage182_3bpa_closure_audit.v1"
+}

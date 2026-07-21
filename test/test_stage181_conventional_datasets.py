@@ -242,3 +242,101 @@ def test_stage181_manifest_includes_3bpa_mixed_temperature_comparison(tmp_path):
     assert "#SBATCH --mem" not in wrapper_text
     assert "--cpus-per-task" not in wrapper_text
     assert "set -u" not in wrapper_text
+
+
+def test_stage182_3bpa_closure_manifest_compares_rtece_nep_and_dpalike(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage182_3bpa_closure import (
+        BENCHMARK_SPLITS,
+        audit_stage182_manifest,
+        make_stage182_manifest,
+        materialize_stage182,
+    )
+
+    payload = make_stage182_manifest(output_root=tmp_path / "stage182", dataset_root=tmp_path / "dataset_3BPA")
+    result = materialize_stage182(payload)
+    audit = audit_stage182_manifest(payload)
+
+    assert result["audit"]["contract_pass"]
+    assert audit["contract_pass"], audit["failed_checks"]
+    assert payload["stage"] == "stage182_3bpa_conventional_closure"
+    assert payload["dataset"]["name"] == "3BPA"
+    assert payload["dataset"]["units"] == {"energy": "eV", "forces": "eV/A", "distance": "A"}
+    assert payload["dataset"]["benchmark_splits"] == BENCHMARK_SPLITS
+    assert {row["name"] for row in payload["rows"]} == {
+        "rtece_l1_local_l0_train300k",
+        "nep4_train300k",
+        "deepmd_dpa1_zero_train300k",
+    }
+    assert payload["comparison_contract"]["primary_ranking_metric"] == "rmse_f_mev_a"
+    for metric in [
+        "rmse_e_mev_atom",
+        "max_abs_e_mev_atom",
+        "rmse_f_mev_a",
+        "max_abs_f_mev_a",
+        "atoms_per_second",
+        "peak_memory_mb",
+    ]:
+        assert metric in payload["comparison_contract"]["required_metrics"]
+    wrappers = result["wrappers"]
+    assert set(wrappers) == {row["name"] for row in payload["rows"]}
+    benchmark_wrappers = result["benchmark_wrappers"]
+    assert set(benchmark_wrappers) == {row["name"] for row in payload["rows"]}
+
+
+def test_stage182_3bpa_closure_wrappers_are_sai_safe_and_split_complete(tmp_path):
+    from pathlib import Path
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage182_3bpa_closure import (
+        BENCHMARK_SPLITS,
+        make_stage182_manifest,
+        materialize_stage182,
+    )
+
+    payload = make_stage182_manifest(output_root=tmp_path / "stage182", dataset_root=tmp_path / "dataset_3BPA")
+    result = materialize_stage182(payload)
+    wrapper_text = "\n".join(Path(path).read_text(encoding="utf-8") for group in ["wrappers", "benchmark_wrappers"] for path in result[group].values())
+
+    for forbidden in ["--export", "#SBATCH --mem", "--mem=", "#SBATCH --cpus-per-task", "--cpus-per-task", "set -u", "export "]:
+        assert forbidden not in wrapper_text
+    assert "train_300K.xyz" in wrapper_text
+    assert "train_mixedT.xyz" not in wrapper_text
+    for split in BENCHMARK_SPLITS:
+        assert f"{split}.xyz" in wrapper_text
+    assert "tace.scripts.rtece_train_scalar" in wrapper_text
+    assert "convert_stage145_nep.py" in wrapper_text
+    assert "convert_stage145_deepmd.py" in wrapper_text
+    assert "benchmark_rtece_scalar.py" in wrapper_text
+    assert "benchmark_stage145_community.py" in wrapper_text
+    assert "module load gpumd" in wrapper_text
+    assert "module load deepmd-kit" in wrapper_text
+
+
+def test_stage182_summary_marks_missing_results_and_orders_by_force_rmse(tmp_path):
+    import json
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage182_3bpa_closure import (
+        make_stage182_manifest,
+        summarize_stage182_results,
+    )
+
+    payload = make_stage182_manifest(output_root=tmp_path / "stage182", dataset_root=tmp_path / "dataset_3BPA")
+    rows = {row["name"]: row for row in payload["rows"]}
+    rtece_out = Path(rows["rtece_l1_local_l0_train300k"]["benchmark_outputs"]["test_300K"])
+    nep_out = Path(rows["nep4_train300k"]["benchmark_outputs"]["test_300K"])
+    for path, rmse_f, atoms_s in [(rtece_out, 120.0, 1.5e6), (nep_out, 80.0, 7.5e6)]:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(json.dumps({
+            "status": "completed",
+            "rmse_e_mev_atom": 3.0,
+            "max_abs_e_mev_atom": 9.0,
+            "rmse_f_mev_a": rmse_f,
+            "max_abs_f_mev_a": 400.0,
+            "atoms_per_second": atoms_s,
+        }), encoding="utf-8")
+
+    summary = summarize_stage182_results(payload)
+
+    assert summary["schema_version"] == "rtece_stage182_3bpa_closure_summary.v1"
+    assert summary["rows"][0]["row_name"] == "nep4_train300k"
+    assert summary["rows"][0]["split"] == "test_300K"
+    assert any(row["status"] == "missing" and row["row_name"] == "deepmd_dpa1_zero_train300k" for row in summary["rows"])
+    assert "rmse_f_mev_a" in summary["markdown"]
+    assert "missing" in summary["markdown"]

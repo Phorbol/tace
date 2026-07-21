@@ -11866,3 +11866,48 @@ def test_stage178_representation_upgrade_manifest_builds_doc_grounded_ladder_and
     assert "dimer_scan_rtece.py" in physical_wrapper
     assert "rattle_relax_rtece.py" in physical_wrapper
     assert "summarize_rtece_physical_pareto.py" in physical_wrapper
+
+
+def test_stage145_community_error_writer_includes_memory_metric_alias(tmp_path):
+    from argparse import Namespace
+    from benchmarks.oc20neb_tace_mace.benchmark_stage145_community import _write_error
+
+    output = tmp_path / "error.json"
+    args = Namespace(
+        row_name="nep4_train300k",
+        engine="nep",
+        model_artifact=tmp_path / "nep.txt",
+        configs=tmp_path / "test_300K.xyz",
+    )
+
+    _write_error(output, args=args, message="missing model")
+    payload = json.loads(output.read_text())
+
+    assert payload["status"] == "error"
+    assert "peak_memory_mb" in payload
+    assert "peak_allocated_mb" in payload
+    assert "peak_reserved_mb" in payload
+
+
+def test_stage182_summary_accepts_peak_reserved_memory_as_peak_memory_alias(tmp_path):
+    import json
+    from pathlib import Path
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage182_3bpa_closure import (
+        make_stage182_manifest,
+        summarize_stage182_results,
+    )
+
+    payload = make_stage182_manifest(output_root=tmp_path / "stage182", dataset_root=tmp_path / "dataset_3BPA")
+    row = payload["rows"][0]
+    output = Path(row["benchmark_outputs"]["test_300K"])
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps({
+        "status": "completed",
+        "rmse_f_mev_a": 10.0,
+        "peak_reserved_mb": 321.5,
+    }), encoding="utf-8")
+
+    summary = summarize_stage182_results(payload)
+
+    completed = next(item for item in summary["rows"] if item["row_name"] == row["name"] and item["split"] == "test_300K")
+    assert completed["peak_memory_mb"] == 321.5

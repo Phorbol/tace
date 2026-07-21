@@ -1,0 +1,147 @@
+{
+  "artifacts": {
+    "audit": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/stage182_manifest_audit.json",
+    "benchmark_wrapper_root": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/benchmark_wrappers",
+    "diagnostics_root": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics",
+    "manifest": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/stage182_manifest.json",
+    "results_root": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/results",
+    "stage_plan": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/stage182_plan.md",
+    "summary_json": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/stage182_summary.json",
+    "summary_md": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/stage182_summary.md",
+    "wrapper_root": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/wrappers"
+  },
+  "comparison_contract": {
+    "physical_followups_after_numeric_closure": [
+      "dimer_scan",
+      "rattle_relax_rmsd"
+    ],
+    "primary_ranking_metric": "rmse_f_mev_a",
+    "required_metrics": [
+      "mae_e_mev_atom",
+      "rmse_e_mev_atom",
+      "max_abs_e_mev_atom",
+      "mae_f_mev_a",
+      "rmse_f_mev_a",
+      "max_abs_f_mev_a",
+      "atoms_per_second",
+      "peak_memory_mb"
+    ],
+    "secondary_ranking_metrics": [
+      "rmse_e_mev_atom",
+      "atoms_per_second",
+      "max_abs_f_mev_a"
+    ]
+  },
+  "dataset": {
+    "benchmark_splits": [
+      "test_300K",
+      "test_600K",
+      "test_1200K",
+      "test_dih"
+    ],
+    "labels": {
+      "energy_key": "energy",
+      "forces_key": "forces"
+    },
+    "name": "3BPA",
+    "ood_axes": [
+      "temperature_600K",
+      "temperature_1200K",
+      "dihedral_pes"
+    ],
+    "root": "datasets/3BPA/dataset_3BPA",
+    "train_split": "train_300K",
+    "units": {
+      "distance": "A",
+      "energy": "eV",
+      "forces": "eV/A"
+    }
+  },
+  "rows": [
+    {
+      "benchmark_outputs": {
+        "test_1200K": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/rtece_l1_local_l0_train300k/test_1200K_benchmark.json",
+        "test_300K": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/rtece_l1_local_l0_train300k/test_300K_benchmark.json",
+        "test_600K": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/rtece_l1_local_l0_train300k/test_600K_benchmark.json",
+        "test_dih": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/rtece_l1_local_l0_train300k/test_dih_benchmark.json"
+      },
+      "benchmark_wrapper": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/benchmark_wrappers/rtece_l1_local_l0_train300k_benchmark_no_export.sbatch",
+      "descriptor_label": "tece_scalar_l1_local_l0_rank4",
+      "engine": "rtece",
+      "model_artifact": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/results/rtece_l1_local_l0_train300k/rtece_scalar_best.pt",
+      "name": "rtece_l1_local_l0_train300k",
+      "student_config": {
+        "atomic_cross_radial_projection": "learnable",
+        "atomic_cross_radial_sketch_channels": 3,
+        "hidden_channels": "64,64",
+        "local_l0_chemistry_rank": 4,
+        "moment_l_max": 1,
+        "num_radial": 10,
+        "scalar_path_ids": [
+          "atomic.radial_density",
+          "atomic.species_basis_density",
+          "atomic.local_l0_lowrank_density",
+          "atomic.vector_norm",
+          "atomic.vector_cross_radial_dot"
+        ],
+        "species_basis_channels": 16,
+        "species_basis_mode": "learnable_embedding"
+      },
+      "train_dir": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/results/rtece_l1_local_l0_train300k",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/wrappers/rtece_l1_local_l0_train300k_no_export.sbatch"
+    },
+    {
+      "benchmark_outputs": {
+        "test_1200K": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/nep4_train300k/test_1200K_benchmark.json",
+        "test_300K": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/nep4_train300k/test_300K_benchmark.json",
+        "test_600K": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/nep4_train300k/test_600K_benchmark.json",
+        "test_dih": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/nep4_train300k/test_dih_benchmark.json"
+      },
+      "benchmark_wrapper": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/benchmark_wrappers/nep4_train300k_benchmark_no_export.sbatch",
+      "descriptor_label": "nep4",
+      "engine": "nep",
+      "generation": 20000,
+      "model_artifact": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/results/nep4_train300k/nep.txt",
+      "module": "gpumd/4.8-cuda12.4",
+      "name": "nep4_train300k",
+      "train_dir": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/results/nep4_train300k",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/wrappers/nep4_train300k_no_export.sbatch"
+    },
+    {
+      "benchmark_outputs": {
+        "test_1200K": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/deepmd_dpa1_zero_train300k/test_1200K_benchmark.json",
+        "test_300K": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/deepmd_dpa1_zero_train300k/test_300K_benchmark.json",
+        "test_600K": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/deepmd_dpa1_zero_train300k/test_600K_benchmark.json",
+        "test_dih": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/deepmd_dpa1_zero_train300k/test_dih_benchmark.json"
+      },
+      "benchmark_wrapper": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/benchmark_wrappers/deepmd_dpa1_zero_train300k_benchmark_no_export.sbatch",
+      "descriptor_label": "dpa1_zero_attention",
+      "engine": "deepmd",
+      "model_artifact": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/results/deepmd_dpa1_zero_train300k/frozen_model.pth",
+      "module": "deepmd-kit/3.1.2",
+      "name": "deepmd_dpa1_zero_train300k",
+      "stop_batch": 20000,
+      "train_dir": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/results/deepmd_dpa1_zero_train300k",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/wrappers/deepmd_dpa1_zero_train300k_no_export.sbatch"
+    }
+  ],
+  "schema_version": "rtece_stage182_3bpa_closure.v1",
+  "scientific_question": "On a clean molecular-MD deployment distribution, does the TECE-derived scalar student occupy a useful accuracy/throughput region relative to NEP4 and DPA1 zero-attention-style baselines?",
+  "stage": "stage182_3bpa_conventional_closure",
+  "theory_alignment": [
+    "TECE_design_space.md: define the projection target by deployment distribution mu, physical error metric, and hardware cost.",
+    "rTECE_review.md: compare against community high-throughput baselines before spending effort on low-level kernels.",
+    "Stage181 result: mixed-temperature coverage helped OOD force RMSE but did not close energy/tail errors, so train_300K is the controlled first row."
+  ],
+  "train_contract": {
+    "bench_limit_configs": 512,
+    "deepmd_converter": "benchmarks/oc20neb_tace_mace/convert_stage145_deepmd.py",
+    "energy_key": "energy",
+    "forces_key": "forces",
+    "limit_configs": 500,
+    "max_steps": 20000,
+    "nep_converter": "benchmarks/oc20neb_tace_mace/convert_stage145_nep.py",
+    "rtece_entrypoint": "tace.scripts.rtece_train_scalar",
+    "train_file": "datasets/3BPA/dataset_3BPA/train_300K.xyz"
+  }
+}
