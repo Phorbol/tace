@@ -350,6 +350,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--no-progress-bar", action="store_true")
     parser.add_argument("--logger", action="store_true", help="Enable Lightning logger output; disabled by default for Slurm sweeps.")
     parser.add_argument("--no-logger", action="store_true", help="Deprecated compatibility flag; logger is disabled by default.")
+    parser.add_argument("--init-state", type=Path, default=None, help="Portable rTECE checkpoint used to initialize the model before optimizer construction.")
     return parser.parse_args()
 
 
@@ -424,6 +425,7 @@ def main() -> None:
             early_stopping_patience=args.early_stopping_patience,
             enable_progress_bar=not args.no_progress_bar,
             logger=bool(args.logger and not args.no_logger),
+            init_state=args.init_state,
         )
         summary["eval_interval"] = args.eval_interval
         summary["min_eval_step"] = args.min_eval_step
@@ -453,6 +455,11 @@ def main() -> None:
     if not args.no_fit_energy_shift:
         config = replace(config, atomic_energies=fit_atomic_energies(samples))
     model = RTECEScalarModel(config).to(device=device, dtype=dtype)
+    init_state_metadata = None
+    if args.init_state is not None:
+        from tace.lightning.rtece import load_rtece_init_state
+
+        init_state_metadata = load_rtece_init_state(args.init_state, model, config, dtype=dtype)
     valid_samples = None
     best_checkpoint_path = None
     if not args.disable_best_checkpoint and args.eval_interval > 0:
@@ -529,6 +536,8 @@ def main() -> None:
             "neighborlist_backend": args.neighborlist_backend,
             "checkpoint": str(args.output_dir / "rtece_scalar.pt"),
             "best_checkpoint": str(best_checkpoint_path) if best_checkpoint_path is not None else None,
+            "init_state": str(args.init_state) if args.init_state is not None else None,
+            "init_state_metadata": init_state_metadata,
         }
     )
     save_checkpoint(args.output_dir / "rtece_scalar.pt", model, config)

@@ -13,8 +13,8 @@ This stage is a proof scaffold, not a final renormalization result.
 |---|---:|---|---|
 | `scratch_same_student` | True | none | Control arm: train the fixed student path set from random initialization. |
 | `linear_projection_diagnostic` | True | none | Quantify projection/downfolding gap from reference proxy paths onto the fixed student path set. |
-| `renorm_initialized_same_student` | False | checkpoint_initialization_from_projection_coefficients, train_entrypoint_init_checkpoint_or_init_state | Train the same fixed student path set from a projection/GN initialized checkpoint. |
-| `renorm_initialized_teacher_residual_distill` | False | checkpoint_initialization_from_projection_coefficients, train_entrypoint_init_checkpoint_or_init_state, teacher_residual_cache_or_extxyz_labels, distillation_loss_mixing_real_and_teacher_labels | Use the same renormalized initialization plus teacher E/F residual distillation labels. |
+| `renorm_initialized_same_student` | True | none | Train the same fixed student path set from a projection-constrained/GN-proxy initialized checkpoint. |
+| `renorm_initialized_teacher_residual_distill` | False | teacher_residual_cache_or_extxyz_labels, distillation_loss_mixing_real_and_teacher_labels | Use the same renormalized initialization plus teacher E/F residual distillation labels. |
 
 ## Success Criteria
 

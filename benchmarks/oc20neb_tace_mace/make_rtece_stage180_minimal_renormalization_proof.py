@@ -53,7 +53,9 @@ def _artifacts(root: Path) -> dict[str, Any]:
         "diagnostics_root": str(root / "diagnostics"),
         "wrappers": {
             "projection_diagnostic": str(root / "wrappers" / "stage180_projection_diagnostic_no_export.sbatch"),
+            "projection_initializer": str(root / "wrappers" / "stage180_projection_initializer_no_export.sbatch"),
             "scratch_train": str(root / "wrappers" / "stage180_scratch_train_no_export.sbatch"),
+            "renorm_initialized_train": str(root / "wrappers" / "stage180_renorm_init_train_no_export.sbatch"),
             "benchmark_physical_after_training": str(root / "wrappers" / "stage180_benchmark_physical_no_export.sbatch"),
         },
     }
@@ -103,6 +105,14 @@ def make_stage180_manifest(
             "force_component_sample_count": 64,
             "force_eval_stride": 4,
         },
+        "renorm_initialization_config": {
+            "candidate": "scratch_same_student",
+            "init_steps": 512,
+            "lr": 1.0e-3,
+            "energy_weight": 1.0,
+            "force_weight": 10.0,
+            "output_checkpoint": str(root / "results" / "renorm_initialized_same_student" / "rtece_scalar_init.pt"),
+        },
         "training_config": {
             "entrypoint": "tace.scripts.rtece_train_scalar",
             "trainer_backend": "lightning",
@@ -134,21 +144,18 @@ def make_stage180_manifest(
             },
             {
                 "id": "renorm_initialized_same_student",
-                "purpose": "Train the same fixed student path set from a projection/GN initialized checkpoint.",
-                "runnable_now": False,
-                "blocking_tooling": [
-                    "checkpoint_initialization_from_projection_coefficients",
-                    "train_entrypoint_init_checkpoint_or_init_state",
-                ],
-                "required_before_running": "Implement a deterministic initializer that maps projection/GN coefficients into the fixed student model state and lets the train entrypoint load it before optimizer construction.",
+                "purpose": "Train the same fixed student path set from a projection-constrained/GN-proxy initialized checkpoint.",
+                "runnable_now": True,
+                "blocking_tooling": [],
+                "output_dir": str(root / "results" / "renorm_initialized_same_student"),
+                "init_state": str(root / "results" / "renorm_initialized_same_student" / "rtece_scalar_init.pt"),
+                "initializer_summary": str(root / "results" / "renorm_initialized_same_student" / "rtece_scalar_init.summary.json"),
             },
             {
                 "id": "renorm_initialized_teacher_residual_distill",
                 "purpose": "Use the same renormalized initialization plus teacher E/F residual distillation labels.",
                 "runnable_now": False,
                 "blocking_tooling": [
-                    "checkpoint_initialization_from_projection_coefficients",
-                    "train_entrypoint_init_checkpoint_or_init_state",
                     "teacher_residual_cache_or_extxyz_labels",
                     "distillation_loss_mixing_real_and_teacher_labels",
                 ],
@@ -222,7 +229,7 @@ def _wrapper_header(payload: dict[str, Any], *, job_name: str, time_limit: str) 
     ]
 
 
-def _student_train_command(payload: dict[str, Any], *, output_dir: str) -> str:
+def _student_train_command(payload: dict[str, Any], *, output_dir: str, init_state: str | None = None) -> str:
     cfg = payload["student_config"]
     train = payload["training_config"]
     parts = [
@@ -288,6 +295,8 @@ def _student_train_command(payload: dict[str, Any], *, output_dir: str) -> str:
         "float32",
         "--no-progress-bar",
     ]
+    if init_state is not None:
+        parts.extend(["--init-state", shlex.quote(str(init_state))])
     return " ".join(parts)
 
 
@@ -315,6 +324,60 @@ def write_projection_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
                 "--energy-ridge-grid 1e-12,1e-10,1e-8,1e-6 --energy-split-mode group-loocv --energy-group-key case_id "
                 f"--force-target-key forces --force-component-sample-count {force_component_sample_count} --force-eval-stride {force_eval_stride}"
             ),
+            "",
+        ]
+    )
+    wrapper.parent.mkdir(parents=True, exist_ok=True)
+    wrapper.write_text("\n".join(body), encoding="utf-8")
+    return wrapper
+
+
+def write_projection_initializer_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
+    wrapper = Path(path)
+    body = _wrapper_header(payload, job_name="rtece-st180-init", time_limit="01:55:00")
+    cfg = payload["student_config"]
+    init_cfg = payload["renorm_initialization_config"]
+    projection_json = Path(payload["artifacts"]["diagnostics_root"]) / "stage180_projection_diagnostic.json"
+    out = Path(init_cfg["output_checkpoint"])
+    body.extend(
+        [
+            f"mkdir -p {shlex.quote(str(out.parent))}",
+            (
+                'PYTHONPATH="${TACE_ROOT}:${PYTHONPATH:-}" python benchmarks/oc20neb_tace_mace/initialize_rtece_from_projection.py '
+                f"--projection-json {shlex.quote(str(projection_json))} "
+                f"--candidate {shlex.quote(str(init_cfg['candidate']))} "
+                '--train-file "${TRAIN_FILE}" '
+                f"--output {shlex.quote(str(out))} "
+                f"--variant {shlex.quote(str(cfg['variant']))} "
+                f"--scalar-path-ids {_path_csv(payload['fixed_student_path_ids'])} "
+                '--limit-configs "${PROJECTION_LIMIT_CONFIGS}" '
+                f"--init-steps {int(init_cfg['init_steps'])} "
+                f"--lr {float(init_cfg['lr'])} "
+                f"--energy-weight {float(init_cfg['energy_weight'])} "
+                f"--force-weight {float(init_cfg['force_weight'])} "
+                f"--num-radial {int(cfg['num_radial'])} --hidden-channels {shlex.quote(str(cfg['hidden_channels']))} "
+                f"--species-basis-channels {int(cfg['species_basis_channels'])} --species-basis-mode {shlex.quote(str(cfg['species_basis_mode']))} "
+                f"--local-l0-chemistry-rank {int(cfg['local_l0_chemistry_rank'])} --moment-l-max {int(cfg['moment_l_max'])} "
+                f"--atomic-cross-radial-sketch-channels {int(cfg['atomic_cross_radial_sketch_channels'])} "
+                f"--atomic-cross-radial-projection {shlex.quote(str(cfg['atomic_cross_radial_projection']))} "
+                "--device cuda --default-dtype float32 --neighborlist-backend matscipy"
+            ),
+            "",
+        ]
+    )
+    wrapper.parent.mkdir(parents=True, exist_ok=True)
+    wrapper.write_text("\n".join(body), encoding="utf-8")
+    return wrapper
+
+
+def write_renorm_initialized_train_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
+    wrapper = Path(path)
+    body = _wrapper_header(payload, job_name="rtece-st180-renorm", time_limit="03:55:00")
+    arm = next(row for row in payload["comparison_arms"] if row["id"] == "renorm_initialized_same_student")
+    body.extend(
+        [
+            f"mkdir -p {shlex.quote(arm['output_dir'])}",
+            _student_train_command(payload, output_dir=str(arm["output_dir"]), init_state=str(arm["init_state"])),
             "",
         ]
     )
@@ -599,13 +662,9 @@ def audit_stage180_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         },
         "runnable_truth": arms.get("scratch_same_student", {}).get("runnable_now") is True
         and arms.get("linear_projection_diagnostic", {}).get("runnable_now") is True
-        and arms.get("renorm_initialized_same_student", {}).get("runnable_now") is False
+        and arms.get("renorm_initialized_same_student", {}).get("runnable_now") is True
         and arms.get("renorm_initialized_teacher_residual_distill", {}).get("runnable_now") is False,
-        "renorm_blockers": arms.get("renorm_initialized_same_student", {}).get("blocking_tooling")
-        == [
-            "checkpoint_initialization_from_projection_coefficients",
-            "train_entrypoint_init_checkpoint_or_init_state",
-        ],
+        "renorm_blockers": arms.get("renorm_initialized_same_student", {}).get("blocking_tooling") == [],
         "success_claim": payload.get("success_criteria", {}).get("primary_claim_requires")
         == [
             "renorm_initialized_same_student beats scratch_same_student under matched E/F/relative/physical metrics",
@@ -613,7 +672,9 @@ def audit_stage180_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         ],
         "wrappers": set(wrappers) == {
             "projection_diagnostic",
+            "projection_initializer",
             "scratch_train",
+            "renorm_initialized_train",
             "benchmark_physical_after_training",
         },
         "no_forbidden_sbatch_flags": not any(token in wrapper_text for token in forbidden),
@@ -632,7 +693,9 @@ def materialize_stage180(payload: dict[str, Any]) -> dict[str, Any]:
     artifacts = payload["artifacts"]
     Path(artifacts["manifest"]).parent.mkdir(parents=True, exist_ok=True)
     write_projection_wrapper(artifacts["wrappers"]["projection_diagnostic"], payload)
+    write_projection_initializer_wrapper(artifacts["wrappers"]["projection_initializer"], payload)
     write_scratch_train_wrapper(artifacts["wrappers"]["scratch_train"], payload)
+    write_renorm_initialized_train_wrapper(artifacts["wrappers"]["renorm_initialized_train"], payload)
     write_benchmark_physical_wrapper(artifacts["wrappers"]["benchmark_physical_after_training"], payload)
     audit = audit_stage180_manifest(payload)
     Path(artifacts["manifest"]).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")

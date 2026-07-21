@@ -33,18 +33,18 @@ def test_stage180_scaffold_declares_fixed_path_set_and_honest_tooling_gaps(tmp_p
     }
     assert arms["scratch_same_student"]["runnable_now"] is True
     assert arms["linear_projection_diagnostic"]["runnable_now"] is True
-    assert arms["renorm_initialized_same_student"]["runnable_now"] is False
-    assert arms["renorm_initialized_same_student"]["blocking_tooling"] == [
-        "checkpoint_initialization_from_projection_coefficients",
-        "train_entrypoint_init_checkpoint_or_init_state",
-    ]
+    assert arms["renorm_initialized_same_student"]["runnable_now"] is True
+    assert arms["renorm_initialized_same_student"]["blocking_tooling"] == []
+    assert arms["renorm_initialized_same_student"]["init_state"].endswith("rtece_scalar_init.pt")
     assert arms["renorm_initialized_teacher_residual_distill"]["runnable_now"] is False
     assert "teacher_residual_cache_or_extxyz_labels" in arms["renorm_initialized_teacher_residual_distill"]["blocking_tooling"]
 
     wrappers = payload["artifacts"]["wrappers"]
     assert set(wrappers) == {
         "projection_diagnostic",
+        "projection_initializer",
         "scratch_train",
+        "renorm_initialized_train",
         "benchmark_physical_after_training",
     }
     assert audit["no_forbidden_sbatch_flags"] is True
@@ -98,3 +98,68 @@ def test_stage180_projection_wrapper_passes_local_l0_projection_args(tmp_path):
     assert "--local-l0-chemistry-rank 4" in text
     assert "--force-component-sample-count 64" in text
     assert "--force-component-sample-count 6000" not in text
+
+
+
+def test_rtece_train_init_state_loader_rejects_config_mismatch(tmp_path):
+    import pytest
+    import torch
+    from dataclasses import replace
+
+    from tace.lightning.rtece import load_rtece_init_state
+    from tace.models.rtece_scalar import RTECEScalarModel, build_rtece_config_from_path_ids
+    from tace.models.rtece_workflow import save_checkpoint
+
+    config = build_rtece_config_from_path_ids(
+        "init_state_unit",
+        ["atomic.radial_density"],
+        num_radial=3,
+        hidden_channels=(4,),
+    )
+    source = RTECEScalarModel(config).to(dtype=torch.float32)
+    with torch.no_grad():
+        for parameter in source.parameters():
+            parameter.fill_(0.125)
+    init_path = tmp_path / "rtece_scalar_init.pt"
+    save_checkpoint(init_path, source, config, metadata={"init_method": "unit_test"})
+
+    target = RTECEScalarModel(config).to(dtype=torch.float32)
+    metadata = load_rtece_init_state(init_path, target, config, dtype=torch.float32)
+
+    assert metadata["init_state"] == str(init_path)
+    assert metadata["init_metadata"]["init_method"] == "unit_test"
+    for name, value in target.state_dict().items():
+        assert torch.allclose(value, source.state_dict()[name].to(value.dtype))
+
+    mismatch = replace(config, num_radial=4)
+    with pytest.raises(ValueError, match="init-state config mismatch"):
+        load_rtece_init_state(init_path, RTECEScalarModel(mismatch), mismatch, dtype=torch.float32)
+
+
+def test_stage180_manifest_makes_renorm_init_arm_runnable_with_safe_wrappers(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage180_minimal_renormalization_proof import (
+        audit_stage180_manifest,
+        make_stage180_manifest,
+        materialize_stage180,
+    )
+
+    payload = make_stage180_manifest(output_root=tmp_path / "stage180")
+    result = materialize_stage180(payload)
+    payload = result["payload"]
+    audit = audit_stage180_manifest(payload)
+    arms = {row["id"]: row for row in payload["comparison_arms"]}
+    wrappers = payload["artifacts"]["wrappers"]
+
+    assert arms["renorm_initialized_same_student"]["runnable_now"] is True
+    assert arms["renorm_initialized_same_student"]["blocking_tooling"] == []
+    assert set(wrappers) == {
+        "projection_diagnostic",
+        "projection_initializer",
+        "scratch_train",
+        "renorm_initialized_train",
+        "benchmark_physical_after_training",
+    }
+    assert "--init-state" in (tmp_path / "stage180" / "wrappers" / "stage180_renorm_init_train_no_export.sbatch").read_text(encoding="utf-8")
+    assert "initialize_rtece_from_projection.py" in (tmp_path / "stage180" / "wrappers" / "stage180_projection_initializer_no_export.sbatch").read_text(encoding="utf-8")
+    assert audit["contract_pass"], audit["failed_checks"]
+    assert audit["no_forbidden_sbatch_flags"] is True

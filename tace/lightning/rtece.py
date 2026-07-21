@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import json
-from dataclasses import replace
+from dataclasses import asdict, replace
 from pathlib import Path
 from typing import Any
 
@@ -21,7 +21,7 @@ from tace.models.rtece_scalar import (
     config_with_moment_l_max,
     collate_graphs,
 )
-from tace.models.rtece_workflow import loss_for_batch, save_checkpoint
+from tace.models.rtece_workflow import load_checkpoint, loss_for_batch, save_checkpoint
 
 
 def parse_hidden_channels(value: str | tuple[int, ...] | list[int]) -> tuple[int, ...]:
@@ -543,6 +543,42 @@ class RTECELightningModule(L.LightningModule):
         }
 
 
+def _config_payload_for_init_compare(config: RTECEScalarConfig) -> dict[str, Any]:
+    payload = asdict(config)
+    if payload.get("atomic_energies") is not None:
+        payload["atomic_energies"] = {int(k): float(v) for k, v in payload["atomic_energies"].items()}
+    if payload.get("scalar_path_ids") is not None:
+        payload["scalar_path_ids"] = tuple(payload["scalar_path_ids"])
+    if payload.get("hidden_channels") is not None:
+        payload["hidden_channels"] = tuple(payload["hidden_channels"])
+    return payload
+
+
+def load_rtece_init_state(
+    path: str | Path,
+    model: RTECEScalarModel,
+    expected_config: RTECEScalarConfig,
+    *,
+    dtype: torch.dtype = torch.float32,
+) -> dict[str, Any]:
+    """Load a portable rTECE init-state into an existing model before optimizer creation."""
+
+    source_model, source_config, source_metadata = load_checkpoint(path, dtype=dtype, device="cpu")
+    expected_payload = _config_payload_for_init_compare(expected_config)
+    source_payload = _config_payload_for_init_compare(source_config)
+    if source_payload != expected_payload:
+        mismatch_keys = sorted(key for key in set(source_payload) | set(expected_payload) if source_payload.get(key) != expected_payload.get(key))
+        raise ValueError(
+            "init-state config mismatch: "
+            f"{Path(path)} is not compatible with the requested rTECE config; mismatched keys: {mismatch_keys}"
+        )
+    model.load_state_dict(source_model.state_dict())
+    return {
+        "init_state": str(path),
+        "init_metadata": dict(source_metadata),
+    }
+
+
 def _load_lightning_model_state(path: str | Path, config: RTECEScalarConfig, *, dtype: torch.dtype) -> RTECEScalarModel:
     checkpoint = torch.load(path, map_location="cpu", weights_only=False)
     state_dict = {key[len("model."):]: value for key, value in checkpoint["state_dict"].items() if key.startswith("model.")}
@@ -610,6 +646,7 @@ def fit_rtece_lightning(
     early_stopping_patience: int | None = None,
     enable_progress_bar: bool = True,
     logger: bool | Any = False,
+    init_state: str | Path | None = None,
 ) -> dict[str, Any]:
     L.seed_everything(int(seed), workers=True)
     dtype = _resolve_dtype(default_dtype)
@@ -676,6 +713,9 @@ def fit_rtece_lightning(
         relative_image_key=relative_image_key,
     )
     model = RTECEScalarModel(config).to(dtype=dtype)
+    init_state_metadata = None
+    if init_state is not None:
+        init_state_metadata = load_rtece_init_state(init_state, model, config, dtype=dtype)
     datamodule = RTECEDataModule(
         train_samples,
         valid_samples,
@@ -804,6 +844,8 @@ def fit_rtece_lightning(
         "checkpoint": str(final_checkpoint),
         "best_checkpoint": str(best_checkpoint),
         "lightning_best_checkpoint": str(best_lightning_path) if best_lightning_path else None,
+        "init_state": str(init_state) if init_state is not None else None,
+        "init_state_metadata": init_state_metadata,
     }
     (output_path / "train_summary.json").write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     return summary
@@ -818,6 +860,7 @@ __all__ = [
     "build_training_config",
     "fit_atomic_energies",
     "fit_rtece_lightning",
+    "load_rtece_init_state",
     "load_samples",
     "parse_force_focus_elements",
     "parse_hidden_channels",

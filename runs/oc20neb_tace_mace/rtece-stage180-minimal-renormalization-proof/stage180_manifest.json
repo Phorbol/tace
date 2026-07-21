@@ -9,6 +9,8 @@
     "wrappers": {
       "benchmark_physical_after_training": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/wrappers/stage180_benchmark_physical_no_export.sbatch",
       "projection_diagnostic": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/wrappers/stage180_projection_diagnostic_no_export.sbatch",
+      "projection_initializer": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/wrappers/stage180_projection_initializer_no_export.sbatch",
+      "renorm_initialized_train": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/wrappers/stage180_renorm_init_train_no_export.sbatch",
       "scratch_train": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/wrappers/stage180_scratch_train_no_export.sbatch"
     }
   },
@@ -28,19 +30,16 @@
       "runnable_now": true
     },
     {
-      "blocking_tooling": [
-        "checkpoint_initialization_from_projection_coefficients",
-        "train_entrypoint_init_checkpoint_or_init_state"
-      ],
+      "blocking_tooling": [],
       "id": "renorm_initialized_same_student",
-      "purpose": "Train the same fixed student path set from a projection/GN initialized checkpoint.",
-      "required_before_running": "Implement a deterministic initializer that maps projection/GN coefficients into the fixed student model state and lets the train entrypoint load it before optimizer construction.",
-      "runnable_now": false
+      "init_state": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/results/renorm_initialized_same_student/rtece_scalar_init.pt",
+      "initializer_summary": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/results/renorm_initialized_same_student/rtece_scalar_init.summary.json",
+      "output_dir": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/results/renorm_initialized_same_student",
+      "purpose": "Train the same fixed student path set from a projection-constrained/GN-proxy initialized checkpoint.",
+      "runnable_now": true
     },
     {
       "blocking_tooling": [
-        "checkpoint_initialization_from_projection_coefficients",
-        "train_entrypoint_init_checkpoint_or_init_state",
         "teacher_residual_cache_or_extxyz_labels",
         "distillation_loss_mixing_real_and_teacher_labels"
       ],
@@ -83,6 +82,14 @@
     "edge.cavity.vector_dot",
     "edge.direct.radial"
   ],
+  "renorm_initialization_config": {
+    "candidate": "scratch_same_student",
+    "energy_weight": 1.0,
+    "force_weight": 10.0,
+    "init_steps": 512,
+    "lr": 0.001,
+    "output_checkpoint": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/results/renorm_initialized_same_student/rtece_scalar_init.pt"
+  },
   "review_basis": [
     "TECE_design_space.md: deleted paths should be downfolded into retained paths by Gram/Schur or local GN correction, not merely set to zero.",
     "rTECE_review.md: only renormalization+distillation outperforming from-scratch proves the branch is more than scalar student architecture search.",
