@@ -350,7 +350,7 @@ def write_projection_initializer_wrapper(path: str | Path, payload: dict[str, An
                 f"--output {shlex.quote(str(out))} "
                 f"--variant {shlex.quote(str(cfg['variant']))} "
                 f"--scalar-path-ids {_path_csv(payload['fixed_student_path_ids'])} "
-                '--limit-configs "${PROJECTION_LIMIT_CONFIGS}" '
+                '--limit-configs "${LIMIT_CONFIGS}" '
                 f"--init-steps {int(init_cfg['init_steps'])} "
                 f"--lr {float(init_cfg['lr'])} "
                 f"--energy-weight {float(init_cfg['energy_weight'])} "

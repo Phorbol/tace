@@ -163,3 +163,20 @@ def test_stage180_manifest_makes_renorm_init_arm_runnable_with_safe_wrappers(tmp
     assert "initialize_rtece_from_projection.py" in (tmp_path / "stage180" / "wrappers" / "stage180_projection_initializer_no_export.sbatch").read_text(encoding="utf-8")
     assert audit["contract_pass"], audit["failed_checks"]
     assert audit["no_forbidden_sbatch_flags"] is True
+
+
+def test_stage180_initializer_uses_training_limit_for_matching_e0s(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage180_minimal_renormalization_proof import (
+        make_stage180_manifest,
+        write_projection_initializer_wrapper,
+    )
+
+    payload = make_stage180_manifest(output_root=tmp_path / "stage180")
+    wrapper = write_projection_initializer_wrapper(
+        tmp_path / "stage180" / "wrappers" / "stage180_projection_initializer_no_export.sbatch",
+        payload,
+    )
+    text = wrapper.read_text(encoding="utf-8")
+
+    assert '--limit-configs "${LIMIT_CONFIGS}"' in text
+    assert '--limit-configs "${PROJECTION_LIMIT_CONFIGS}"' not in text
