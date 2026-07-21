@@ -435,3 +435,40 @@ def test_stage183_analysis_prioritizes_l2_and_edge_from_stage182_dih_gap(tmp_pat
     assert analysis["priority_axes"] == ["l2_atomic_quadrupole", "t3_cavity_edge_relational"]
     assert analysis["next_decision"] == "representation_ladder_before_more_kernel_work"
 
+
+def test_stage183_summary_ranks_rows_by_force_rmse_and_includes_train_loss(tmp_path):
+    import json
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage183_3bpa_representation_ladder import (
+        make_stage183_manifest,
+        summarize_stage183_results,
+    )
+
+    payload = make_stage183_manifest(output_root=tmp_path / "stage183", dataset_root=tmp_path / "dataset_3BPA")
+    rows = {row["name"]: row for row in payload["rows"]}
+    for row_name, valid_loss in [("stage183_l0_local_species", 0.3), ("stage183_l2_atomic_quadrupole", 0.1)]:
+        summary_path = Path(rows[row_name]["train_dir"]) / "train_summary.json"
+        summary_path.parent.mkdir(parents=True, exist_ok=True)
+        summary_path.write_text(json.dumps({"best_valid_loss": valid_loss, "best_step": 100}), encoding="utf-8")
+    for row_name, rmse_f in [("stage183_l0_local_species", 200.0), ("stage183_l2_atomic_quadrupole", 120.0)]:
+        out = Path(rows[row_name]["benchmark_outputs"]["test_300K"])
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(json.dumps({
+            "status": "completed",
+            "rmse_e_mev_atom": 5.0,
+            "max_abs_e_mev_atom": 10.0,
+            "rmse_f_mev_a": rmse_f,
+            "max_abs_f_mev_a": 500.0,
+            "atoms_per_second": 1.0e6,
+            "peak_reserved_mb": 900.0,
+        }), encoding="utf-8")
+
+    summary = summarize_stage183_results(payload)
+
+    assert summary["schema_version"] == "rtece_stage183_representation_ladder_summary.v1"
+    assert summary["rows"][0]["row_name"] == "stage183_l2_atomic_quadrupole"
+    assert summary["rows"][0]["train_best_valid_loss"] == 0.1
+    assert summary["rows"][0]["peak_memory_mb"] == 900.0
+    assert any(row["status"] == "missing" and row["row_name"] == "stage183_t3_cavity_vecq" for row in summary["rows"])
+    assert "train_best_valid_loss" in summary["markdown"]
+    assert "stage183_l2_atomic_quadrupole" in summary["markdown"]
+

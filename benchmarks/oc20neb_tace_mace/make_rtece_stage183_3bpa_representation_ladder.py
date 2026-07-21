@@ -539,6 +539,108 @@ def materialize_stage183(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _read_json(path: str | Path) -> dict[str, Any] | None:
+    p = Path(path)
+    if not p.exists():
+        return None
+    return json.loads(p.read_text(encoding="utf-8"))
+
+
+def _train_summary_for_row(row: dict[str, Any]) -> dict[str, Any]:
+    return _read_json(Path(row["train_dir"]) / "train_summary.json") or {}
+
+
+def _summary_row(row: dict[str, Any], split: str) -> dict[str, Any]:
+    train_summary = _train_summary_for_row(row)
+    bench = _read_json(row["benchmark_outputs"][split])
+    result: dict[str, Any] = {
+        "row_name": row["name"],
+        "engine": row["engine"],
+        "split": split,
+        "tece_tier": row.get("tece_tier"),
+        "representation_step": row.get("representation_step"),
+        "train_best_valid_loss": train_summary.get("best_valid_loss"),
+        "train_best_step": train_summary.get("best_step"),
+        "train_steps": train_summary.get("steps"),
+        "status": "missing",
+        "benchmark_output": row["benchmark_outputs"][split],
+    }
+    if bench is None:
+        return result
+    result["status"] = str(bench.get("status", "completed"))
+    for key in [
+        "mae_e_mev_atom",
+        "rmse_e_mev_atom",
+        "max_abs_e_mev_atom",
+        "mae_f_mev_a",
+        "rmse_f_mev_a",
+        "max_abs_f_mev_a",
+        "atoms_per_second",
+        "peak_memory_mb",
+        "peak_reserved_mb",
+        "peak_allocated_mb",
+    ]:
+        if key in bench:
+            result[key] = bench[key]
+    if "peak_memory_mb" not in result:
+        if result.get("peak_reserved_mb") is not None:
+            result["peak_memory_mb"] = result["peak_reserved_mb"]
+        elif result.get("peak_allocated_mb") is not None:
+            result["peak_memory_mb"] = result["peak_allocated_mb"]
+    return result
+
+
+def _summary_sort_key(row: dict[str, Any]) -> tuple[int, int, float, str]:
+    missing = 0 if row.get("status") == "completed" else 1
+    split_rank = BENCHMARK_SPLITS.index(row["split"]) if row.get("split") in BENCHMARK_SPLITS else len(BENCHMARK_SPLITS)
+    rmse = row.get("rmse_f_mev_a")
+    return (missing, split_rank, float(rmse) if rmse is not None else float("inf"), str(row.get("row_name")))
+
+
+def _render_summary_markdown(rows: list[dict[str, Any]]) -> str:
+    lines = [
+        "# Stage183 3BPA Representation Ladder Summary",
+        "",
+        "| row | tier | split | status | train_best_valid_loss | rmse_f_mev_a | rmse_e_mev_atom | max_abs_f_mev_a | max_abs_e_mev_atom | atoms_per_second | peak_memory_mb |",
+        "| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for row in rows:
+        def fmt(key: str) -> str:
+            value = row.get(key)
+            if value is None:
+                return ""
+            if isinstance(value, (int, float)):
+                return f"{float(value):.3f}"
+            return str(value)
+        lines.append(
+            f"| {row['row_name']} | {fmt('tece_tier')} | {row['split']} | {row['status']} | "
+            f"{fmt('train_best_valid_loss')} | {fmt('rmse_f_mev_a')} | {fmt('rmse_e_mev_atom')} | "
+            f"{fmt('max_abs_f_mev_a')} | {fmt('max_abs_e_mev_atom')} | {fmt('atoms_per_second')} | {fmt('peak_memory_mb')} |"
+        )
+    lines.append("")
+    return "\n".join(lines)
+
+
+def summarize_stage183_results(payload: dict[str, Any], *, write: bool = False) -> dict[str, Any]:
+    rows = [_summary_row(row, split) for row in payload["rows"] for split in BENCHMARK_SPLITS]
+    rows.sort(key=_summary_sort_key)
+    markdown = _render_summary_markdown(rows)
+    summary = {
+        "schema_version": "rtece_stage183_representation_ladder_summary.v1",
+        "stage": payload["stage"],
+        "primary_ranking_metric": payload["comparison_contract"]["primary_ranking_metric"],
+        "rows": rows,
+        "markdown": markdown,
+    }
+    if write:
+        json_path = Path(payload["artifacts"]["summary_json"])
+        md_path = Path(payload["artifacts"]["summary_md"])
+        json_path.parent.mkdir(parents=True, exist_ok=True)
+        json_path.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        md_path.write_text(markdown, encoding="utf-8")
+    return summary
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output-root", type=Path, default=DEFAULT_OUTPUT_ROOT)
@@ -548,6 +650,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--bench-limit-configs", type=int, default=512)
     parser.add_argument("--max-steps", type=int, default=20000)
     parser.add_argument("--analyze-only", action="store_true")
+    parser.add_argument("--summarize-only", action="store_true")
     return parser.parse_args()
 
 
@@ -564,7 +667,11 @@ def main() -> None:
     if args.analyze_only:
         print(json.dumps(payload["stage182_analysis"], indent=2, sort_keys=True))
         return
+    if args.summarize_only:
+        print(json.dumps(summarize_stage183_results(payload, write=True), indent=2, sort_keys=True))
+        return
     result = materialize_stage183(payload)
+    summarize_stage183_results(payload, write=True)
     print(json.dumps(result, indent=2, sort_keys=True))
 
 
