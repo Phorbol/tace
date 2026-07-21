@@ -1,0 +1,64 @@
+#!/bin/bash
+#SBATCH --job-name=rtece-matrix
+#SBATCH --partition=16V100
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
+#SBATCH --gpus-per-node=1
+#SBATCH --qos=flood-1o2gpu
+#SBATCH --time=03:55:00
+#SBATCH --output=/home/gengjianrui/bin/logs/rtece-matrix-%j.out
+#SBATCH --error=/home/gengjianrui/bin/logs/rtece-matrix-%j.err
+
+set -eo pipefail
+# SAI policy: pass parameters inside this wrapper, not through Slurm command-line environment export.
+export VARIANTS=stage158_cavity_uvproj_b32_rel0p25_mixed2048
+export RUN_ROOT=runs/oc20neb_tace_mace/rtece-stage158-cavity-frame-projections/projection_runs
+export TRAIN_FILE=runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz
+export TRAIN_VALID_FILE=/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz
+export DFT_VALID_FILE=/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz
+export TEACHER_VALID_FILE=runs/oc20neb_tace_mace/tece-distill-20260717/teacher_valid.extxyz
+export LIMIT_CONFIGS=2048
+export VALID_LIMIT_CONFIGS=256
+export BENCH_LIMIT_CONFIGS=1024
+export MAX_STEPS=20000
+export LR=1e-3
+export HIDDEN_CHANNELS=64,64
+export NUM_RADIAL=12
+export MOMENT_L_MAX=2
+export SCALAR_PATH_IDS=atomic.radial_density,atomic.species_basis_density,atomic.vector_norm,atomic.vector_cross_radial_dot,atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius,edge.cavity.vector_dot,edge.direct.radial,edge.cavity.target_vector_projection,edge.cavity.source_vector_projection
+export SPECIES_BASIS_CHANNELS=24
+export SPECIES_BASIS_MODE=learnable_embedding
+export ATOMIC_CROSS_RADIAL_SKETCH_CHANNELS=6
+export ATOMIC_CROSS_RADIAL_PROJECTION=learnable
+export SEED=0
+export ENERGY_WEIGHT=1.0
+export FORCE_WEIGHT=10.0
+export RELATIVE_ENERGY_WEIGHT=0.25
+export RELATIVE_ENERGY_GROUP_KEY=case_id
+export RELATIVE_ENERGY_IMAGE_KEY=source_frame
+export USE_SHORT_RANGE_REPULSION=1
+export SHORT_RANGE_REPULSION_POTENTIAL=zbl
+export LEARNABLE_RADIAL_MIXING=1
+export RADIAL_SPECIES_ADAPTER_CHANNELS=8
+export RADIAL_SPECIES_ADAPTER_SCOPE=all
+export DESCRIPTOR_CONDITIONER=residual_mlp
+export DESCRIPTOR_CONDITIONER_HIDDEN_CHANNELS=32
+export SHORT_RANGE_REPULSION_STRENGTH=0.0
+export SHORT_RANGE_REPULSION_BETA=10.0
+export SHORT_RANGE_REPULSION_RADIUS_SCALE=0.75
+export FORCE_MODE=autograd
+export MEASURE_PASSES=5
+export DEFAULT_DTYPE=float32
+export EVAL_INTERVAL=512
+export MIN_EVAL_STEP=0
+export CHECKPOINT_NAME=rtece_scalar_best.pt
+export TRAINER_BACKEND=lightning
+export BATCH_SIZE=32
+export VALID_BATCH_SIZE=32
+export LR_SCHEDULER=plateau
+export LR_PATIENCE=25
+export LR_FACTOR=0.5
+export LR_WARMUP_STEPS=500
+export EARLY_STOPPING_PATIENCE=400
+export GRADIENT_CLIP_VAL=10.0
+exec /bin/bash /home/gengjianrui/bin/tace/benchmarks/oc20neb_tace_mace/rtece_scalar_matrix.sbatch

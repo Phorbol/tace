@@ -68,6 +68,10 @@ _EDGE_SCALAR_PATH_DIMS = {
     "edge.full_moment.vector_dot": 1,
     "edge.cavity.vector_dot": 1,
     "edge.cavity.quadrupole_frobenius": 1,
+    "edge.cavity.target_vector_projection": 1,
+    "edge.cavity.source_vector_projection": 1,
+    "edge.cavity.target_quadrupole_projection": 1,
+    "edge.cavity.source_quadrupole_projection": 1,
     "edge.direct.radial": 2,
     **_EDGE_SHELL_SCALAR_PATH_DIMS,
 }
@@ -1009,6 +1013,58 @@ def rtece_path_manifest(
                             radial_gate="edge_cutoff_envelope",
                             cost_group="edge_cavity_relations",
                         ),
+                        _scalar_path_spec(
+                            "edge.cavity.target_vector_projection",
+                            placement="edge",
+                            inputs=["edge.unit_vector", "moment.l1.vector"],
+                            contraction="u_dot",
+                            radial_projection="full_radial_mean",
+                            cavity=True,
+                            cutoff_power=1,
+                            radial_gate="edge_cutoff_envelope",
+                            cost_group="edge_cavity_frame_projections",
+                        ),
+                        _scalar_path_spec(
+                            "edge.cavity.source_vector_projection",
+                            placement="edge",
+                            inputs=["edge.unit_vector", "moment.l1.vector"],
+                            contraction="u_dot",
+                            radial_projection="full_radial_mean",
+                            cavity=True,
+                            cutoff_power=1,
+                            radial_gate="edge_cutoff_envelope",
+                            cost_group="edge_cavity_frame_projections",
+                        ),
+                        _scalar_path_spec(
+                            "edge.cavity.target_quadrupole_projection",
+                            placement="edge",
+                            inputs=[
+                                "edge.unit_vector",
+                                "moment.l2.quadrupole",
+                                "edge.unit_vector",
+                            ],
+                            contraction="uQu",
+                            radial_projection="full_radial_mean",
+                            cavity=True,
+                            cutoff_power=1,
+                            radial_gate="edge_cutoff_envelope",
+                            cost_group="edge_cavity_frame_projections",
+                        ),
+                        _scalar_path_spec(
+                            "edge.cavity.source_quadrupole_projection",
+                            placement="edge",
+                            inputs=[
+                                "edge.unit_vector",
+                                "moment.l2.quadrupole",
+                                "edge.unit_vector",
+                            ],
+                            contraction="uQu",
+                            radial_projection="full_radial_mean",
+                            cavity=True,
+                            cutoff_power=1,
+                            radial_gate="edge_cutoff_envelope",
+                            cost_group="edge_cavity_frame_projections",
+                        ),
                     ]
                 )
         else:
@@ -1917,6 +1973,9 @@ def edge_relational_sketches(
                 vector_dot = (vi * vj).sum(dim=-1)
                 vector_path = "edge.cavity.vector_dot" if config.use_cavity_edge_sketches else "edge.full_moment.vector_dot"
                 path_values[vector_path] = vector_dot[:, None]
+                if config.use_cavity_edge_sketches:
+                    path_values["edge.cavity.target_vector_projection"] = (unit * vi).sum(dim=-1, keepdim=True)
+                    path_values["edge.cavity.source_vector_projection"] = (unit * vj).sum(dim=-1, keepdim=True)
             if required_ell >= 2:
                 if quadrupole_channels_i is None or quadrupole_channels_j is None:
                     raise RuntimeError("edge quadrupole paths require ell=2 moments")
@@ -1925,6 +1984,12 @@ def edge_relational_sketches(
                 quadrupole_frobenius = (qi * qj).sum(dim=(-1, -2))
                 if config.use_cavity_edge_sketches:
                     path_values["edge.cavity.quadrupole_frobenius"] = quadrupole_frobenius[:, None]
+                    path_values["edge.cavity.target_quadrupole_projection"] = torch.einsum(
+                        "bi,bij,bj->b", unit, qi, unit
+                    )[:, None]
+                    path_values["edge.cavity.source_quadrupole_projection"] = torch.einsum(
+                        "bi,bij,bj->b", unit, qj, unit
+                    )[:, None]
             if (not config.use_cavity_edge_sketches) and needs_shell_paths:
                 if radial.shape[1] < 2:
                     raise ValueError("selected shell edge scalar paths require at least two radial channels")

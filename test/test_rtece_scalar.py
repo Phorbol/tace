@@ -1249,6 +1249,82 @@ def test_rtece_path_id_config_selects_mixed_full_shell_and_direct_edge_paths():
     assert torch.allclose(selected_edge[:, 1:3], full_edge[:, 6:8])
 
 
+def test_rtece_path_id_config_selects_cavity_edge_frame_projection_paths():
+    selected = build_rtece_config_from_path_ids(
+        "rtece_path_cavity_edge_frame_projections",
+        (
+            "atomic.radial_density",
+            "edge.cavity.target_vector_projection",
+            "edge.cavity.source_vector_projection",
+            "edge.cavity.target_quadrupole_projection",
+            "edge.cavity.source_quadrupole_projection",
+        ),
+        num_radial=4,
+        hidden_channels=(8,),
+    )
+    full = RTECEScalarConfig(
+        variant="rtece_cavity_edge_sketch8_reference",
+        num_radial=4,
+        hidden_channels=(8,),
+        use_atomic_moments=True,
+        use_cavity_edge_sketches=True,
+        num_edge_sketches=8,
+    )
+    graph = RTECEGraph(
+        z=torch.tensor([6, 1, 8], dtype=torch.long),
+        pos=torch.tensor(
+            [[0.0, 0.0, 0.0], [0.7, 0.1, 0.0], [0.2, 0.9, 0.1]],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    selected_edge = edge_relational_sketches(graph, selected)
+    full_edge = edge_relational_sketches(graph, full)
+
+    assert selected.scalar_path_ids == (
+        "atomic.radial_density",
+        "edge.cavity.target_vector_projection",
+        "edge.cavity.source_vector_projection",
+        "edge.cavity.target_quadrupole_projection",
+        "edge.cavity.source_quadrupole_projection",
+    )
+    assert selected.use_cavity_edge_sketches is True
+    assert selected.num_edge_sketches == 4
+    assert descriptor_dim(selected) == 8
+    assert torch.allclose(selected_edge, full_edge[:, 2:6])
+
+
+def test_rtece_cavity_edge_frame_projection_manifest_names_total_m0_contractions():
+    config = build_rtece_config_from_path_ids(
+        "rtece_path_cavity_edge_frame_manifest",
+        (
+            "atomic.radial_density",
+            "edge.cavity.target_vector_projection",
+            "edge.cavity.target_quadrupole_projection",
+        ),
+        num_radial=4,
+        hidden_channels=(8,),
+    )
+    manifest = rtece_path_manifest(config)
+    paths = {path["id"]: path for path in manifest["scalar_paths"]}
+
+    assert paths["edge.cavity.target_vector_projection"]["contraction"] == "u_dot"
+    assert paths["edge.cavity.target_vector_projection"]["inputs"] == [
+        "edge.unit_vector",
+        "moment.l1.vector",
+    ]
+    assert paths["edge.cavity.target_vector_projection"]["cavity"] is True
+    assert paths["edge.cavity.target_quadrupole_projection"]["contraction"] == "uQu"
+    assert paths["edge.cavity.target_quadrupole_projection"]["inputs"] == [
+        "edge.unit_vector",
+        "moment.l2.quadrupole",
+        "edge.unit_vector",
+    ]
+    assert paths["edge.cavity.target_quadrupole_projection"]["cavity"] is True
+
+
 def test_rtece_path_id_edge_manifest_reconstructs_selected_edge_paths():
     from benchmarks.oc20neb_tace_mace.rtece_scalar_model import (
         build_rtece_config_from_manifest,

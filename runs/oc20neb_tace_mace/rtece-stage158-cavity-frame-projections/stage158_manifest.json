@@ -1,0 +1,133 @@
+{
+  "baseline_for_comparison": "runs/oc20neb_tace_mace/rtece-stage157-relative-neb-loss/stage157_summary.md row stage157_direct_b32_rel0p25_mixed2048",
+  "basis_documents": [
+    "/home/gengjianrui/bin/TECE_design_space.md sections 5.3 and 10",
+    "/home/gengjianrui/bin/rTECE_review.md section 4.4",
+    "Stage157 summary: relative loss improves raw E modestly but does not solve representation/PES shape bottleneck"
+  ],
+  "common_training_contract": {
+    "atomic_cross_radial_projection": "learnable",
+    "atomic_cross_radial_sketch_channels": 6,
+    "batch_size": 32,
+    "bench_limit_configs": 1024,
+    "checkpoint_name": "rtece_scalar_best.pt",
+    "default_dtype": "float32",
+    "descriptor_conditioner": "residual_mlp",
+    "descriptor_conditioner_hidden_channels": 32,
+    "dft_valid_file": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+    "early_stopping_patience": 400,
+    "energy_weight": 1.0,
+    "eval_interval": 512,
+    "force_mode": "autograd",
+    "force_weight": 10.0,
+    "gradient_clip_val": 10.0,
+    "hidden_channels": "64,64",
+    "learnable_radial_mixing": true,
+    "limit_configs": 2048,
+    "lr": "1e-3",
+    "lr_factor": 0.5,
+    "lr_patience": 25,
+    "lr_scheduler": "plateau",
+    "lr_warmup_steps": 500,
+    "max_steps": 20000,
+    "measure_passes": 5,
+    "min_eval_step": 0,
+    "moment_l_max": 2,
+    "num_radial": 12,
+    "radial_species_adapter_channels": 8,
+    "radial_species_adapter_scope": "all",
+    "relative_energy_group_key": "case_id",
+    "relative_energy_image_key": "source_frame",
+    "relative_energy_weight": 0.25,
+    "run_root": "runs/oc20neb_tace_mace/rtece-stage158-cavity-frame-projections/projection_runs",
+    "seed": 0,
+    "short_range_repulsion_beta": 10.0,
+    "short_range_repulsion_potential": "zbl",
+    "short_range_repulsion_radius_scale": 0.75,
+    "short_range_repulsion_strength": 0.0,
+    "species_basis_channels": 24,
+    "species_basis_mode": "learnable_embedding",
+    "teacher_valid_file": "runs/oc20neb_tace_mace/tece-distill-20260717/teacher_valid.extxyz",
+    "train_file": "runs/oc20neb_tace_mace/tece-distill-20260717/mixed_train_tw0.75.extxyz",
+    "train_valid_file": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+    "trainer_backend": "lightning",
+    "use_short_range_repulsion": true,
+    "valid_batch_size": 32,
+    "valid_limit_configs": 256
+  },
+  "created": "2026-07-21",
+  "promotion_rule": "Promote only if DFT E RMSE/MAE/max or F RMSE/MAE/max improves versus Stage157 rel0.25 without losing throughput enough to leave the Pareto front; relative-image/barrier and later dimer/rattle-relax remain required physical checks.",
+  "rows": [
+    {
+      "descriptor_dim_note": "Stage157 base descriptor plus 2 edge-frame projection scalars",
+      "hypothesis": "Add the u dot v_i\\j and u dot v_j\\i edge-frame vector projections from rTECE_review Section 4.4.",
+      "increment": [
+        "edge.cavity.target_vector_projection",
+        "edge.cavity.source_vector_projection"
+      ],
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius",
+        "edge.cavity.vector_dot",
+        "edge.direct.radial",
+        "edge.cavity.target_vector_projection",
+        "edge.cavity.source_vector_projection"
+      ],
+      "variant": "stage158_cavity_uvproj_b32_rel0p25_mixed2048"
+    },
+    {
+      "descriptor_dim_note": "Stage157 base descriptor plus 2 edge-frame projection scalars",
+      "hypothesis": "Add the u^T Q_i\\j u and u^T Q_j\\i u edge-frame quadrupole projections from rTECE_review Section 4.4.",
+      "increment": [
+        "edge.cavity.target_quadrupole_projection",
+        "edge.cavity.source_quadrupole_projection"
+      ],
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius",
+        "edge.cavity.vector_dot",
+        "edge.direct.radial",
+        "edge.cavity.target_quadrupole_projection",
+        "edge.cavity.source_quadrupole_projection"
+      ],
+      "variant": "stage158_cavity_uquproj_b32_rel0p25_mixed2048"
+    },
+    {
+      "descriptor_dim_note": "Stage157 base descriptor plus 4 edge-frame projection scalars",
+      "hypothesis": "Test the combined edge-frame projection rung before moving to more expensive learned or higher-body contractions.",
+      "increment": [
+        "edge.cavity.target_vector_projection",
+        "edge.cavity.source_vector_projection",
+        "edge.cavity.target_quadrupole_projection",
+        "edge.cavity.source_quadrupole_projection"
+      ],
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius",
+        "edge.cavity.vector_dot",
+        "edge.direct.radial",
+        "edge.cavity.target_vector_projection",
+        "edge.cavity.source_vector_projection",
+        "edge.cavity.target_quadrupole_projection",
+        "edge.cavity.source_quadrupole_projection"
+      ],
+      "variant": "stage158_cavity_uv_uquproj_b32_rel0p25_mixed2048"
+    }
+  ],
+  "run_root": "runs/oc20neb_tace_mace/rtece-stage158-cavity-frame-projections/projection_runs",
+  "schema_version": "rtece_stage158_cavity_frame_projections.v1",
+  "stage": "stage158_cavity_frame_projections",
+  "wrapper_root": "runs/oc20neb_tace_mace/rtece-stage158-cavity-frame-projections/wrappers"
+}
