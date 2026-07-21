@@ -21,6 +21,7 @@ from benchmarks.oc20neb_tace_mace.make_rtece_stage129_teacher_rattle_distill imp
 from benchmarks.oc20neb_tace_mace.make_rtece_stage171_residual_active_set import _shell_assign
 
 DEFAULT_OUTPUT_ROOT = Path("runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof")
+DEFAULT_IMPLEMENTATION_PLAN = Path("docs/superpowers/plans/2026-07-21-stage180-minimal-renormalization-proof.md")
 DEFAULT_TEACHER_VALID = Path("runs/oc20neb_tace_mace/tece-distill-20260717/mixed_valid_tw0.75_regen.extxyz")
 
 FIXED_STUDENT_PATH_IDS = [
@@ -42,11 +43,12 @@ def _path_csv(paths: list[str]) -> str:
 
 
 def _artifacts(root: Path) -> dict[str, Any]:
+    implementation_plan = DEFAULT_IMPLEMENTATION_PLAN if Path(root) == DEFAULT_OUTPUT_ROOT else root / "stage180_implementation_plan.md"
     return {
         "manifest": str(root / "stage180_manifest.json"),
         "manifest_audit": str(root / "stage180_manifest_audit.json"),
         "stage_plan": str(root / "stage180_plan.md"),
-        "implementation_plan": "docs/superpowers/plans/2026-07-21-stage180-minimal-renormalization-proof.md",
+        "implementation_plan": str(implementation_plan),
         "results_root": str(root / "results"),
         "diagnostics_root": str(root / "diagnostics"),
         "wrappers": {
@@ -298,7 +300,8 @@ def write_projection_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
                 f"--output-json {shlex.quote(str(out))} "
                 f"--reference-path-ids {_path_csv(payload['reference_teacher_proxy_path_ids'])} "
                 f"--candidate scratch_same_student:{_path_csv(payload['fixed_student_path_ids'])} "
-                "--num-radial 10 --species-basis-channels 16 "
+                "--num-radial 10 --species-basis-channels 16 --species-basis-mode learnable_embedding "
+                "--local-l0-chemistry-rank 4 "
                 "--reference-atomic-cross-radial-sketch-channels 3 --candidate-atomic-cross-radial-sketch-channels 3 "
                 "--limit-configs \"${PROJECTION_LIMIT_CONFIGS}\" --default-dtype float64 --neighborlist-backend matscipy "
                 "--energy-target-key energy --energy-baseline element_counts --energy-fit-intercept --energy-standardize-features "

@@ -826,6 +826,8 @@ def build_projection_config(
     cutoff: float = 5.0,
     num_radial: int = 8,
     species_basis_channels: int = 0,
+    species_basis_mode: str = "fixed_z_power",
+    local_l0_chemistry_rank: int = 0,
     atomic_cross_radial_sketch_channels: int = 2,
 ) -> RTECEScalarConfig:
     from tace.models.rtece_scalar import build_rtece_config_from_path_ids
@@ -836,6 +838,8 @@ def build_projection_config(
         cutoff=float(cutoff),
         num_radial=int(num_radial),
         species_basis_channels=int(species_basis_channels),
+        species_basis_mode=str(species_basis_mode),
+        local_l0_chemistry_rank=int(local_l0_chemistry_rank),
         atomic_cross_radial_sketch_channels=int(atomic_cross_radial_sketch_channels),
     )
 
@@ -1800,6 +1804,8 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--num-radial", type=int, default=8)
     parser.add_argument("--species-basis-channels", type=int, default=0)
+    parser.add_argument("--species-basis-mode", choices=("fixed_z_power", "learnable_embedding"), default="fixed_z_power")
+    parser.add_argument("--local-l0-chemistry-rank", type=int, default=0)
     parser.add_argument("--atomic-cross-radial-sketch-channels", type=int, default=2)
     parser.add_argument("--reference-atomic-cross-radial-sketch-channels", type=int, default=None)
     parser.add_argument("--candidate-atomic-cross-radial-sketch-channels", type=int, default=None)
@@ -1863,6 +1869,8 @@ def main() -> None:
         cutoff=float(args.cutoff),
         num_radial=int(args.num_radial),
         species_basis_channels=int(args.species_basis_channels),
+        species_basis_mode=str(args.species_basis_mode),
+        local_l0_chemistry_rank=int(args.local_l0_chemistry_rank),
         atomic_cross_radial_sketch_channels=reference_cross_radial_sketch_channels,
     )
     graphs = _load_graphs(
@@ -2011,6 +2019,8 @@ def main() -> None:
             cutoff=float(args.cutoff),
             num_radial=int(args.num_radial),
             species_basis_channels=int(args.species_basis_channels),
+            species_basis_mode=str(args.species_basis_mode),
+            local_l0_chemistry_rank=int(args.local_l0_chemistry_rank),
             atomic_cross_radial_sketch_channels=candidate_cross_radial_sketch_channels,
         )
         candidate_configs.append((candidate_name, candidate_config))
@@ -2070,6 +2080,8 @@ def main() -> None:
         "limit_configs": int(args.limit_configs),
         "num_radial": int(args.num_radial),
         "species_basis_channels": int(args.species_basis_channels),
+        "species_basis_mode": str(args.species_basis_mode),
+        "local_l0_chemistry_rank": int(args.local_l0_chemistry_rank),
         "atomic_cross_radial_sketch_channels": int(args.atomic_cross_radial_sketch_channels),
         "reference_atomic_cross_radial_sketch_channels": reference_cross_radial_sketch_channels,
         "candidate_atomic_cross_radial_sketch_channels": candidate_cross_radial_sketch_channels,

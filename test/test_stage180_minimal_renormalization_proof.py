@@ -70,3 +70,29 @@ def test_stage180_generator_runs_as_direct_script(tmp_path):
     assert result.returncode == 0, result.stderr
     assert (tmp_path / "stage180" / "stage180_manifest.json").exists()
     assert (tmp_path / "stage180" / "wrappers" / "stage180_projection_diagnostic_no_export.sbatch").exists()
+
+
+def test_stage180_nondefault_output_root_keeps_implementation_plan_local(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage180_minimal_renormalization_proof import make_stage180_manifest
+
+    output_root = tmp_path / "stage180"
+    payload = make_stage180_manifest(output_root=output_root)
+
+    assert payload["artifacts"]["implementation_plan"] == str(output_root / "stage180_implementation_plan.md")
+
+
+def test_stage180_projection_wrapper_passes_local_l0_projection_args(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage180_minimal_renormalization_proof import (
+        make_stage180_manifest,
+        write_projection_wrapper,
+    )
+
+    payload = make_stage180_manifest(output_root=tmp_path / "stage180")
+    wrapper = write_projection_wrapper(
+        tmp_path / "stage180" / "wrappers" / "stage180_projection_diagnostic_no_export.sbatch",
+        payload,
+    )
+    text = wrapper.read_text(encoding="utf-8")
+
+    assert "--species-basis-mode learnable_embedding" in text
+    assert "--local-l0-chemistry-rank 4" in text

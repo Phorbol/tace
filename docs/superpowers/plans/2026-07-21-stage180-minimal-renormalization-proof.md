@@ -20,20 +20,20 @@
 ### Task 1: Run Available Baselines
 
 **Files:**
-- Use: `/tmp/pytest-of-gengjianrui/pytest-1094/test_stage180_generator_runs_a0/stage180/wrappers/stage180_projection_diagnostic_no_export.sbatch`
-- Use: `/tmp/pytest-of-gengjianrui/pytest-1094/test_stage180_generator_runs_a0/stage180/wrappers/stage180_scratch_train_no_export.sbatch`
-- Use: `/tmp/pytest-of-gengjianrui/pytest-1094/test_stage180_generator_runs_a0/stage180/wrappers/stage180_benchmark_physical_no_export.sbatch`
+- Use: `runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/wrappers/stage180_projection_diagnostic_no_export.sbatch`
+- Use: `runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/wrappers/stage180_scratch_train_no_export.sbatch`
+- Use: `runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/wrappers/stage180_benchmark_physical_no_export.sbatch`
 
 **Interfaces:**
-- Consumes: Stage180 manifest at `/tmp/pytest-of-gengjianrui/pytest-1094/test_stage180_generator_runs_a0/stage180/stage180_manifest.json`
+- Consumes: Stage180 manifest at `runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/stage180_manifest.json`
 - Produces: projection JSON, scratch checkpoint, E/F benchmark JSONs, dimer/rattle/physical JSONs
 
 - [ ] **Step 1: Validate wrappers with Slurm**
 
 ```bash
-sbatch --test-only /tmp/pytest-of-gengjianrui/pytest-1094/test_stage180_generator_runs_a0/stage180/wrappers/stage180_projection_diagnostic_no_export.sbatch
-sbatch --test-only /tmp/pytest-of-gengjianrui/pytest-1094/test_stage180_generator_runs_a0/stage180/wrappers/stage180_scratch_train_no_export.sbatch
-sbatch --test-only /tmp/pytest-of-gengjianrui/pytest-1094/test_stage180_generator_runs_a0/stage180/wrappers/stage180_benchmark_physical_no_export.sbatch
+sbatch --test-only runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/wrappers/stage180_projection_diagnostic_no_export.sbatch
+sbatch --test-only runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/wrappers/stage180_scratch_train_no_export.sbatch
+sbatch --test-only runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/wrappers/stage180_benchmark_physical_no_export.sbatch
 ```
 
 Expected: all three commands accepted by Slurm; no `--export`, mem, or cpus-per-task flags.
@@ -41,26 +41,26 @@ Expected: all three commands accepted by Slurm; no `--export`, mem, or cpus-per-
 - [ ] **Step 2: Submit projection diagnostic**
 
 ```bash
-sbatch /tmp/pytest-of-gengjianrui/pytest-1094/test_stage180_generator_runs_a0/stage180/wrappers/stage180_projection_diagnostic_no_export.sbatch
+sbatch runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/wrappers/stage180_projection_diagnostic_no_export.sbatch
 ```
 
-Expected: `/tmp/pytest-of-gengjianrui/pytest-1094/test_stage180_generator_runs_a0/stage180/diagnostics/stage180_projection_diagnostic.json` exists and reports descriptor, energy, and sampled force projection rows.
+Expected: `runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/diagnostics/stage180_projection_diagnostic.json` exists and reports descriptor, energy, and sampled force projection rows.
 
 - [ ] **Step 3: Submit scratch training**
 
 ```bash
-sbatch /tmp/pytest-of-gengjianrui/pytest-1094/test_stage180_generator_runs_a0/stage180/wrappers/stage180_scratch_train_no_export.sbatch
+sbatch runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/wrappers/stage180_scratch_train_no_export.sbatch
 ```
 
-Expected: `/tmp/pytest-of-gengjianrui/pytest-1094/test_stage180_generator_runs_a0/stage180/results/scratch_same_student/rtece_scalar_best.pt` and `train_summary.json` exist.
+Expected: `runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/results/scratch_same_student/rtece_scalar_best.pt` and `train_summary.json` exist.
 
 - [ ] **Step 4: Submit scratch benchmark and physical diagnostics**
 
 ```bash
-sbatch /tmp/pytest-of-gengjianrui/pytest-1094/test_stage180_generator_runs_a0/stage180/wrappers/stage180_benchmark_physical_no_export.sbatch
+sbatch runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/wrappers/stage180_benchmark_physical_no_export.sbatch
 ```
 
-Expected: `scratch_same_student_dft_benchmark.json`, `scratch_same_student_teacher_benchmark.json`, scaling JSONs, dimer JSON, rattle JSON, and physical summary JSON exist under `/tmp/pytest-of-gengjianrui/pytest-1094/test_stage180_generator_runs_a0/stage180/diagnostics/scratch_same_student`.
+Expected: `scratch_same_student_dft_benchmark.json`, `scratch_same_student_teacher_benchmark.json`, scaling JSONs, dimer JSON, rattle JSON, and physical summary JSON exist under `runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/diagnostics/scratch_same_student`.
 
 ### Task 2: Add Projection/GN Initializer Support
 
