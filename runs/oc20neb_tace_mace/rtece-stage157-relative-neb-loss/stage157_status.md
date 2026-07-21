@@ -1,11 +1,9 @@
 # Stage157 Status
 
-Generated and submitted wrappers.
+| variant | job | state | exit | elapsed | artifact status |
+|---|---:|---|---|---:|---|
+| `stage157_direct_b32_rel0_mixed2048` | 687503 | COMPLETED | 0:0 | 00:18:57 | train summary, DFT benchmark, teacher benchmark collected |
+| `stage157_direct_b32_rel0p25_mixed2048` | 687504 | COMPLETED | 0:0 | 00:19:31 | train summary, DFT benchmark, teacher benchmark collected |
+| `stage157_direct_b32_rel1p0_mixed2048` | 687505 | COMPLETED | 0:0 | 00:19:25 | train summary, DFT benchmark, teacher benchmark collected |
 
-| row | relative energy weight | job id | state |
-|---|---:|---:|---|
-| `stage157_direct_b32_rel0_mixed2048` | 0.0 | 687503 | submitted |
-| `stage157_direct_b32_rel0p25_mixed2048` | 0.25 | 687504 | submitted |
-| `stage157_direct_b32_rel1p0_mixed2048` | 1.0 | 687505 | submitted |
-
-Next: monitor Slurm completion, collect train summaries and DFT/teacher benchmarks, then compare raw E RMSE/MAE/max, F RMSE/MAE/max, relative-image RMSE, barrier RMSE, case-offset RMSE, and atoms/s against Stage155 direct.
+All jobs completed. Summary metrics are in `stage157_metrics.json` and `stage157_summary.md`.
