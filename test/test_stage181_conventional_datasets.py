@@ -679,3 +679,19 @@ def test_stage185_script_runs_as_direct_cli_entrypoint(tmp_path):
     assert (tmp_path / "stage185" / "stage185_manifest.json").exists()
     assert (tmp_path / "stage185" / "stage185_manifest_audit.json").exists()
 
+
+def test_stage185_prep_wrapper_uses_sai_accepted_short_walltime(tmp_path):
+    from pathlib import Path
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage185_rmd17_representation_ladder import (
+        make_stage185_manifest,
+        materialize_stage185,
+    )
+
+    payload = make_stage185_manifest(output_root=tmp_path / "stage185", rmd17_root=tmp_path / "rMD17")
+    result = materialize_stage185(payload)
+    prep_text = Path(result["prep_wrapper"]).read_text(encoding="utf-8")
+
+    assert "#SBATCH --qos=flood-1o2gpu" in prep_text
+    assert "#SBATCH --time=03:55:00" in prep_text
+    assert "#SBATCH --time=05:55:00" not in prep_text
+

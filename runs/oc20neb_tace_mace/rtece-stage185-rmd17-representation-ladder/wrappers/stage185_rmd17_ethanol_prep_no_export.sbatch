@@ -5,7 +5,7 @@
 #SBATCH --ntasks=1
 #SBATCH --gpus-per-node=1
 #SBATCH --qos=flood-1o2gpu
-#SBATCH --time=05:55:00
+#SBATCH --time=03:55:00
 #SBATCH --output=/home/gengjianrui/bin/logs/rtece-st185-rmd17-prep-%j.out
 #SBATCH --error=/home/gengjianrui/bin/logs/rtece-st185-rmd17-prep-%j.err
 

@@ -277,7 +277,7 @@ def _write_prep_wrapper(payload: dict[str, Any]) -> str:
     molecule = dataset["molecule"]
     source_npz = dataset["source"]["source_npz"]
     archive = str(Path(rmd17_root) / "rMD17_v4.zip")
-    lines = _header("rtece-st185-rmd17-prep", time_limit="05:55:00")
+    lines = _header("rtece-st185-rmd17-prep", time_limit="03:55:00")
     lines.extend([
         f"RMD17_ROOT={shlex.quote(rmd17_root)}",
         f"RMD17_ARCHIVE_URL={shlex.quote(dataset['source']['archive_url'])}",
