@@ -91,6 +91,89 @@ def convert_rmd17_npz_to_extxyz(
     }
 
 
+
+
+def convert_rmd17_npz_to_extxyz_splits(
+    source_npz: str | Path,
+    output_dir: str | Path,
+    *,
+    molecule: str | None = None,
+    train_count: int = 1000,
+    valid_count: int = 1000,
+    test_count: int = 1000,
+) -> dict[str, Any]:
+    """Convert one rMD17 npz into train/valid/test extxyz files in eV units."""
+    from ase import Atoms
+    from ase.io import write
+
+    counts = {"train": int(train_count), "valid": int(valid_count), "test": int(test_count)}
+    if any(count < 1 for count in counts.values()):
+        raise ValueError("train_count, valid_count, and test_count must all be positive")
+
+    source = Path(source_npz)
+    out_dir = Path(output_dir)
+    with np.load(source) as data:
+        z = np.asarray(_require_key(data, "nuclear_charges"), dtype=np.int64)
+        coords = np.asarray(_require_key(data, "coords"), dtype=np.float64)
+        energies = np.asarray(_require_key(data, "energies"), dtype=np.float64).reshape(-1)
+        forces = np.asarray(_require_key(data, "forces"), dtype=np.float64)
+
+    if coords.ndim != 3 or coords.shape[-1] != 3:
+        raise ValueError(f"coords must have shape (n_configs, n_atoms, 3), got {coords.shape}")
+    if forces.shape != coords.shape:
+        raise ValueError(f"forces shape {forces.shape} must match coords shape {coords.shape}")
+    if energies.shape[0] != coords.shape[0]:
+        raise ValueError(f"energies length {energies.shape[0]} must match coords configs {coords.shape[0]}")
+    if z.shape[0] != coords.shape[1]:
+        raise ValueError(f"nuclear_charges length {z.shape[0]} must match coords atoms {coords.shape[1]}")
+
+    total_needed = sum(counts.values())
+    if total_needed > coords.shape[0]:
+        raise ValueError(f"requested {total_needed} split configs but source contains {coords.shape[0]}")
+
+    mol = str(molecule or source.stem.removeprefix("rmd17_") or "unknown")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    cursor = 0
+    split_reports: dict[str, dict[str, Any]] = {}
+    for split, count in counts.items():
+        indices = list(range(cursor, cursor + count))
+        cursor += count
+        atoms_list = []
+        for idx in indices:
+            atoms = Atoms(numbers=z, positions=coords[idx])
+            atoms.info["energy"] = float(energies[idx] * KCAL_MOL_TO_EV)
+            atoms.info["dataset"] = "rMD17"
+            atoms.info["molecule"] = mol
+            atoms.info["split"] = split
+            atoms.info["source_frame"] = int(idx)
+            atoms.info["energy_units"] = "eV"
+            atoms.info["forces_units"] = "eV/A"
+            atoms.arrays["forces"] = np.asarray(forces[idx] * KCAL_MOL_TO_EV, dtype=np.float64)
+            atoms_list.append(atoms)
+        out = out_dir / f"rmd17_{mol}_{split}.extxyz"
+        write(str(out), atoms_list, format="extxyz")
+        split_reports[split] = {
+            "output_extxyz": str(out),
+            "num_configs": int(count),
+            "indices": indices,
+        }
+
+    return {
+        "schema_version": "rtece_stage181_rmd17_split_conversion.v1",
+        "dataset": "rMD17",
+        "molecule": mol,
+        "source_npz": str(source),
+        "output_dir": str(out_dir),
+        "num_atoms": int(z.shape[0]),
+        "source_units": {"energy": "kcal/mol", "forces": "kcal/mol/A", "distance": "A"},
+        "target_units": {"energy": "eV", "forces": "eV/A", "distance": "A"},
+        "conversion_factor_energy": float(KCAL_MOL_TO_EV),
+        "conversion_factor_forces": float(KCAL_MOL_TO_EV),
+        "labels": {"energy_key": "energy", "forces_key": "forces"},
+        "splits": split_reports,
+    }
+
+
 def make_3bpa_dataset_manifest(root: str | Path) -> dict[str, Any]:
     dataset_root = Path(root)
     splits = {}
@@ -247,6 +330,14 @@ def main() -> None:
     p_rmd17.add_argument("--molecule", default=None)
     p_rmd17.add_argument("--limit-configs", type=int, default=None)
     p_rmd17.add_argument("--summary-json", type=Path, default=None)
+    p_rmd17_splits = sub.add_parser("rmd17-npz-to-splits")
+    p_rmd17_splits.add_argument("--source-npz", type=Path, required=True)
+    p_rmd17_splits.add_argument("--output-dir", type=Path, required=True)
+    p_rmd17_splits.add_argument("--molecule", default=None)
+    p_rmd17_splits.add_argument("--train-count", type=int, default=1000)
+    p_rmd17_splits.add_argument("--valid-count", type=int, default=1000)
+    p_rmd17_splits.add_argument("--test-count", type=int, default=1000)
+    p_rmd17_splits.add_argument("--summary-json", type=Path, default=None)
     p_3bpa = sub.add_parser("3bpa-manifest")
     p_3bpa.add_argument("--root", type=Path, required=True)
     p_3bpa.add_argument("--output-json", type=Path, required=True)
@@ -265,6 +356,19 @@ def main() -> None:
             args.output_extxyz,
             molecule=args.molecule,
             limit_configs=args.limit_configs,
+        )
+        if args.summary_json is not None:
+            args.summary_json.parent.mkdir(parents=True, exist_ok=True)
+            args.summary_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    elif args.command == "rmd17-npz-to-splits":
+        payload = convert_rmd17_npz_to_extxyz_splits(
+            args.source_npz,
+            args.output_dir,
+            molecule=args.molecule,
+            train_count=args.train_count,
+            valid_count=args.valid_count,
+            test_count=args.test_count,
         )
         if args.summary_json is not None:
             args.summary_json.parent.mkdir(parents=True, exist_ok=True)

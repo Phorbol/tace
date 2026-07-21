@@ -163,3 +163,49 @@ def test_stage181_manifest_includes_rmd17_smoke_wrappers(tmp_path):
     assert "#SBATCH --mem" not in wrapper_text
     assert "--cpus-per-task" not in wrapper_text
     assert "set -u" not in wrapper_text
+
+
+
+def test_rmd17_npz_to_extxyz_splits_uses_ev_units_and_contiguous_disjoint_splits(tmp_path):
+    from ase.io import read
+    from benchmarks.oc20neb_tace_mace.prepare_stage181_conventional_datasets import (
+        KCAL_MOL_TO_EV,
+        convert_rmd17_npz_to_extxyz_splits,
+    )
+
+    source = tmp_path / "rmd17_ethanol.npz"
+    coords = np.zeros((8, 2, 3), dtype=np.float64)
+    coords[:, 1, 0] = np.arange(8, dtype=np.float64) + 1.0
+    forces = np.ones((8, 2, 3), dtype=np.float64)
+    forces[:, 0, 0] = np.arange(8, dtype=np.float64)
+    np.savez(
+        source,
+        nuclear_charges=np.array([6, 1], dtype=np.int64),
+        coords=coords,
+        energies=np.arange(8, dtype=np.float64),
+        forces=forces,
+    )
+
+    summary = convert_rmd17_npz_to_extxyz_splits(
+        source,
+        tmp_path / "converted_extxyz",
+        molecule="ethanol",
+        train_count=3,
+        valid_count=2,
+        test_count=2,
+    )
+
+    assert summary["schema_version"] == "rtece_stage181_rmd17_split_conversion.v1"
+    assert summary["splits"]["train"]["indices"] == [0, 1, 2]
+    assert summary["splits"]["valid"]["indices"] == [3, 4]
+    assert summary["splits"]["test"]["indices"] == [5, 6]
+    train = read(summary["splits"]["train"]["output_extxyz"], index=":")
+    valid = read(summary["splits"]["valid"]["output_extxyz"], index=":")
+    test = read(summary["splits"]["test"]["output_extxyz"], index=":")
+    assert len(train) == 3
+    assert len(valid) == 2
+    assert len(test) == 2
+    assert train[2].info["source_frame"] == 2
+    assert valid[0].info["source_frame"] == 3
+    assert test[1].get_potential_energy() == pytest.approx(6.0 * KCAL_MOL_TO_EV)
+    assert test[1].get_forces()[0, 0] == pytest.approx(6.0 * KCAL_MOL_TO_EV)
