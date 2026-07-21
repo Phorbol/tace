@@ -1,0 +1,36 @@
+{
+  "followup": {
+    "after_training": "submit the matching benchmark wrappers on test_300K/test_600K/test_1200K/test_dih",
+    "physics_followup": "run dimer scan and rattle-relax RMSD only after numeric ladder results are available",
+    "primary_readout": "compare E/F RMSE, E/F max error, atoms/s, and peak memory across the nested path ladder"
+  },
+  "jobs": [
+    {
+      "job_id": 689424,
+      "row_name": "stage183_l0_local_species",
+      "status_at_record": "RUNNING",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage183-3bpa-representation-ladder/wrappers/stage183_l0_local_species_no_export.sbatch"
+    },
+    {
+      "job_id": 689426,
+      "row_name": "stage183_l1_cross",
+      "status_at_record": "RUNNING",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage183-3bpa-representation-ladder/wrappers/stage183_l1_cross_no_export.sbatch"
+    },
+    {
+      "job_id": 689423,
+      "row_name": "stage183_l2_atomic_quadrupole",
+      "status_at_record": "RUNNING",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage183-3bpa-representation-ladder/wrappers/stage183_l2_atomic_quadrupole_no_export.sbatch"
+    },
+    {
+      "job_id": 689425,
+      "row_name": "stage183_t3_cavity_vecq",
+      "status_at_record": "RUNNING",
+      "wrapper": "runs/oc20neb_tace_mace/rtece-stage183-3bpa-representation-ladder/wrappers/stage183_t3_cavity_vecq_no_export.sbatch"
+    }
+  ],
+  "schema_version": "rtece_stage183_train_submissions.v1",
+  "stage": "stage183_3bpa_representation_ladder",
+  "submitted_at_utc": "2026-07-21T12:00:02.780261+00:00"
+}
