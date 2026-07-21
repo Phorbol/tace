@@ -1,0 +1,27 @@
+{
+  "checks": {
+    "has_feature_cache": true,
+    "has_wrapper": true,
+    "max_configs_per_case_positive": true,
+    "no_forbidden_sbatch_flags": true,
+    "no_set_u": true,
+    "schema_version": true,
+    "stage": true,
+    "uses_feature_cache_flags": true,
+    "uses_pipefail": true,
+    "uses_stage168_summary": true
+  },
+  "command": "/home/gengjianrui/bin/.venvs/tace-mace-cu126/bin/python benchmarks/oc20neb_tace_mace/summarize_rtece_stage168_rtece_descriptor_proxy.py --benchmark \"runs/oc20neb_tace_mace/rtece-stage157-relative-neb-loss/relative_loss_runs/stage157_direct_b32_rel0p25_mixed2048/stage157_direct_b32_rel0p25_mixed2048_dft_benchmark.json\" --configs \"/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz\" --num-radial 8 --max-configs-per-case 2 --ridge 0.001 --neighborlist-backend \"matscipy\" --feature-cache-json \"runs/oc20neb_tace_mace/rtece-stage169-descriptor-cache/stage169_rtece_descriptor_features.json\" --write-feature-cache-json \"runs/oc20neb_tace_mace/rtece-stage169-descriptor-cache/stage169_rtece_descriptor_features.json\" --output-json \"runs/oc20neb_tace_mace/rtece-stage169-descriptor-cache/stage169_rtece_descriptor_proxy.json\" --output-md \"runs/oc20neb_tace_mace/rtece-stage169-descriptor-cache/stage169_rtece_descriptor_proxy.md\"",
+  "forbidden_sbatch_flags": [],
+  "has_feature_cache": true,
+  "has_wrapper": true,
+  "max_configs_per_case_positive": true,
+  "no_forbidden_sbatch_flags": true,
+  "no_set_u": true,
+  "passed": true,
+  "schema_version": true,
+  "stage": true,
+  "uses_feature_cache_flags": true,
+  "uses_pipefail": true,
+  "uses_stage168_summary": true
+}

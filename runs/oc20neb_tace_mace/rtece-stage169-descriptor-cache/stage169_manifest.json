@@ -1,0 +1,22 @@
+{
+  "artifacts": {
+    "audit": "runs/oc20neb_tace_mace/rtece-stage169-descriptor-cache/stage169_manifest_audit.json",
+    "feature_cache": "runs/oc20neb_tace_mace/rtece-stage169-descriptor-cache/stage169_rtece_descriptor_features.json",
+    "manifest": "runs/oc20neb_tace_mace/rtece-stage169-descriptor-cache/stage169_manifest.json",
+    "plan": "runs/oc20neb_tace_mace/rtece-stage169-descriptor-cache/stage169_plan.md",
+    "summary_json": "runs/oc20neb_tace_mace/rtece-stage169-descriptor-cache/stage169_rtece_descriptor_proxy.json",
+    "summary_md": "runs/oc20neb_tace_mace/rtece-stage169-descriptor-cache/stage169_rtece_descriptor_proxy.md",
+    "wrapper": "runs/oc20neb_tace_mace/rtece-stage169-descriptor-cache/stage169_descriptor_cache.sbatch"
+  },
+  "benchmark": "runs/oc20neb_tace_mace/rtece-stage157-relative-neb-loss/relative_loss_runs/stage157_direct_b32_rel0p25_mixed2048/stage157_direct_b32_rel0p25_mixed2048_dft_benchmark.json",
+  "configs": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "group_key": "case_id",
+  "max_configs_per_case": 2,
+  "neighborlist_backend": "matscipy",
+  "num_radial": 8,
+  "purpose": "cache rTECE semantic descriptor features for Stage168 energy-offset proxy diagnostics",
+  "ridge": 0.001,
+  "row_set": "stage169-rtece-descriptor-cache",
+  "schema_version": "rtece_stage169_descriptor_cache.v1",
+  "stage": "stage169_rtece_descriptor_cache"
+}

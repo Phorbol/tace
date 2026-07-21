@@ -8905,6 +8905,73 @@ def test_stage168_rtece_descriptor_proxy_scores_semantic_path_sets():
     assert "case_id is used only for grouping" in markdown
 
 
+def test_stage169_rtece_descriptor_proxy_uses_feature_cache_and_safe_sbatch(tmp_path):
+    import json
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage169_descriptor_cache import (
+        audit_stage169_manifest,
+        make_stage169_manifest,
+        materialize_stage169,
+    )
+    from benchmarks.oc20neb_tace_mace.summarize_rtece_stage168_rtece_descriptor_proxy import (
+        load_case_feature_cache,
+        summarize_stage168_from_files,
+        write_case_feature_cache,
+    )
+
+    cache_path = tmp_path / "features.json"
+    features = {
+        "case-a": {"t4_pair_density.mean.d0": 1.0, "t4_pair_density.std.d0": 0.1},
+        "case-b": {"t4_pair_density.mean.d0": 2.0, "t4_pair_density.std.d0": 0.2},
+        "case-c": {"t4_pair_density.mean.d0": 3.0, "t4_pair_density.std.d0": 0.3},
+    }
+    write_case_feature_cache(
+        cache_path,
+        case_features=features,
+        metadata={"source": "unit-test", "max_configs_per_case": 1},
+    )
+    cache_payload = load_case_feature_cache(cache_path)
+    assert cache_payload["schema_version"] == "rtece_stage168_case_feature_cache.v1"
+    assert cache_payload["case_features"] == features
+    assert cache_payload["case_count"] == 3
+
+    benchmark = tmp_path / "benchmark.json"
+    benchmark.write_text(
+        json.dumps({
+            "variant": "unit",
+            "group_mean_offsets_eV_per_atom": {"case-a": 0.001, "case-b": 0.002, "case-c": 0.003},
+        })
+    )
+    summary = summarize_stage168_from_files(
+        benchmark=benchmark,
+        configs_file=tmp_path / "missing.extxyz",
+        feature_cache_json=cache_path,
+    )
+    assert summary["feature_cache_json"] == str(cache_path)
+    assert summary["feature_cache_used"] is True
+    assert summary["case_count"] == 3
+
+    manifest = make_stage169_manifest(
+        output_root=tmp_path / "stage169",
+        benchmark="benchmark.json",
+        configs="valid.extxyz",
+        max_configs_per_case=2,
+    )
+    audit = audit_stage169_manifest(manifest)
+    assert audit["no_forbidden_sbatch_flags"] is True
+    materialized = materialize_stage169(manifest)
+    wrapper = Path(materialized["artifacts"]["wrapper"])
+    text = wrapper.read_text()
+    assert "set -eo pipefail" in text
+    assert "--feature-cache-json" in text
+    assert "--write-feature-cache-json" in text
+    assert "--max-configs-per-case 2" in text
+    assert "--export" not in text
+    assert "--mem" not in text
+    assert "--cpus-per-task" not in text
+
+
 def test_stage145_summary_keeps_rmse_first_and_missing_outputs_explicit(tmp_path):
     import json
 

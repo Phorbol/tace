@@ -189,6 +189,45 @@ def _average_feature_rows(rows: Sequence[Mapping[str, float]]) -> dict[str, floa
     return averaged
 
 
+def write_case_feature_cache(
+    path: str | Path,
+    *,
+    case_features: Mapping[str, Mapping[str, float]],
+    metadata: Mapping[str, Any] | None = None,
+) -> dict[str, Any]:
+    normalized_features = {
+        str(case_id): {str(key): float(value) for key, value in sorted(row.items())}
+        for case_id, row in sorted(case_features.items())
+    }
+    payload = {
+        "schema_version": "rtece_stage168_case_feature_cache.v1",
+        "cache_semantics": "case-level averaged rTECE semantic descriptor statistics; case_id is a grouping key, not a model feature",
+        "case_count": len(normalized_features),
+        "feature_count": len({key for row in normalized_features.values() for key in row}),
+        "metadata": dict(metadata or {}),
+        "case_features": normalized_features,
+    }
+    output = Path(path)
+    output.parent.mkdir(parents=True, exist_ok=True)
+    output.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    return payload
+
+
+def load_case_feature_cache(path: str | Path) -> dict[str, Any]:
+    payload = json.loads(Path(path).read_text())
+    if payload.get("schema_version") != "rtece_stage168_case_feature_cache.v1":
+        raise ValueError("expected rtece_stage168_case_feature_cache.v1 cache")
+    raw_features = payload.get("case_features")
+    if not isinstance(raw_features, Mapping):
+        raise ValueError("case feature cache is missing case_features")
+    payload["case_features"] = {
+        str(case_id): {str(key): _float(value) for key, value in dict(row).items()}
+        for case_id, row in raw_features.items()
+    }
+    payload["case_count"] = len(payload["case_features"])
+    return payload
+
+
 def case_rtece_descriptor_features_from_atoms(
     atoms_list: Sequence[object],
     *,
@@ -390,19 +429,42 @@ def summarize_stage168_from_files(
     max_configs_per_case: int | None = None,
     ridge: float = 1.0e-3,
     neighborlist_backend: str = "matscipy",
+    feature_cache_json: str | Path | None = None,
+    write_feature_cache_json: str | Path | None = None,
 ) -> dict[str, Any]:
     payload = json.loads(Path(benchmark).read_text())
     offsets = payload.get("group_mean_offsets_eV_per_atom") or {}
     case_offsets = {str(case_id): _float(value) * 1000.0 for case_id, value in offsets.items()}
     configs = rtece_descriptor_proxy_configs(num_radial=num_radial)
-    case_features = load_case_rtece_descriptor_features(
-        configs_file,
-        rtece_configs=configs,
-        group_key=group_key,
-        limit_configs=limit_configs,
-        max_configs_per_case=max_configs_per_case,
-        neighborlist_backend=neighborlist_backend,
-    )
+    feature_cache_used = False
+    if feature_cache_json is not None and Path(feature_cache_json).exists():
+        cache_payload = load_case_feature_cache(feature_cache_json)
+        case_features = cache_payload["case_features"]
+        feature_cache_used = True
+    else:
+        case_features = load_case_rtece_descriptor_features(
+            configs_file,
+            rtece_configs=configs,
+            group_key=group_key,
+            limit_configs=limit_configs,
+            max_configs_per_case=max_configs_per_case,
+            neighborlist_backend=neighborlist_backend,
+        )
+        if write_feature_cache_json is not None:
+            write_case_feature_cache(
+                write_feature_cache_json,
+                case_features=case_features,
+                metadata={
+                    "benchmark": str(benchmark),
+                    "configs": str(configs_file),
+                    "group_key": str(group_key),
+                    "num_radial": int(num_radial),
+                    "limit_configs": limit_configs,
+                    "max_configs_per_case": max_configs_per_case,
+                    "neighborlist_backend": str(neighborlist_backend),
+                    "descriptor_config_names": list(configs),
+                },
+            )
     summary = summarize_rtece_descriptor_proxy_feature_sets(
         case_offsets_mev_atom=case_offsets,
         case_features=case_features,
@@ -418,6 +480,9 @@ def summarize_stage168_from_files(
             "limit_configs": limit_configs,
             "max_configs_per_case": max_configs_per_case,
             "neighborlist_backend": str(neighborlist_backend),
+            "feature_cache_json": None if feature_cache_json is None else str(feature_cache_json),
+            "write_feature_cache_json": None if write_feature_cache_json is None else str(write_feature_cache_json),
+            "feature_cache_used": bool(feature_cache_used),
             "source_variant": payload.get("variant") or Path(benchmark).stem.replace("_dft_benchmark", ""),
             "raw_e_rmse_mev_atom": _float(payload.get("rmse_e_mev_atom")),
             "group_offset_rmse_mev_atom": _float(payload.get("group_mean_offset_rmse_mev_atom")),
@@ -491,6 +556,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-configs-per-case", type=int, default=None)
     parser.add_argument("--ridge", type=float, default=1.0e-3)
     parser.add_argument("--neighborlist-backend", default="matscipy")
+    parser.add_argument("--feature-cache-json", type=Path, default=None)
+    parser.add_argument("--write-feature-cache-json", type=Path, default=None)
     parser.add_argument("--output-json", type=Path, default=DEFAULT_OUTPUT_JSON)
     parser.add_argument("--output-md", type=Path, default=DEFAULT_OUTPUT_MD)
     return parser.parse_args()
@@ -507,6 +574,8 @@ def main() -> None:
         max_configs_per_case=args.max_configs_per_case,
         ridge=args.ridge,
         neighborlist_backend=args.neighborlist_backend,
+        feature_cache_json=args.feature_cache_json,
+        write_feature_cache_json=args.write_feature_cache_json,
     )
     args.output_json.parent.mkdir(parents=True, exist_ok=True)
     args.output_json.write_text(json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8")
