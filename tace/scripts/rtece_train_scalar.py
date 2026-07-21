@@ -135,20 +135,26 @@ def load_checkpoint(
     return model, config
 
 
-def _energy_and_forces(atoms):
-    if "energy" in atoms.info:
-        energy = float(atoms.info["energy"])
-    elif atoms.calc is not None and "energy" in getattr(atoms.calc, "results", {}):
-        energy = float(atoms.calc.results["energy"])
-    else:
+def _energy_and_forces(atoms, *, energy_key: str = "energy", forces_key: str = "forces"):
+    energy_name = str(energy_key)
+    forces_name = str(forces_key)
+    if energy_name in atoms.info:
+        energy = float(atoms.info[energy_name])
+    elif atoms.calc is not None and energy_name in getattr(atoms.calc, "results", {}):
+        energy = float(atoms.calc.results[energy_name])
+    elif energy_name == "energy":
         energy = float(atoms.get_potential_energy())
-
-    if "forces" in atoms.arrays:
-        forces = np.asarray(atoms.arrays["forces"], dtype=np.float64)
-    elif atoms.calc is not None and "forces" in getattr(atoms.calc, "results", {}):
-        forces = np.asarray(atoms.calc.results["forces"], dtype=np.float64)
     else:
+        raise KeyError(f"atoms object is missing energy label key {energy_name!r}")
+
+    if forces_name in atoms.arrays:
+        forces = np.asarray(atoms.arrays[forces_name], dtype=np.float64)
+    elif atoms.calc is not None and forces_name in getattr(atoms.calc, "results", {}):
+        forces = np.asarray(atoms.calc.results[forces_name], dtype=np.float64)
+    elif forces_name == "forces":
         forces = np.asarray(atoms.get_forces(), dtype=np.float64)
+    else:
+        raise KeyError(f"atoms object is missing forces label key {forces_name!r}")
     return energy, forces
 
 
@@ -176,6 +182,8 @@ def atoms_to_graph(
     device: torch.device,
     dtype: torch.dtype,
     neighborlist_backend: str = "matscipy",
+    energy_key: str = "energy",
+    forces_key: str = "forces",
 ) -> tuple[RTECEGraph, torch.Tensor, torch.Tensor]:
     graph = atoms_to_rtece_graph(
         atoms,
@@ -184,7 +192,7 @@ def atoms_to_graph(
         dtype=dtype,
         neighborlist_backend=neighborlist_backend,
     )
-    energy_value, forces_value = _energy_and_forces(atoms)
+    energy_value, forces_value = _energy_and_forces(atoms, energy_key=energy_key, forces_key=forces_key)
     energy = torch.tensor([energy_value], dtype=dtype, device=device)
     forces = torch.tensor(forces_value, dtype=dtype, device=device)
     return graph, energy, forces
@@ -260,6 +268,8 @@ def load_samples(
     dtype: torch.dtype,
     limit_configs: int | None,
     neighborlist_backend: str = "matscipy",
+    energy_key: str = "energy",
+    forces_key: str = "forces",
 ) -> list[tuple[RTECEGraph, torch.Tensor, torch.Tensor]]:
     import ase.io
 
@@ -274,6 +284,8 @@ def load_samples(
             device=device,
             dtype=dtype,
             neighborlist_backend=neighborlist_backend,
+            energy_key=energy_key,
+            forces_key=forces_key,
         )
         for atoms in atoms_list
     ]
@@ -321,6 +333,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--seed", type=int, default=0)
     parser.add_argument("--energy-weight", type=float, default=1.0)
     parser.add_argument("--force-weight", type=float, default=10.0)
+    parser.add_argument("--energy-key", default="energy", help="ASE info/calc key used as the supervised energy label.")
+    parser.add_argument("--forces-key", default="forces", help="ASE arrays/calc key used as the supervised force label.")
     parser.add_argument("--force-focus-elements", default=None)
     parser.add_argument("--force-focus-weight", type=float, default=1.0)
     parser.add_argument("--relative-energy-weight", type=float, default=0.0)
@@ -404,6 +418,8 @@ def main() -> None:
             seed=args.seed,
             energy_weight=args.energy_weight,
             force_weight=args.force_weight,
+            energy_key=args.energy_key,
+            forces_key=args.forces_key,
             force_focus_elements=args.force_focus_elements,
             force_focus_weight=args.force_focus_weight,
             relative_energy_weight=args.relative_energy_weight,
@@ -451,6 +467,8 @@ def main() -> None:
         dtype=dtype,
         limit_configs=args.limit_configs,
         neighborlist_backend=args.neighborlist_backend,
+        energy_key=args.energy_key,
+        forces_key=args.forces_key,
     )
     if not args.no_fit_energy_shift:
         config = replace(config, atomic_energies=fit_atomic_energies(samples))
@@ -470,6 +488,8 @@ def main() -> None:
             dtype=dtype,
             limit_configs=args.valid_limit_configs,
             neighborlist_backend=args.neighborlist_backend,
+            energy_key=args.energy_key,
+            forces_key=args.forces_key,
         )
         best_checkpoint_path = args.output_dir / "rtece_scalar_best.pt"
     force_focus_atomic_numbers = parse_force_focus_elements(args.force_focus_elements)
@@ -524,6 +544,8 @@ def main() -> None:
             "seed": int(args.seed),
             "energy_weight": args.energy_weight,
             "force_weight": args.force_weight,
+            "energy_key": args.energy_key,
+            "forces_key": args.forces_key,
             "eval_interval": args.eval_interval,
             "min_eval_step": args.min_eval_step,
             "force_focus_atomic_numbers": list(force_focus_atomic_numbers),

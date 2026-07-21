@@ -77,7 +77,6 @@ def test_rtece_triton_kernels_have_formal_tace_models_entrypoint():
     assert core_kernels.direct_radius_counted_edges_triton is benchmark_kernels.direct_radius_counted_edges_triton
 
 
-
 def test_fit_atomic_energies_respects_energy_sample_weights():
     from tace.lightning.rtece import fit_atomic_energies
 
@@ -244,7 +243,6 @@ def test_build_rtece_config_defines_ordered_variants():
         < descriptor_dim(sketch8)
         < descriptor_dim(sketch16)
     )
-
 
 
 def test_compute_pair_geometry_uses_periodic_edge_shifts():
@@ -470,7 +468,6 @@ def test_element_density_descriptors_are_rotation_invariant_and_element_sensitiv
     assert desc.shape[-1] == 2 * config.num_radial
     assert torch.allclose(desc, desc_rot, atol=1e-10, rtol=1e-10)
     assert not torch.allclose(desc, desc_changed, atol=1e-10, rtol=1e-10)
-
 
 
 def test_species_basis_descriptors_distinguish_equal_z_sum_neighbors():
@@ -2507,7 +2504,6 @@ def test_rtece_active_set_can_require_beating_intercept_baseline():
     assert "intercept_baseline_not_beaten" in ranked[0]["active_set_rejection_reasons"]
 
 
-
 def test_rtece_projection_rows_cache_reference_descriptors(monkeypatch):
     from benchmarks.oc20neb_tace_mace import analyze_rtece_projection_error as mod
 
@@ -3781,7 +3777,6 @@ def test_edge_sketch16_adds_non_repeated_relational_paths():
     assert not torch.allclose(sketches[:, :8], sketches[:, 8:], atol=1e-12, rtol=1e-12)
 
 
-
 def test_radial_edge_projection_preserves_shell_information_lost_by_mean():
     channels_a = torch.tensor([[[1.0], [1.0], [0.0], [0.0]]], dtype=torch.float64)
     channels_b = torch.tensor([[[0.0], [0.0], [1.0], [1.0]]], dtype=torch.float64)
@@ -4664,7 +4659,6 @@ def test_train_rtece_scalar_builds_config_with_short_range_repulsive_core():
     assert config.short_range_repulsion_radius_scale == pytest.approx(0.8)
 
 
-
 def test_parse_force_focus_elements_accepts_symbols_and_atomic_numbers():
     from benchmarks.oc20neb_tace_mace.train_rtece_scalar import parse_force_focus_elements
 
@@ -4861,6 +4855,36 @@ def test_loss_for_batch_normalizes_batched_energy_by_each_config_natoms():
     assert torch.allclose(loss, torch.tensor(2.5, dtype=torch.float64))
 
 
+def test_lightning_load_samples_accepts_custom_teacher_label_keys(tmp_path):
+    import ase.io
+    from ase import Atoms
+    from tace.lightning.rtece import load_samples
+
+    atoms = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]])
+    atoms.info["energy"] = -10.0
+    atoms.info["teacher_energy"] = -0.25
+    atoms.arrays["forces"] = torch.zeros((2, 3), dtype=torch.float64).numpy()
+    atoms.arrays["teacher_forces"] = torch.tensor(
+        [[1.0, 2.0, 3.0], [-1.0, -2.0, -3.0]], dtype=torch.float64
+    ).numpy()
+    path = tmp_path / "teacher_labels.extxyz"
+    ase.io.write(path, [atoms])
+
+    sample = load_samples(
+        path,
+        cutoff=5.0,
+        dtype=torch.float64,
+        energy_key="teacher_energy",
+        forces_key="teacher_forces",
+    )[0]
+
+    assert torch.allclose(sample[1], torch.tensor([-0.25], dtype=torch.float64))
+    assert torch.allclose(
+        sample[2],
+        torch.tensor([[1.0, 2.0, 3.0], [-1.0, -2.0, -3.0]], dtype=torch.float64),
+    )
+
+
 def test_lightning_load_samples_reads_extxyz_property_weights(tmp_path):
     import ase.io
     from ase import Atoms
@@ -5002,6 +5026,22 @@ def test_apply_extxyz_sample_weights_supports_source_energy_and_force_multiplier
     assert np.allclose(frames[1].get_forces(), np.ones((1, 3)))
 
 
+def test_rtece_train_scalar_cli_exposes_label_key_arguments():
+    root = __import__("pathlib").Path(__file__).resolve().parents[1]
+    result = subprocess.run(
+        [sys.executable, "-m", "tace.scripts.rtece_train_scalar", "--help"],
+        cwd=root,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=120,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert "--energy-key" in result.stdout
+    assert "--forces-key" in result.stdout
+
+
 def test_rtece_scripts_are_directly_executable():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     for script in (
@@ -5134,7 +5174,6 @@ def test_fit_energy_per_atom_shift_uses_total_energy_per_total_atom():
     ]
 
     assert fit_energy_per_atom_shift(samples) == 1.6
-
 
 
 def test_train_rtece_scalar_cli_fits_atomic_energies_by_default(tmp_path):
@@ -5896,7 +5935,6 @@ def test_cached_topology_update_backend_reuses_edges_and_updates_positions():
     assert backend.rebuild_count == 1
 
 
-
 def test_benchmark_build_atom_graph_supports_tace_matscipy_pbc_backend():
     from ase import Atoms
     from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import build_atom_graph
@@ -6414,8 +6452,6 @@ def test_prediction_error_payload_summarizes_available_predictions():
     assert payload["mae_f_mev_a"] == 0.0
 
 
-
-
 def test_prediction_error_payload_includes_relative_energy_metrics_when_groups_are_given():
     import numpy as np
     from benchmarks.oc20neb_tace_mace.benchmark_rtece_scalar import prediction_error_payload
@@ -6515,8 +6551,6 @@ def test_rtece_train_help_exposes_num_radial():
     assert "--moment-l-max" in result.stdout
     assert "--learnable-radial-mixing" in result.stdout
     assert "--seed" in result.stdout
-
-
 
 
 def test_stage_sweep_summary_collects_benchmarks_and_marks_missing_rows(tmp_path):
@@ -8012,7 +8046,6 @@ def test_rtece_stage121_active_frontloaded_rows_keep_active_atomic_paths_and_mov
     assert by_name["l2_active_species16_bneck16_h64"]["representation_parameters_estimate"] > by_name["l1_active_species16_bneck16_h64"]["representation_parameters_estimate"]
 
 
-
 def test_rtece_stage132_broad_teacher_distill_manifest_materializes_no_export_wrappers(tmp_path):
     from pathlib import Path
 
@@ -8844,7 +8877,6 @@ def test_rtece_stage164_force_protected_uv_manifest_materializes_single_uv_row(t
     assert "force-protected" in stage_plan
 
 
-
 def test_stage164_results_summary_reports_pending_and_metric_deltas(tmp_path):
     import json
 
@@ -8911,7 +8943,6 @@ def test_stage164_results_summary_reports_pending_and_metric_deltas(tmp_path):
     assert "complete" in markdown
 
 
-
 def test_stage165_energy_baseline_triage_summarizes_case_offsets(tmp_path):
     import json
 
@@ -8956,7 +8987,6 @@ def test_stage165_energy_baseline_triage_summarizes_case_offsets(tmp_path):
     assert "dissociation_id_1_neb1.0" in markdown
 
 
-
 def test_stage166_deployable_proxy_baseline_scores_feature_sets():
     from benchmarks.oc20neb_tace_mace.summarize_rtece_stage166_deployable_proxy_baseline import (
         fit_proxy_feature_sets,
@@ -8995,7 +9025,6 @@ def test_stage166_deployable_proxy_baseline_scores_feature_sets():
     assert "Stage166 Deployable Proxy Baseline" in markdown
     assert "case_id is used only for grouping" in markdown
     assert "composition_cell" in markdown
-
 
 
 def test_stage167_local_radial_proxy_extracts_pair_histograms_and_scores():
@@ -9056,7 +9085,6 @@ def test_stage167_local_radial_proxy_extracts_pair_histograms_and_scores():
     markdown = render_stage167_local_radial_proxy_markdown(summary)
     assert "Stage167 Local Radial Proxy" in markdown
     assert "case_id is used only for grouping" in markdown
-
 
 
 def test_stage168_rtece_descriptor_proxy_scores_semantic_path_sets():
@@ -9411,8 +9439,6 @@ def test_stage145_summary_keeps_rmse_first_and_missing_outputs_explicit(tmp_path
     assert "deepmd_dpa_like_mixed_smoke" in markdown
 
 
-
-
 def test_stage145_summary_preserves_relative_neb_energy_metrics(tmp_path):
     import json
 
@@ -9460,7 +9486,6 @@ def test_stage145_summary_preserves_relative_neb_energy_metrics(tmp_path):
     assert "19.250" in markdown
     assert "6.750" in markdown
     assert "17.500" in markdown
-
 
 
 def test_stage162_energy_offset_summary_ranks_case_offsets(tmp_path):
@@ -11371,8 +11396,6 @@ def test_stage175_local_tece_front_manifest_is_tece_aligned_and_sbatch_safe(tmp_
     assert "--energy-ridge-grid 1e-08,1e-06,0.0001,0.01,1,100" in wrapper
 
 
-
-
 def test_stage176_local_l0_lowrank_front_is_rotation_invariant_and_trainable():
     config = build_rtece_config_from_path_ids(
         "stage176_local_l0_rank3",
@@ -11418,7 +11441,6 @@ def test_stage176_local_l0_lowrank_front_is_rotation_invariant_and_trainable():
     assert torch.allclose(desc, desc_rot, atol=1e-10, rtol=1e-10)
     assert not torch.allclose(desc, desc_changed, atol=1e-10, rtol=1e-10)
     assert any("local_l0_chemistry_front" in name for name, _param in model.named_parameters())
-
 
 
 def test_stage178_local_l0_front_can_be_combined_with_edge_relational_paths():
@@ -11536,7 +11558,6 @@ def test_stage176_training_config_plumbs_local_l0_chemistry_rank():
     assert lightning_config.local_l0_chemistry_rank == 3
     assert cli_config.local_l0_chemistry_rank == 3
     assert descriptor_dim(lightning_config) == descriptor_dim(cli_config) == 32
-
 
 
 def test_stage176_train_smoke_manifest_uses_production_cli_and_safe_sbatch(tmp_path):
@@ -11767,7 +11788,6 @@ def test_stage177_unified_pareto_audit_marks_stage176_missing_and_normalizes_bas
     markdown = Path(materialized["markdown"]).read_text(encoding="utf-8")
     assert "Stage177 Unified Pareto Audit" in markdown
     assert "stage176_local_l0_rank3" in markdown
-
 
 
 def test_stage178_representation_upgrade_manifest_builds_doc_grounded_ladder_and_safe_wrappers(tmp_path):

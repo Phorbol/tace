@@ -146,20 +146,26 @@ def _resolve_dtype(default_dtype: str | torch.dtype) -> torch.dtype:
     raise ValueError("default_dtype must be 'float32' or 'float64'")
 
 
-def _energy_and_forces(atoms):
-    if "energy" in atoms.info:
-        energy = float(atoms.info["energy"])
-    elif atoms.calc is not None and "energy" in getattr(atoms.calc, "results", {}):
-        energy = float(atoms.calc.results["energy"])
-    else:
+def _energy_and_forces(atoms, *, energy_key: str = "energy", forces_key: str = "forces"):
+    energy_name = str(energy_key)
+    forces_name = str(forces_key)
+    if energy_name in atoms.info:
+        energy = float(atoms.info[energy_name])
+    elif atoms.calc is not None and energy_name in getattr(atoms.calc, "results", {}):
+        energy = float(atoms.calc.results[energy_name])
+    elif energy_name == "energy":
         energy = float(atoms.get_potential_energy())
-
-    if "forces" in atoms.arrays:
-        forces = np.asarray(atoms.arrays["forces"], dtype=np.float64)
-    elif atoms.calc is not None and "forces" in getattr(atoms.calc, "results", {}):
-        forces = np.asarray(atoms.calc.results["forces"], dtype=np.float64)
     else:
+        raise KeyError(f"atoms object is missing energy label key {energy_name!r}")
+
+    if forces_name in atoms.arrays:
+        forces = np.asarray(atoms.arrays[forces_name], dtype=np.float64)
+    elif atoms.calc is not None and forces_name in getattr(atoms.calc, "results", {}):
+        forces = np.asarray(atoms.calc.results[forces_name], dtype=np.float64)
+    elif forces_name == "forces":
         forces = np.asarray(atoms.get_forces(), dtype=np.float64)
+    else:
+        raise KeyError(f"atoms object is missing forces label key {forces_name!r}")
     return energy, forces
 
 
@@ -170,6 +176,8 @@ def atoms_to_graph(
     device: torch.device | str = "cpu",
     dtype: torch.dtype = torch.float32,
     neighborlist_backend: str = "matscipy",
+    energy_key: str = "energy",
+    forces_key: str = "forces",
 ) -> tuple[RTECEGraph, torch.Tensor, torch.Tensor]:
     graph = atoms_to_rtece_graph(
         atoms,
@@ -178,7 +186,7 @@ def atoms_to_graph(
         dtype=dtype,
         neighborlist_backend=neighborlist_backend,
     )
-    energy_value, forces_value = _energy_and_forces(atoms)
+    energy_value, forces_value = _energy_and_forces(atoms, energy_key=energy_key, forces_key=forces_key)
     energy = torch.tensor([energy_value], dtype=dtype, device=device)
     forces = torch.tensor(forces_value, dtype=dtype, device=device)
     return graph, energy, forces
@@ -218,6 +226,8 @@ def atoms_to_weighted_graph(
     device: torch.device | str = "cpu",
     dtype: torch.dtype = torch.float32,
     neighborlist_backend: str = "matscipy",
+    energy_key: str = "energy",
+    forces_key: str = "forces",
 ) -> tuple[RTECEGraph, torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
     graph, energy, forces = atoms_to_graph(
         atoms,
@@ -225,6 +235,8 @@ def atoms_to_weighted_graph(
         device=device,
         dtype=dtype,
         neighborlist_backend=neighborlist_backend,
+        energy_key=energy_key,
+        forces_key=forces_key,
     )
     energy_weight, forces_weight = _sample_weights(atoms, dtype=dtype, device=device)
     return graph, energy, forces, energy_weight, forces_weight
@@ -283,6 +295,8 @@ def load_samples(
     dtype: torch.dtype,
     limit_configs: int | None = None,
     neighborlist_backend: str = "matscipy",
+    energy_key: str = "energy",
+    forces_key: str = "forces",
     include_sample_weights: bool = False,
     include_relative_metadata: bool = False,
     relative_group_key: str = "case_id",
@@ -305,6 +319,8 @@ def load_samples(
                 device="cpu",
                 dtype=dtype,
                 neighborlist_backend=neighborlist_backend,
+                energy_key=energy_key,
+                forces_key=forces_key,
             )
             if include_relative_metadata:
                 group, image = _relative_metadata(
@@ -323,6 +339,8 @@ def load_samples(
                 device="cpu",
                 dtype=dtype,
                 neighborlist_backend=neighborlist_backend,
+                energy_key=energy_key,
+                forces_key=forces_key,
             )
         samples.append(sample)
     return samples
@@ -624,6 +642,8 @@ def fit_rtece_lightning(
     seed: int = 0,
     energy_weight: float = 1.0,
     force_weight: float = 10.0,
+    energy_key: str = "energy",
+    forces_key: str = "forces",
     force_focus_elements: str | tuple[int, ...] | list[int] | None = None,
     force_focus_weight: float = 1.0,
     relative_energy_weight: float = 0.0,
@@ -683,6 +703,8 @@ def fit_rtece_lightning(
         dtype=dtype,
         limit_configs=limit_configs,
         neighborlist_backend=neighborlist_backend,
+        energy_key=energy_key,
+        forces_key=forces_key,
         include_sample_weights=True,
         include_relative_metadata=include_relative_metadata,
         relative_group_key=relative_group_key,
@@ -707,6 +729,8 @@ def fit_rtece_lightning(
         dtype=dtype,
         limit_configs=valid_limit_configs,
         neighborlist_backend=neighborlist_backend,
+        energy_key=energy_key,
+        forces_key=forces_key,
         include_sample_weights=True,
         include_relative_metadata=include_relative_metadata,
         relative_group_key=relative_group_key,
@@ -822,6 +846,8 @@ def fit_rtece_lightning(
         "seed": int(seed),
         "energy_weight": float(energy_weight),
         "force_weight": float(force_weight),
+        "energy_key": str(energy_key),
+        "forces_key": str(forces_key),
         "force_focus_atomic_numbers": list(parse_force_focus_elements(force_focus_elements)),
         "force_focus_weight": float(force_focus_weight),
         "relative_energy_weight": float(relative_energy_weight),
