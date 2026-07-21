@@ -2217,6 +2217,72 @@ def test_rtece_projection_rows_use_total_energy_rank_when_per_atom_metric_missin
     assert "ef_combined_rank" not in by_candidate["b"]
 
 
+def test_rtece_active_set_ranking_uses_marginal_gain_per_cost():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import rank_active_set_candidate_rows
+
+    rows = [
+        {
+            "candidate": "baseline",
+            "path_ids": ["atomic.radial_density"],
+            "candidate_dim": 8,
+            "energy_per_atom_rmse": 50.0,
+            "force_rmse": 100.0,
+            "relative_residual": 0.30,
+        },
+        {
+            "candidate": "cheap_energy_gain",
+            "path_ids": ["atomic.radial_density", "atomic.species_basis_density"],
+            "candidate_dim": 10,
+            "energy_per_atom_rmse": 44.0,
+            "force_rmse": 98.0,
+            "relative_residual": 0.28,
+            "marginal_cost_proxy": 2.0,
+        },
+        {
+            "candidate": "expensive_bigger_gain",
+            "path_ids": ["atomic.radial_density", "edge.cavity.quadrupole_frobenius"],
+            "candidate_dim": 28,
+            "energy_per_atom_rmse": 40.0,
+            "force_rmse": 94.0,
+            "relative_residual": 0.25,
+            "marginal_cost_proxy": 20.0,
+        },
+        {
+            "candidate": "worse_energy",
+            "path_ids": ["atomic.radial_density", "edge.cavity.target_vector_projection"],
+            "candidate_dim": 9,
+            "energy_per_atom_rmse": 55.0,
+            "force_rmse": 101.0,
+            "relative_residual": 0.35,
+            "marginal_cost_proxy": 1.0,
+        },
+    ]
+
+    ranked = rank_active_set_candidate_rows(
+        rows,
+        baseline_candidate="baseline",
+        energy_weight=1.0,
+        force_weight=0.5,
+        projection_weight=10.0,
+    )
+
+    assert [row["candidate"] for row in ranked] == [
+        "cheap_energy_gain",
+        "expensive_bigger_gain",
+        "worse_energy",
+    ]
+    cheap = ranked[0]
+    worse = ranked[-1]
+    assert cheap["baseline_candidate"] == "baseline"
+    assert cheap["marginal_paths"] == ["atomic.species_basis_density"]
+    assert cheap["energy_marginal_gain"] == pytest.approx(6.0)
+    assert cheap["force_marginal_gain"] == pytest.approx(2.0)
+    assert cheap["projection_marginal_gain"] == pytest.approx(0.02)
+    assert cheap["active_set_promoted"] is True
+    assert worse["active_set_promoted"] is False
+    assert worse["marginal_gain_per_cost"] < 0.0
+
+
 def test_rtece_projection_rows_cache_reference_descriptors(monkeypatch):
     from benchmarks.oc20neb_tace_mace import analyze_rtece_projection_error as mod
 

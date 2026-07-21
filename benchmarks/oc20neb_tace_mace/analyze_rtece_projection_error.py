@@ -851,6 +851,107 @@ def rank_projection_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return ranked
 
 
+def _row_path_ids(row: dict[str, Any]) -> tuple[str, ...]:
+    for key in ("path_ids", "candidate_scalar_path_ids", "scalar_path_ids"):
+        value = row.get(key)
+        if value is not None:
+            return tuple(str(path_id) for path_id in value)
+    return ()
+
+
+def _metric_gain(candidate: dict[str, Any], baseline: dict[str, Any], keys: tuple[str, ...]) -> tuple[float, str | None]:
+    for key in keys:
+        baseline_value = _safe_float_metric(baseline, key)
+        candidate_value = _safe_float_metric(candidate, key)
+        if baseline_value < float("inf") and candidate_value < float("inf"):
+            return baseline_value - candidate_value, key
+    return 0.0, None
+
+
+def _candidate_cost_proxy(candidate: dict[str, Any], baseline: dict[str, Any]) -> float:
+    for key in ("marginal_cost_proxy", "incremental_cost_proxy"):
+        value = candidate.get(key)
+        if value is not None:
+            try:
+                cost = float(value)
+            except (TypeError, ValueError):
+                break
+            if cost > 0.0 and cost == cost:
+                return cost
+    candidate_dim = _safe_float_metric(candidate, "candidate_dim")
+    baseline_dim = _safe_float_metric(baseline, "candidate_dim")
+    if candidate_dim < float("inf") and baseline_dim < float("inf"):
+        return max(candidate_dim - baseline_dim, 1.0)
+    return 1.0
+
+
+def rank_active_set_candidate_rows(
+    rows: list[dict[str, Any]],
+    *,
+    baseline_candidate: str,
+    energy_weight: float = 1.0,
+    force_weight: float = 1.0,
+    projection_weight: float = 0.0,
+) -> list[dict[str, Any]]:
+    baseline_rows = [row for row in rows if str(row.get("candidate")) == str(baseline_candidate)]
+    if len(baseline_rows) != 1:
+        raise ValueError(f"expected exactly one baseline candidate {baseline_candidate!r}, found {len(baseline_rows)}")
+    baseline = baseline_rows[0]
+    baseline_paths = set(_row_path_ids(baseline))
+    ranked: list[dict[str, Any]] = []
+    for row in rows:
+        if str(row.get("candidate")) == str(baseline_candidate):
+            continue
+        candidate = dict(row)
+        candidate_paths = _row_path_ids(candidate)
+        marginal_paths = [path_id for path_id in candidate_paths if path_id not in baseline_paths]
+        energy_gain, energy_metric = _metric_gain(
+            candidate,
+            baseline,
+            ("energy_per_atom_rmse", "raw_rmse_mev_atom", "rmse_e_mev_atom", "energy_rmse"),
+        )
+        force_gain, force_metric = _metric_gain(
+            candidate,
+            baseline,
+            ("force_rmse", "rmse_f_mev_a"),
+        )
+        projection_gain, projection_metric = _metric_gain(candidate, baseline, ("relative_residual",))
+        weighted_gain = (
+            float(energy_weight) * energy_gain
+            + float(force_weight) * force_gain
+            + float(projection_weight) * projection_gain
+        )
+        cost = _candidate_cost_proxy(candidate, baseline)
+        candidate.update(
+            {
+                "baseline_candidate": str(baseline_candidate),
+                "marginal_paths": marginal_paths,
+                "marginal_cost_proxy": float(cost),
+                "energy_marginal_gain": float(energy_gain),
+                "force_marginal_gain": float(force_gain),
+                "projection_marginal_gain": float(projection_gain),
+                "active_set_energy_metric": energy_metric,
+                "active_set_force_metric": force_metric,
+                "active_set_projection_metric": projection_metric,
+                "weighted_marginal_gain": float(weighted_gain),
+                "marginal_gain_per_cost": float(weighted_gain / max(cost, 1.0e-12)),
+                "active_set_promoted": bool(weighted_gain > 0.0),
+            }
+        )
+        ranked.append(candidate)
+    ranked.sort(
+        key=lambda row: (
+            not bool(row.get("active_set_promoted", False)),
+            -float(row.get("marginal_gain_per_cost", float("-inf"))),
+            float(row.get("marginal_cost_proxy", float("inf"))),
+            str(row.get("candidate", "")),
+        )
+    )
+    for index, row in enumerate(ranked, start=1):
+        row["active_set_rank"] = int(index)
+    return ranked
+
+
 def rank_metrics_summary(rows: list[dict[str, Any]]) -> dict[str, str | None]:
     energy_metric = _first_available_metric(rows, ("energy_per_atom_rmse", "energy_rmse"))
     force_metric = _first_available_metric(rows, ("force_rmse",))
