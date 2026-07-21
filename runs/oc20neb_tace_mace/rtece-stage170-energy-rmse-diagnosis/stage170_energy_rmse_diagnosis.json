@@ -1,0 +1,90 @@
+{
+  "schema_version": "rtece_stage170_energy_rmse_diagnosis.v1",
+  "diagnosis": "current_rtece_absolute_energy_rmse_is_poor_and_is_dominated_by_case_level_low_frequency_offsets_not_a_simple_global_or_per_element_e0_toggle",
+  "document_alignment": {
+    "rtece_review_energy_shift": "rTECE_review.md section 7 says global per-atom energy shift is insufficient and per-element reference energies are required.",
+    "rtece_review_residual_learning": "rTECE_review.md section 4 recommends per-element reference plus physical baseline so the student learns residual structure.",
+    "rtece_review_distillation": "rTECE_review.md section 6 requires teacher cache, semantic projections, and Schur/Gauss-Newton downfolding instead of ad-hoc descriptor tuning.",
+    "tece_design_priority": "TECE design-space priority remains controlled scalar/edge path retention and Pareto evaluation, not post-hoc benchmark-only calibration."
+  },
+  "code_state": {
+    "energy_reference_implementation": "current rTECE training fits per-element atomic_energies by default and model forward adds atomic_reference_energy before returning total energy",
+    "legacy_global_shift_status": "energy_per_atom_shift remains only a legacy zeroth-order fallback when atomic_energies are not provided",
+    "stage157_training_contract": {
+      "train_configs": 2048,
+      "valid_configs": 256,
+      "batch_size": 32,
+      "max_steps": 20000,
+      "best_step": 16896,
+      "lr_scheduler": "plateau",
+      "lr_warmup_steps": 500,
+      "early_stopping_patience": 400,
+      "atomic_energies_count": 38
+    }
+  },
+  "main_evidence": {
+    "stage157_best_current_rtece": {
+      "variant": "stage157_direct_b32_rel0p25_mixed2048",
+      "num_parameters": 54886,
+      "dft_e_rmse_mev_atom": 52.53824210343257,
+      "dft_e_mae_mev_atom": 35.442889350217385,
+      "dft_e_max_abs_mev_atom": 204.98604174742866,
+      "dft_f_rmse_mev_a": 94.15889889773099,
+      "dft_f_mae_mev_a": 41.82262941676011,
+      "dft_f_max_abs_mev_a": 2092.9614936904904,
+      "relative_image_rmse_mev_atom": 7.10409388625699,
+      "barrier_rmse_mev_atom": 11.402551116757193,
+      "group_offset_rmse_mev_atom": 4.76899892317605,
+      "raw_rmse_removed_by_group_offset_fraction_stage162": 0.909,
+      "atoms_per_second": 500402.22630368394
+    },
+    "stage149_energy_gauge": {
+      "message": "Stage149 already used fitted per-element atomic energies; residual per-element calibration on valid 0:128 did not transfer to valid 128:1024.",
+      "l2_anchor_none_e_rmse_mev_atom": 95.983,
+      "l2_anchor_global_calibrated_e_rmse_mev_atom": 93.410,
+      "l2_anchor_per_element_residual_e_rmse_mev_atom": 97.121,
+      "t3_cavity_none_e_rmse_mev_atom": 111.934,
+      "t3_cavity_global_calibrated_e_rmse_mev_atom": 107.777,
+      "t3_cavity_per_element_residual_e_rmse_mev_atom": 108.816
+    },
+    "stage169_descriptor_proxy": {
+      "target_case_offset_rmse_mev_atom": 61.445410256782594,
+      "best_loocv_feature_set": "intercept_only",
+      "intercept_loocv_rmse_mev_atom": 60.48158125540124,
+      "all_rtece_descriptor_groups_train_rmse_mev_atom": 0.0071966877885107335,
+      "all_rtece_descriptor_groups_loocv_rmse_mev_atom": 108.73180587303872,
+      "generalization_status": "implemented_rtece_descriptor_families_can_memorize_case_offsets_but_do_not_generalize_as_deployable_energy_baseline_coordinates"
+    },
+    "community_baselines_stage145": {
+      "nep4_mixed_smoke": {
+        "dft_e_rmse_mev_atom": 23.846193555229316,
+        "dft_e_mae_mev_atom": 17.639373451434125,
+        "dft_e_max_mev_atom": 81.01769683544278,
+        "dft_f_rmse_mev_a": 143.0374014464665,
+        "dft_f_mae_mev_a": 63.71831257029057,
+        "atoms_per_second": 103226.50050880814
+      },
+      "deepmd_dpa1_zero_attention_smoke": {
+        "dft_e_rmse_mev_atom": 325.28127548401045,
+        "dft_e_mae_mev_atom": 253.37610861097858,
+        "dft_f_rmse_mev_a": 109.85922351272542,
+        "dft_f_mae_mev_a": 29.236857807539458,
+        "atoms_per_second": 10916.839598964832
+      }
+    }
+  },
+  "root_cause_assessment": [
+    "The observed energy MAE/RMSE problem is real: current best rTECE raw E RMSE is roughly 52.5 meV/atom, over 2x worse than the NEP smoke E RMSE on the same community-baseline stage.",
+    "It is not explained by the old global energy_per_atom_shift alone because current training fits per-element atomic_energies, and Stage150 residual per-element calibration did not transfer.",
+    "It is not primarily a local NEB-shape failure: relative image RMSE and barrier RMSE are around 7-11 meV/atom, while group-offset oracle RMSE is around 4.8 meV/atom.",
+    "It is not fixed by current implemented rTECE semantic descriptors used as simple low-frequency baseline proxies: Stage169 LOOCV selects intercept-only, while all current descriptors overfit offsets.",
+    "The most likely root cause is missing deployable low-frequency chemical/site/adsorbate representation plus insufficient teacher-coverage/downfolding, not just head size or optimizer tuning."
+  ],
+  "next_priority": [
+    "Keep E/F RMSE, E/F MAE, and E/F max errors as primary metrics; raw E RMSE must remain visible, but relative image/barrier and physical tests are required to avoid overfitting absolute offsets.",
+    "Do not add a case-id or group-offset feature; it would solve the benchmark oracle but is not deployable.",
+    "Do not spend the next round on another post-hoc E0/gauge toggle unless a new diagnostic shows composition-only residual transfer.",
+    "Design Stage171 around teacher-selected residual scalar paths or semantic active-set projections for the case-offset residual, then train the same student architecture from scratch versus renormalized/distilled initialization.",
+    "In parallel, keep NEP/DPA comparisons as reference endpoints, but the algorithmic route should remain TECE-style controlled path retention plus teacher cache/projection/downfolding."
+  ]
+}

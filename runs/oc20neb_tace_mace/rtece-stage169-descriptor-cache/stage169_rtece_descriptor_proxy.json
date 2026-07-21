@@ -1,0 +1,638 @@
+{
+  "barrier_rmse_mev_atom": 11.402551116757193,
+  "benchmark": "runs/oc20neb_tace_mace/rtece-stage157-relative-neb-loss/relative_loss_runs/stage157_direct_b32_rel0p25_mixed2048/stage157_direct_b32_rel0p25_mixed2048_dft_benchmark.json",
+  "best_loocv_rmse_feature_set": "intercept_only",
+  "best_loocv_rmse_mev_atom": 60.48158125540124,
+  "best_train_rmse_feature_set": "all_rtece_descriptor_groups",
+  "case_count": 22,
+  "case_ids": [
+    "dissociation_id_104_2948_48_111-1_neb1.0",
+    "dissociation_id_108_99_21_111-0_neb1.0",
+    "dissociation_id_127_9635_0_100-1_neb1.0",
+    "dissociation_id_146_7638_30_100-4_neb1.0",
+    "dissociation_id_154_1581_1_111-0_neb1.0",
+    "dissociation_id_181_116_6_111-0_neb1.0",
+    "dissociation_id_182_2807_43_111-2_neb1.0",
+    "dissociation_id_195_6923_47_111-1_neb1.0",
+    "dissociation_id_212_7241_50_011-0_neb1.0",
+    "dissociation_id_219_10897_5_100-0_neb1.0",
+    "dissociation_id_236_2395_27_000-0_neb1.0",
+    "dissociation_id_239_6570_8_211-5_neb1.0",
+    "dissociation_id_245_139_42_211-1_neb1.0",
+    "dissociation_id_250_4710_31_111-0_neb1.0",
+    "dissociation_id_252_5588_26_011-1_neb1.0",
+    "dissociation_id_258_5496_39_100-1_neb1.0",
+    "dissociation_id_266_9844_9_111-2_neb1.0",
+    "dissociation_id_271_7189_22_211-5_neb1.0",
+    "dissociation_id_281_2644_33_200-4_neb1.0",
+    "dissociation_id_293_11099_47_100-0_neb1.0",
+    "dissociation_id_294_2408_32_222-0_neb1.0",
+    "dissociation_id_295_8139_40_211-10_neb1.0"
+  ],
+  "configs": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "descriptor_configs": {
+    "t3_atomic_l2_cross": {
+      "descriptor_dim": 44,
+      "route": {
+        "ase_implemented_outputs": [
+          "energy",
+          "free_energy",
+          "forces",
+          "stress"
+        ],
+        "deleted_tece_groups": [
+          "persistent_equivariant_node_state",
+          "persistent_equivariant_edge_state",
+          "edge_tensor_product_channel_mixing",
+          "multi_layer_equivariant_message_passing"
+        ],
+        "descriptor_dim": 44,
+        "descriptor_family": "element_density",
+        "descriptor_readout_dim": 44,
+        "descriptor_realization": "pytorch_edge_scatter",
+        "edge_state_lifetime": "caller_supplied_edge_index",
+        "energy_reference": "none",
+        "feature_extractor": "fixed_radial_basis",
+        "force_mode": "autograd",
+        "force_realization": "autograd_conservative",
+        "fused_descriptor": false,
+        "fused_force": false,
+        "graph_construction_backend": null,
+        "graph_semantics": "prebuilt_edge_index",
+        "graph_update_backend": null,
+        "hidden_channels": [
+          64,
+          64
+        ],
+        "implemented_outputs": [
+          "energy",
+          "atomic_energy",
+          "forces"
+        ],
+        "missing_output_contracts": [
+          "validated_edge_gradient_virial"
+        ],
+        "moment_l_max": 2,
+        "num_radial": 8,
+        "pareto_axes": [
+          "semantic_projection",
+          "scalar_head_capacity",
+          "force_realization",
+          "angular_bandwidth_l_max",
+          "radial_rank"
+        ],
+        "retained_tece_groups": [
+          "radial_density",
+          "neighbor_element_density",
+          "atomic_cross_radial_invariants",
+          "atomic_cross_radial_rank_4"
+        ],
+        "semantic_tier": "T3_element_conditioned_scalar_density",
+        "stress_realization": "ase_autograd_finite_strain_inference",
+        "virial_realization": "not_implemented"
+      },
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.element_density",
+        "atomic.vector_norm",
+        "atomic.quadrupole_norm",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_cross_radial_frobenius"
+      ],
+      "variant": "stage168_t3_atomic_l2_cross"
+    },
+    "t3_cavity_edge": {
+      "descriptor_dim": 24,
+      "route": {
+        "ase_implemented_outputs": [
+          "energy",
+          "free_energy",
+          "forces",
+          "stress"
+        ],
+        "deleted_tece_groups": [
+          "persistent_equivariant_node_state",
+          "persistent_equivariant_edge_state",
+          "edge_tensor_product_channel_mixing",
+          "multi_layer_equivariant_message_passing"
+        ],
+        "descriptor_dim": 24,
+        "descriptor_family": "element_density",
+        "descriptor_readout_dim": 24,
+        "descriptor_realization": "pytorch_edge_scatter",
+        "edge_state_lifetime": "caller_supplied_edge_index",
+        "energy_reference": "none",
+        "feature_extractor": "fixed_radial_basis",
+        "force_mode": "autograd",
+        "force_realization": "autograd_conservative",
+        "fused_descriptor": false,
+        "fused_force": false,
+        "graph_construction_backend": null,
+        "graph_semantics": "prebuilt_edge_index",
+        "graph_update_backend": null,
+        "hidden_channels": [
+          64,
+          64
+        ],
+        "implemented_outputs": [
+          "energy",
+          "atomic_energy",
+          "forces"
+        ],
+        "missing_output_contracts": [
+          "validated_edge_gradient_virial"
+        ],
+        "moment_l_max": 2,
+        "num_radial": 8,
+        "pareto_axes": [
+          "semantic_projection",
+          "scalar_head_capacity",
+          "force_realization",
+          "angular_bandwidth_l_max"
+        ],
+        "retained_tece_groups": [
+          "radial_density",
+          "neighbor_element_density"
+        ],
+        "semantic_tier": "T3_element_conditioned_scalar_density",
+        "stress_realization": "ase_autograd_finite_strain_inference",
+        "virial_realization": "not_implemented"
+      },
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.element_density",
+        "edge.cavity.vector_dot",
+        "edge.cavity.quadrupole_frobenius",
+        "edge.cavity.target_vector_projection",
+        "edge.cavity.source_vector_projection",
+        "edge.cavity.target_quadrupole_projection",
+        "edge.cavity.source_quadrupole_projection",
+        "edge.direct.radial"
+      ],
+      "variant": "stage168_t3_cavity_edge"
+    },
+    "t3_element_density": {
+      "descriptor_dim": 16,
+      "route": {
+        "ase_implemented_outputs": [
+          "energy",
+          "free_energy",
+          "forces",
+          "stress"
+        ],
+        "deleted_tece_groups": [
+          "persistent_equivariant_node_state",
+          "persistent_equivariant_edge_state",
+          "edge_tensor_product_channel_mixing",
+          "multi_layer_equivariant_message_passing"
+        ],
+        "descriptor_dim": 16,
+        "descriptor_family": "element_density",
+        "descriptor_readout_dim": 16,
+        "descriptor_realization": "pytorch_edge_scatter",
+        "edge_state_lifetime": "caller_supplied_edge_index",
+        "energy_reference": "none",
+        "feature_extractor": "fixed_radial_basis",
+        "force_mode": "autograd",
+        "force_realization": "autograd_conservative",
+        "fused_descriptor": false,
+        "fused_force": false,
+        "graph_construction_backend": null,
+        "graph_semantics": "prebuilt_edge_index",
+        "graph_update_backend": null,
+        "hidden_channels": [
+          64,
+          64
+        ],
+        "implemented_outputs": [
+          "energy",
+          "atomic_energy",
+          "forces"
+        ],
+        "missing_output_contracts": [
+          "validated_edge_gradient_virial"
+        ],
+        "moment_l_max": null,
+        "num_radial": 8,
+        "pareto_axes": [
+          "semantic_projection",
+          "scalar_head_capacity",
+          "force_realization"
+        ],
+        "retained_tece_groups": [
+          "radial_density",
+          "neighbor_element_density"
+        ],
+        "semantic_tier": "T3_element_conditioned_scalar_density",
+        "stress_realization": "ase_autograd_finite_strain_inference",
+        "virial_realization": "not_implemented"
+      },
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.element_density"
+      ],
+      "variant": "stage168_t3_element_density"
+    },
+    "t3_full_moment_shell": {
+      "descriptor_dim": 24,
+      "route": {
+        "ase_implemented_outputs": [
+          "energy",
+          "free_energy",
+          "forces",
+          "stress"
+        ],
+        "deleted_tece_groups": [
+          "persistent_equivariant_node_state",
+          "persistent_equivariant_edge_state",
+          "edge_tensor_product_channel_mixing",
+          "multi_layer_equivariant_message_passing"
+        ],
+        "descriptor_dim": 24,
+        "descriptor_family": "element_density",
+        "descriptor_readout_dim": 24,
+        "descriptor_realization": "pytorch_edge_scatter",
+        "edge_state_lifetime": "caller_supplied_edge_index",
+        "energy_reference": "none",
+        "feature_extractor": "fixed_radial_basis",
+        "force_mode": "autograd",
+        "force_realization": "autograd_conservative",
+        "fused_descriptor": false,
+        "fused_force": false,
+        "graph_construction_backend": null,
+        "graph_semantics": "prebuilt_edge_index",
+        "graph_update_backend": null,
+        "hidden_channels": [
+          64,
+          64
+        ],
+        "implemented_outputs": [
+          "energy",
+          "atomic_energy",
+          "forces"
+        ],
+        "missing_output_contracts": [
+          "validated_edge_gradient_virial"
+        ],
+        "moment_l_max": 2,
+        "num_radial": 8,
+        "pareto_axes": [
+          "semantic_projection",
+          "scalar_head_capacity",
+          "force_realization",
+          "angular_bandwidth_l_max"
+        ],
+        "retained_tece_groups": [
+          "radial_density",
+          "neighbor_element_density"
+        ],
+        "semantic_tier": "T3_element_conditioned_scalar_density",
+        "stress_realization": "ase_autograd_finite_strain_inference",
+        "virial_realization": "not_implemented"
+      },
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.element_density",
+        "edge.full_moment.vector_shell_dot",
+        "edge.full_moment.vector_cross_shell_dot",
+        "edge.full_moment.quadrupole_shell_frobenius",
+        "edge.full_moment.quadrupole_cross_shell_frobenius",
+        "edge.full_moment.vector_shell_contrast_projection"
+      ],
+      "variant": "stage168_t3_full_moment_shell"
+    },
+    "t4_pair_density": {
+      "descriptor_dim": 8,
+      "route": {
+        "ase_implemented_outputs": [
+          "energy",
+          "free_energy",
+          "forces",
+          "stress"
+        ],
+        "deleted_tece_groups": [
+          "persistent_equivariant_node_state",
+          "persistent_equivariant_edge_state",
+          "edge_tensor_product_channel_mixing",
+          "multi_layer_equivariant_message_passing"
+        ],
+        "descriptor_dim": 8,
+        "descriptor_family": "pair_density",
+        "descriptor_readout_dim": 8,
+        "descriptor_realization": "pytorch_edge_scatter",
+        "edge_state_lifetime": "caller_supplied_edge_index",
+        "energy_reference": "none",
+        "feature_extractor": "fixed_radial_basis",
+        "force_mode": "autograd",
+        "force_realization": "autograd_conservative",
+        "fused_descriptor": false,
+        "fused_force": false,
+        "graph_construction_backend": null,
+        "graph_semantics": "prebuilt_edge_index",
+        "graph_update_backend": null,
+        "hidden_channels": [
+          64,
+          64
+        ],
+        "implemented_outputs": [
+          "energy",
+          "atomic_energy",
+          "forces"
+        ],
+        "missing_output_contracts": [
+          "validated_edge_gradient_virial"
+        ],
+        "moment_l_max": null,
+        "num_radial": 8,
+        "pareto_axes": [
+          "semantic_projection",
+          "scalar_head_capacity",
+          "force_realization"
+        ],
+        "retained_tece_groups": [
+          "radial_density"
+        ],
+        "semantic_tier": "T4_scalar_pair_density",
+        "stress_realization": "ase_autograd_finite_strain_inference",
+        "virial_realization": "not_implemented"
+      },
+      "scalar_path_ids": [
+        "atomic.radial_density"
+      ],
+      "variant": "stage168_t4_pair_density"
+    }
+  },
+  "diagnostic_semantics": "case_id is used only for grouping offsets to structures; rTECE descriptors are deployable semantic path features",
+  "feature_cache_json": "runs/oc20neb_tace_mace/rtece-stage169-descriptor-cache/stage169_rtece_descriptor_features.json",
+  "feature_cache_used": false,
+  "force_rmse_mev_a": 94.15889889773099,
+  "group_key": "case_id",
+  "group_offset_rmse_mev_atom": 4.76899892317605,
+  "intercept_loocv_rmse_mev_atom": 60.48158125540124,
+  "limit_configs": null,
+  "max_configs_per_case": 2,
+  "neighborlist_backend": "matscipy",
+  "num_radial": 8,
+  "proxy_generalization_status": "rtece_descriptor_proxy_not_supported_by_loocv",
+  "raw_e_rmse_mev_atom": 52.53824210343257,
+  "relative_image_rmse_mev_atom": 7.10409388625699,
+  "rows": [
+    {
+      "case_count": 22,
+      "feature_count": 0,
+      "feature_names_omitted": 0,
+      "feature_names_sample": [],
+      "feature_set": "intercept_only",
+      "loocv_mae_mev_atom": 47.047552707932624,
+      "loocv_r2": -0.09750566893424018,
+      "loocv_rmse_mev_atom": 60.48158125540124,
+      "ridge": 0.001,
+      "train_mae_mev_atom": 44.90902758484478,
+      "train_r2": 0.0,
+      "train_rmse_mev_atom": 57.732418471064825,
+      "uses_case_id_as_feature": false
+    },
+    {
+      "case_count": 22,
+      "feature_count": 237,
+      "feature_names_omitted": 213,
+      "feature_names_sample": [
+        "t3_atomic_l2_cross.descriptor_dim",
+        "t3_atomic_l2_cross.mean.d0",
+        "t3_atomic_l2_cross.mean.d1",
+        "t3_atomic_l2_cross.mean.d10",
+        "t3_atomic_l2_cross.mean.d11",
+        "t3_atomic_l2_cross.mean.d12",
+        "t3_atomic_l2_cross.mean.d13",
+        "t3_atomic_l2_cross.mean.d14",
+        "t3_atomic_l2_cross.mean.d15",
+        "t3_atomic_l2_cross.mean.d16",
+        "t3_atomic_l2_cross.mean.d17",
+        "t3_atomic_l2_cross.mean.d18",
+        "t3_atomic_l2_cross.mean.d19",
+        "t3_atomic_l2_cross.mean.d2",
+        "t3_atomic_l2_cross.mean.d20",
+        "t3_atomic_l2_cross.mean.d21",
+        "t3_atomic_l2_cross.mean.d22",
+        "t3_atomic_l2_cross.mean.d23",
+        "t3_atomic_l2_cross.mean.d24",
+        "t3_atomic_l2_cross.mean.d25",
+        "t3_atomic_l2_cross.mean.d26",
+        "t3_atomic_l2_cross.mean.d27",
+        "t3_atomic_l2_cross.mean.d28",
+        "t3_atomic_l2_cross.mean.d29"
+      ],
+      "feature_set": "all_rtece_descriptor_groups",
+      "loocv_mae_mev_atom": 89.54953132368195,
+      "loocv_r2": -2.547102188903601,
+      "loocv_rmse_mev_atom": 108.73180587303872,
+      "ridge": 0.001,
+      "train_mae_mev_atom": 0.004900908479129243,
+      "train_r2": 0.9999999844609014,
+      "train_rmse_mev_atom": 0.0071966877885107335,
+      "uses_case_id_as_feature": false
+    },
+    {
+      "case_count": 22,
+      "feature_count": 89,
+      "feature_names_omitted": 65,
+      "feature_names_sample": [
+        "t3_atomic_l2_cross.descriptor_dim",
+        "t3_atomic_l2_cross.mean.d0",
+        "t3_atomic_l2_cross.mean.d1",
+        "t3_atomic_l2_cross.mean.d10",
+        "t3_atomic_l2_cross.mean.d11",
+        "t3_atomic_l2_cross.mean.d12",
+        "t3_atomic_l2_cross.mean.d13",
+        "t3_atomic_l2_cross.mean.d14",
+        "t3_atomic_l2_cross.mean.d15",
+        "t3_atomic_l2_cross.mean.d16",
+        "t3_atomic_l2_cross.mean.d17",
+        "t3_atomic_l2_cross.mean.d18",
+        "t3_atomic_l2_cross.mean.d19",
+        "t3_atomic_l2_cross.mean.d2",
+        "t3_atomic_l2_cross.mean.d20",
+        "t3_atomic_l2_cross.mean.d21",
+        "t3_atomic_l2_cross.mean.d22",
+        "t3_atomic_l2_cross.mean.d23",
+        "t3_atomic_l2_cross.mean.d24",
+        "t3_atomic_l2_cross.mean.d25",
+        "t3_atomic_l2_cross.mean.d26",
+        "t3_atomic_l2_cross.mean.d27",
+        "t3_atomic_l2_cross.mean.d28",
+        "t3_atomic_l2_cross.mean.d29"
+      ],
+      "feature_set": "t3_atomic_l2_cross",
+      "loocv_mae_mev_atom": 92.63128687887678,
+      "loocv_r2": -2.7138709223724646,
+      "loocv_rmse_mev_atom": 111.2584880241995,
+      "ridge": 0.001,
+      "train_mae_mev_atom": 0.010813796633381384,
+      "train_r2": 0.9999999275284426,
+      "train_rmse_mev_atom": 0.01554187988657224,
+      "uses_case_id_as_feature": false
+    },
+    {
+      "case_count": 22,
+      "feature_count": 49,
+      "feature_names_omitted": 25,
+      "feature_names_sample": [
+        "t3_full_moment_shell.descriptor_dim",
+        "t3_full_moment_shell.mean.d0",
+        "t3_full_moment_shell.mean.d1",
+        "t3_full_moment_shell.mean.d10",
+        "t3_full_moment_shell.mean.d11",
+        "t3_full_moment_shell.mean.d12",
+        "t3_full_moment_shell.mean.d13",
+        "t3_full_moment_shell.mean.d14",
+        "t3_full_moment_shell.mean.d15",
+        "t3_full_moment_shell.mean.d16",
+        "t3_full_moment_shell.mean.d17",
+        "t3_full_moment_shell.mean.d18",
+        "t3_full_moment_shell.mean.d19",
+        "t3_full_moment_shell.mean.d2",
+        "t3_full_moment_shell.mean.d20",
+        "t3_full_moment_shell.mean.d21",
+        "t3_full_moment_shell.mean.d22",
+        "t3_full_moment_shell.mean.d23",
+        "t3_full_moment_shell.mean.d3",
+        "t3_full_moment_shell.mean.d4",
+        "t3_full_moment_shell.mean.d5",
+        "t3_full_moment_shell.mean.d6",
+        "t3_full_moment_shell.mean.d7",
+        "t3_full_moment_shell.mean.d8"
+      ],
+      "feature_set": "t3_full_moment_shell",
+      "loocv_mae_mev_atom": 92.98493332673588,
+      "loocv_r2": -4.733959241548597,
+      "loocv_rmse_mev_atom": 138.24424203550197,
+      "ridge": 0.001,
+      "train_mae_mev_atom": 0.0402246057041385,
+      "train_r2": 0.9999991726557736,
+      "train_rmse_mev_atom": 0.052512521358898466,
+      "uses_case_id_as_feature": false
+    },
+    {
+      "case_count": 22,
+      "feature_count": 49,
+      "feature_names_omitted": 25,
+      "feature_names_sample": [
+        "t3_cavity_edge.descriptor_dim",
+        "t3_cavity_edge.mean.d0",
+        "t3_cavity_edge.mean.d1",
+        "t3_cavity_edge.mean.d10",
+        "t3_cavity_edge.mean.d11",
+        "t3_cavity_edge.mean.d12",
+        "t3_cavity_edge.mean.d13",
+        "t3_cavity_edge.mean.d14",
+        "t3_cavity_edge.mean.d15",
+        "t3_cavity_edge.mean.d16",
+        "t3_cavity_edge.mean.d17",
+        "t3_cavity_edge.mean.d18",
+        "t3_cavity_edge.mean.d19",
+        "t3_cavity_edge.mean.d2",
+        "t3_cavity_edge.mean.d20",
+        "t3_cavity_edge.mean.d21",
+        "t3_cavity_edge.mean.d22",
+        "t3_cavity_edge.mean.d23",
+        "t3_cavity_edge.mean.d3",
+        "t3_cavity_edge.mean.d4",
+        "t3_cavity_edge.mean.d5",
+        "t3_cavity_edge.mean.d6",
+        "t3_cavity_edge.mean.d7",
+        "t3_cavity_edge.mean.d8"
+      ],
+      "feature_set": "t3_cavity_edge",
+      "loocv_mae_mev_atom": 135.44919890859225,
+      "loocv_r2": -5.114701741610028,
+      "loocv_rmse_mev_atom": 142.76027965333327,
+      "ridge": 0.001,
+      "train_mae_mev_atom": 0.24465017675487194,
+      "train_r2": 0.999969907080164,
+      "train_rmse_mev_atom": 0.31670280875874507,
+      "uses_case_id_as_feature": false
+    },
+    {
+      "case_count": 22,
+      "feature_count": 17,
+      "feature_names_omitted": 0,
+      "feature_names_sample": [
+        "t4_pair_density.descriptor_dim",
+        "t4_pair_density.mean.d0",
+        "t4_pair_density.mean.d1",
+        "t4_pair_density.mean.d2",
+        "t4_pair_density.mean.d3",
+        "t4_pair_density.mean.d4",
+        "t4_pair_density.mean.d5",
+        "t4_pair_density.mean.d6",
+        "t4_pair_density.mean.d7",
+        "t4_pair_density.std.d0",
+        "t4_pair_density.std.d1",
+        "t4_pair_density.std.d2",
+        "t4_pair_density.std.d3",
+        "t4_pair_density.std.d4",
+        "t4_pair_density.std.d5",
+        "t4_pair_density.std.d6",
+        "t4_pair_density.std.d7"
+      ],
+      "feature_set": "t4_pair_density",
+      "loocv_mae_mev_atom": 121.46067928592848,
+      "loocv_r2": -16.05088650533395,
+      "loocv_rmse_mev_atom": 238.3928538792784,
+      "ridge": 0.001,
+      "train_mae_mev_atom": 18.222172338172257,
+      "train_r2": 0.8478702575550338,
+      "train_rmse_mev_atom": 22.517844510567162,
+      "uses_case_id_as_feature": false
+    },
+    {
+      "case_count": 22,
+      "feature_count": 33,
+      "feature_names_omitted": 9,
+      "feature_names_sample": [
+        "t3_element_density.descriptor_dim",
+        "t3_element_density.mean.d0",
+        "t3_element_density.mean.d1",
+        "t3_element_density.mean.d10",
+        "t3_element_density.mean.d11",
+        "t3_element_density.mean.d12",
+        "t3_element_density.mean.d13",
+        "t3_element_density.mean.d14",
+        "t3_element_density.mean.d15",
+        "t3_element_density.mean.d2",
+        "t3_element_density.mean.d3",
+        "t3_element_density.mean.d4",
+        "t3_element_density.mean.d5",
+        "t3_element_density.mean.d6",
+        "t3_element_density.mean.d7",
+        "t3_element_density.mean.d8",
+        "t3_element_density.mean.d9",
+        "t3_element_density.std.d0",
+        "t3_element_density.std.d1",
+        "t3_element_density.std.d10",
+        "t3_element_density.std.d11",
+        "t3_element_density.std.d12",
+        "t3_element_density.std.d13",
+        "t3_element_density.std.d14"
+      ],
+      "feature_set": "t3_element_density",
+      "loocv_mae_mev_atom": 187.71783722312014,
+      "loocv_r2": -32.21706437540619,
+      "loocv_rmse_mev_atom": 332.7364471219276,
+      "ridge": 0.001,
+      "train_mae_mev_atom": 1.1400529748946882,
+      "train_r2": 0.9992665168642156,
+      "train_rmse_mev_atom": 1.5635609574187799,
+      "uses_case_id_as_feature": false
+    }
+  ],
+  "rtece_descriptor_proxy_supported": false,
+  "schema_version": "rtece_stage168_rtece_descriptor_proxy.v1",
+  "source_variant": "stage157_direct_b32_rel0p25_mixed2048",
+  "stage168_recommendation": "do_not_treat_current_rtece_descriptors_as_sufficient_energy_baseline_prioritize_teacher_coverage_and_new_scalar_paths",
+  "target_offset_mae_mev_atom": 40.66918735430447,
+  "target_offset_max_abs_mev_atom": 199.68137096868014,
+  "target_offset_rmse_mev_atom": 61.445410256782594,
+  "target_semantics": "oracle group_mean_offsets_eV_per_atom converted to meV/atom",
+  "write_feature_cache_json": "runs/oc20neb_tace_mace/rtece-stage169-descriptor-cache/stage169_rtece_descriptor_features.json"
+}
