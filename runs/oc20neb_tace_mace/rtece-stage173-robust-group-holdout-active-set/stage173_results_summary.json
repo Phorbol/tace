@@ -1,0 +1,181 @@
+{
+  "active_set_rows": [
+    {
+      "active_set_constraint_passed": false,
+      "active_set_promoted": false,
+      "active_set_rejection_reasons": [
+        "intercept_baseline_not_beaten"
+      ],
+      "candidate": "t1_l1_atomic_cross",
+      "energy_marginal_gain": 12.245513642628296,
+      "marginal_gain_per_cost": 0.8177174555183384
+    },
+    {
+      "active_set_constraint_passed": false,
+      "active_set_promoted": false,
+      "active_set_rejection_reasons": [
+        "intercept_baseline_not_beaten"
+      ],
+      "candidate": "t2_edge_frame_projection",
+      "energy_marginal_gain": 2.5053795289561975,
+      "marginal_gain_per_cost": 0.07034451683795324
+    },
+    {
+      "active_set_constraint_passed": false,
+      "active_set_promoted": false,
+      "active_set_rejection_reasons": [
+        "intercept_baseline_not_beaten"
+      ],
+      "candidate": "t2_edge_frame_plus_direct",
+      "energy_marginal_gain": 2.093196669627318,
+      "marginal_gain_per_cost": 0.05579525704690925
+    },
+    {
+      "active_set_constraint_passed": false,
+      "active_set_promoted": false,
+      "active_set_rejection_reasons": [
+        "intercept_baseline_not_beaten"
+      ],
+      "candidate": "t2_cavity_quadrupole",
+      "energy_marginal_gain": 0.8781196268978135,
+      "marginal_gain_per_cost": 0.028202593691650544
+    },
+    {
+      "active_set_constraint_passed": false,
+      "active_set_promoted": false,
+      "active_set_rejection_reasons": [
+        "energy_gain_required",
+        "intercept_baseline_not_beaten"
+      ],
+      "candidate": "t2_cavity_vector",
+      "energy_marginal_gain": -3.577350653812971,
+      "marginal_gain_per_cost": -0.1146142669168755
+    },
+    {
+      "active_set_constraint_passed": false,
+      "active_set_promoted": false,
+      "active_set_rejection_reasons": [
+        "energy_gain_required",
+        "intercept_baseline_not_beaten"
+      ],
+      "candidate": "t1_l2_atomic_cross",
+      "energy_marginal_gain": -12.162221165205352,
+      "marginal_gain_per_cost": -0.40459971615062035
+    }
+  ],
+  "best_candidate": {
+    "candidate": "t1_l1_atomic_cross",
+    "candidate_dim": 315,
+    "energy_beats_intercept_baseline": false,
+    "energy_intercept_baseline_per_atom_rmse": 56.60319287094426,
+    "energy_per_atom_mae": 69.69909982663643,
+    "energy_per_atom_max_abs": 370.3266853309321,
+    "energy_per_atom_rmse": 94.04617889384562,
+    "energy_selected_ridge": 1.0,
+    "relative_residual": 0.027099824006928827
+  },
+  "fit_intercept": true,
+  "group_count": 11,
+  "group_key": "case_id",
+  "intercept_baseline_per_atom_rmse": 56.60319287094426,
+  "interpretation": [
+    "Stage173 removes the catastrophic Stage172 numerical extrapolation scale by adding intercept, fold-local standardization, and ridge sweep.",
+    "No candidate beats the group-heldout intercept-only per-atom baseline, so the active-set gate promotes no deployable rTECE path group.",
+    "The result supports the Stage170 diagnosis that current rTECE descriptors lack a deployable low-frequency case/site/adsorbate energy coordinate.",
+    "The next architecture branch should add learnable low-frequency chemistry/site/front representations instead of training the Stage171/172/173 projection winners."
+  ],
+  "limit_configs": 512,
+  "ridge_grid": [
+    1e-08,
+    1e-06,
+    0.0001,
+    0.01,
+    1.0,
+    100.0
+  ],
+  "rows": [
+    {
+      "candidate": "t2_edge_frame_plus_direct",
+      "candidate_dim": 338,
+      "energy_beats_intercept_baseline": false,
+      "energy_intercept_baseline_per_atom_rmse": 56.60319287094426,
+      "energy_per_atom_mae": 64.95147467113503,
+      "energy_per_atom_max_abs": 311.434224444411,
+      "energy_per_atom_rmse": 104.1984958668466,
+      "energy_selected_ridge": 1.0,
+      "relative_residual": 1.9197312055892566e-07
+    },
+    {
+      "candidate": "t2_edge_frame_projection",
+      "candidate_dim": 336,
+      "energy_beats_intercept_baseline": false,
+      "energy_intercept_baseline_per_atom_rmse": 56.60319287094426,
+      "energy_per_atom_mae": 64.77385780120514,
+      "energy_per_atom_max_abs": 311.51708139843964,
+      "energy_per_atom_rmse": 103.78631300751772,
+      "energy_selected_ridge": 1.0,
+      "relative_residual": 2.757535764935609e-07
+    },
+    {
+      "candidate": "t2_cavity_quadrupole",
+      "candidate_dim": 332,
+      "energy_beats_intercept_baseline": false,
+      "energy_intercept_baseline_per_atom_rmse": 56.60319287094426,
+      "energy_per_atom_mae": 65.30291482899345,
+      "energy_per_atom_max_abs": 313.11777107778,
+      "energy_per_atom_rmse": 105.4135729095761,
+      "energy_selected_ridge": 1.0,
+      "relative_residual": 0.010639099654038666
+    },
+    {
+      "candidate": "t2_cavity_vector",
+      "candidate_dim": 331,
+      "energy_beats_intercept_baseline": false,
+      "energy_intercept_baseline_per_atom_rmse": 56.60319287094426,
+      "energy_per_atom_mae": 68.26732639726707,
+      "energy_per_atom_max_abs": 336.222788941201,
+      "energy_per_atom_rmse": 109.86904319028689,
+      "energy_selected_ridge": 1.0,
+      "relative_residual": 0.010859067034732344
+    },
+    {
+      "candidate": "t1_l2_atomic_cross",
+      "candidate_dim": 330,
+      "energy_beats_intercept_baseline": false,
+      "energy_intercept_baseline_per_atom_rmse": 56.60319287094426,
+      "energy_per_atom_mae": 73.18484539510764,
+      "energy_per_atom_max_abs": 354.23925994681883,
+      "energy_per_atom_rmse": 118.45391370167927,
+      "energy_selected_ridge": 1.0,
+      "relative_residual": 0.011173861847081645
+    },
+    {
+      "candidate": "t1_l1_atomic_cross",
+      "candidate_dim": 315,
+      "energy_beats_intercept_baseline": false,
+      "energy_intercept_baseline_per_atom_rmse": 56.60319287094426,
+      "energy_per_atom_mae": 69.69909982663643,
+      "energy_per_atom_max_abs": 370.3266853309321,
+      "energy_per_atom_rmse": 94.04617889384562,
+      "energy_selected_ridge": 1.0,
+      "relative_residual": 0.027099824006928827
+    },
+    {
+      "candidate": "t1_l0_species_radial",
+      "candidate_dim": 300,
+      "energy_beats_intercept_baseline": false,
+      "energy_intercept_baseline_per_atom_rmse": 56.60319287094426,
+      "energy_per_atom_mae": 58.376498433603146,
+      "energy_per_atom_max_abs": 349.73955196714934,
+      "energy_per_atom_rmse": 106.29169253647392,
+      "energy_selected_ridge": 100.0,
+      "relative_residual": 0.10809258459405417
+    }
+  ],
+  "slurm_exit_code": "0:0",
+  "slurm_job": 688196,
+  "slurm_state": "COMPLETED",
+  "split": "group-loocv",
+  "stage": "stage173_robust_group_holdout_active_set",
+  "standardize_features": true
+}

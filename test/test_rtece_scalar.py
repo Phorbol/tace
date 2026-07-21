@@ -2412,6 +2412,42 @@ def test_rtece_active_set_can_require_energy_gain():
     assert "energy_gain_required" in ranked[0]["active_set_rejection_reasons"]
 
 
+def test_rtece_active_set_can_require_beating_intercept_baseline():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import rank_active_set_candidate_rows
+
+    rows = [
+        {
+            "candidate": "baseline",
+            "path_ids": ["atomic.radial_density"],
+            "energy_per_atom_rmse": 100.0,
+            "energy_intercept_baseline_per_atom_rmse": 50.0,
+            "candidate_dim": 4,
+        },
+        {
+            "candidate": "descriptor_gain_but_worse_than_intercept",
+            "path_ids": ["atomic.radial_density", "edge.cavity.vector_dot"],
+            "energy_per_atom_rmse": 80.0,
+            "energy_intercept_baseline_per_atom_rmse": 50.0,
+            "candidate_dim": 8,
+        },
+    ]
+
+    ranked = rank_active_set_candidate_rows(
+        rows,
+        baseline_candidate="baseline",
+        energy_weight=1.0,
+        require_energy_gain=True,
+        require_beat_intercept=True,
+    )
+
+    assert ranked[0]["candidate"] == "descriptor_gain_but_worse_than_intercept"
+    assert ranked[0]["energy_marginal_gain"] == pytest.approx(20.0)
+    assert ranked[0]["active_set_promoted"] is False
+    assert ranked[0]["active_set_constraint_passed"] is False
+    assert ranked[0]["active_set_require_beat_intercept"] is True
+    assert "intercept_baseline_not_beaten" in ranked[0]["active_set_rejection_reasons"]
+
+
 
 def test_rtece_projection_rows_cache_reference_descriptors(monkeypatch):
     from benchmarks.oc20neb_tace_mace import analyze_rtece_projection_error as mod
@@ -2587,6 +2623,35 @@ def test_rtece_energy_group_loocv_projection_metrics_reports_unseen_group_error(
     assert metrics["energy_rmse"] == pytest.approx(10.0)
     assert metrics["energy_mae"] == pytest.approx(10.0)
     assert [fold["group"] for fold in metrics["energy_group_folds"]] == ["case-a", "case-b"]
+
+
+def test_rtece_energy_group_loocv_projection_metrics_reports_robust_intercept_baseline():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import energy_group_loocv_projection_metrics
+
+    source = torch.tensor([[1.0], [2.0], [3.0], [4.0], [5.0], [6.0]], dtype=torch.float64)
+    atom_counts = torch.full((6,), 10.0, dtype=torch.float64)
+    target = source.flatten() * atom_counts
+    group_labels = ["case-a", "case-a", "case-b", "case-b", "case-c", "case-c"]
+
+    metrics = energy_group_loocv_projection_metrics(
+        source,
+        target,
+        group_labels=group_labels,
+        ridge=1.0e-8,
+        atom_counts=atom_counts,
+        include_intercept=True,
+        standardize_features=True,
+        ridge_values=(0.0, 1.0),
+    )
+
+    assert metrics["energy_split_mode"] == "group-loocv"
+    assert metrics["energy_fit_intercept"] is True
+    assert metrics["energy_standardize_features"] is True
+    assert metrics["energy_ridge_grid"] == [0.0, 1.0]
+    assert metrics["energy_selected_ridge"] == pytest.approx(0.0)
+    assert metrics["energy_per_atom_rmse"] == pytest.approx(0.0, abs=1.0e-10)
+    assert metrics["energy_intercept_baseline_per_atom_rmse"] > 0.0
+    assert metrics["energy_beats_intercept_baseline"] is True
 
 
 def test_rtece_sampled_force_descriptor_rows_match_full_jacobian():
@@ -9192,6 +9257,48 @@ def test_stage172_group_holdout_residual_active_set_manifest_is_tece_aligned_and
     assert "--energy-group-key case_id" in text
     assert "--active-set-baseline-candidate t1_l0_species_radial" in text
     assert "--active-set-require-energy-gain" in text
+    assert "--export" not in text
+    assert "--mem" not in text
+    assert "--cpus-per-task" not in text
+    assert "set -u" not in text
+
+
+def test_stage173_robust_group_holdout_active_set_manifest_is_tece_aligned_and_sbatch_safe(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage173_robust_group_holdout_active_set import (
+        audit_stage173_manifest,
+        make_stage173_manifest,
+        materialize_stage173,
+    )
+
+    manifest = make_stage173_manifest(
+        output_root=tmp_path / "stage173",
+        stage165_json="stage165.json",
+        configs="valid.extxyz",
+        limit_configs=64,
+    )
+    audit = audit_stage173_manifest(manifest)
+
+    assert audit["contract_pass"] is True
+    assert manifest["schema_version"] == "rtece_stage173_robust_group_holdout_active_set.v1"
+    assert manifest["stage"] == "stage173_robust_group_holdout_active_set"
+    assert manifest["energy_split_mode"] == "group-loocv"
+    assert manifest["projection_diagnostics"]["fit_intercept"] is True
+    assert manifest["projection_diagnostics"]["standardize_features"] is True
+    assert manifest["projection_diagnostics"]["ridge_grid"] == [1.0e-8, 1.0e-6, 1.0e-4, 1.0e-2, 1.0, 100.0]
+    assert manifest["active_set"]["require_beat_intercept"] is True
+    assert manifest["uses_case_id_as_feature"] is False
+    assert any("Stage172" in item for item in manifest["review_basis"])
+
+    materialized = materialize_stage173(manifest)
+    wrapper = Path(materialized["artifacts"]["wrapper"])
+    text = wrapper.read_text()
+    assert "--energy-split-mode group-loocv" in text
+    assert "--energy-fit-intercept" in text
+    assert "--energy-standardize-features" in text
+    assert "--energy-ridge-grid 1e-08,1e-06,0.0001,0.01,1,100" in text
+    assert "--active-set-require-beat-intercept" in text
     assert "--export" not in text
     assert "--mem" not in text
     assert "--cpus-per-task" not in text

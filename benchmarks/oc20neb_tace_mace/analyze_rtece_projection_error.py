@@ -236,6 +236,136 @@ def energy_label_projection_metrics(
     return payload
 
 
+def _append_intercept_column(matrix: torch.Tensor) -> torch.Tensor:
+    import torch
+
+    ones = torch.ones((int(matrix.shape[0]), 1), dtype=matrix.dtype, device=matrix.device)
+    return torch.cat([matrix, ones], dim=-1)
+
+
+def _standardize_fit_eval_features(fit_x: torch.Tensor, eval_x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    import torch
+
+    mean = fit_x.mean(dim=0, keepdim=True)
+    std = fit_x.std(dim=0, unbiased=False, keepdim=True)
+    std = torch.where(std > 0.0, std, torch.ones_like(std))
+    return (fit_x - mean) / std, (eval_x - mean) / std
+
+
+def _normalize_ridge_values(ridge: float, ridge_values: tuple[float, ...] | list[float] | None) -> tuple[float, ...]:
+    values = (float(ridge),) if ridge_values is None else tuple(float(value) for value in ridge_values)
+    if not values:
+        raise ValueError("ridge_values must contain at least one value")
+    for value in values:
+        if value != value or value < 0.0:
+            raise ValueError("ridge values must be finite and non-negative")
+    return values
+
+
+def _energy_selection_metric(payload: dict[str, Any]) -> tuple[float, str]:
+    value = payload.get("energy_per_atom_rmse")
+    if value is not None:
+        return float(value), "energy_per_atom_rmse"
+    return float(payload["energy_rmse"]), "energy_rmse"
+
+
+def constant_group_loocv_energy_baseline_metrics(
+    target: torch.Tensor,
+    *,
+    group_labels: list[str] | tuple[str, ...],
+    atom_counts: torch.Tensor | None = None,
+) -> dict[str, Any]:
+    """Group-heldout constant baseline for energy projection diagnostics.
+
+    With atom counts, fit the mean per-atom target on the training groups and
+    predict total energy by multiplying that mean by held-out atom counts. This
+    matches the Stage165/170 case-offset residual target convention.
+    """
+    import torch
+
+    y = target.detach().to(dtype=torch.float64, device="cpu")
+    if y.ndim == 1:
+        y = y.unsqueeze(-1)
+    y = _as_float64_matrix(y, "target")
+    labels = [str(label) for label in group_labels]
+    if len(labels) != int(y.shape[0]):
+        raise ValueError(f"group_labels must contain {y.shape[0]} values, got {len(labels)}")
+    unique_groups = _unique_in_order(labels)
+    if len(unique_groups) < 2:
+        raise ValueError("group-loocv baseline requires at least two groups")
+    counts = None
+    if atom_counts is not None:
+        counts = atom_counts.detach().to(dtype=torch.float64, device="cpu").flatten()
+        if counts.numel() != int(y.shape[0]):
+            raise ValueError(f"atom_counts must contain {y.shape[0]} values, got {counts.numel()}")
+        if bool((counts <= 0.0).any().item()):
+            raise ValueError("atom_counts must be positive")
+
+    residual_chunks: list[torch.Tensor] = []
+    eval_index_chunks: list[torch.Tensor] = []
+    fold_payloads: list[dict[str, Any]] = []
+    for group in unique_groups:
+        eval_rows = torch.tensor([idx for idx, label in enumerate(labels) if label == group], dtype=torch.long)
+        fit_rows = torch.tensor([idx for idx, label in enumerate(labels) if label != group], dtype=torch.long)
+        if counts is None:
+            train_mean = y[fit_rows].mean(dim=0, keepdim=True)
+            pred = train_mean.expand(int(eval_rows.numel()), -1)
+        else:
+            train_per_atom = y[fit_rows].flatten() / counts[fit_rows]
+            train_mean = train_per_atom.mean().reshape(1, 1)
+            pred = train_mean * counts[eval_rows].reshape(-1, 1)
+        residual = y[eval_rows] - pred
+        residual_chunks.append(residual)
+        eval_index_chunks.append(eval_rows)
+        flat = residual.flatten()
+        fold: dict[str, Any] = {
+            "group": str(group),
+            "fit_num_samples": int(fit_rows.numel()),
+            "eval_num_samples": int(eval_rows.numel()),
+            "energy_intercept_baseline_rmse": float(torch.sqrt(torch.mean(flat.square())).item()),
+            "energy_intercept_baseline_mae": float(torch.mean(torch.abs(flat)).item()),
+            "energy_intercept_baseline_max_abs": float(torch.max(torch.abs(flat)).item()),
+        }
+        if counts is not None:
+            per_atom = residual.flatten() / counts[eval_rows]
+            fold.update(
+                {
+                    "energy_intercept_baseline_per_atom_rmse": float(torch.sqrt(torch.mean(per_atom.square())).item()),
+                    "energy_intercept_baseline_per_atom_mae": float(torch.mean(torch.abs(per_atom)).item()),
+                    "energy_intercept_baseline_per_atom_max_abs": float(torch.max(torch.abs(per_atom)).item()),
+                }
+            )
+        fold_payloads.append(fold)
+
+    residual_all = torch.cat(residual_chunks, dim=0)
+    eval_rows_all = torch.cat(eval_index_chunks, dim=0)
+    flat_residual = residual_all.flatten()
+    payload: dict[str, Any] = {
+        "energy_intercept_baseline_num_samples": int(residual_all.shape[0]),
+        "energy_intercept_baseline_group_count": int(len(unique_groups)),
+        "energy_intercept_baseline_folds": fold_payloads,
+        "energy_intercept_baseline_rmse": float(torch.sqrt(torch.mean(flat_residual.square())).item()),
+        "energy_intercept_baseline_mae": float(torch.mean(torch.abs(flat_residual)).item()),
+        "energy_intercept_baseline_bias": float(torch.mean(flat_residual).item()),
+        "energy_intercept_baseline_max_abs": float(torch.max(torch.abs(flat_residual)).item()),
+        "energy_intercept_baseline_per_atom_rmse": None,
+        "energy_intercept_baseline_per_atom_mae": None,
+        "energy_intercept_baseline_per_atom_bias": None,
+        "energy_intercept_baseline_per_atom_max_abs": None,
+    }
+    if counts is not None:
+        per_atom = residual_all.flatten() / counts[eval_rows_all]
+        payload.update(
+            {
+                "energy_intercept_baseline_per_atom_rmse": float(torch.sqrt(torch.mean(per_atom.square())).item()),
+                "energy_intercept_baseline_per_atom_mae": float(torch.mean(torch.abs(per_atom)).item()),
+                "energy_intercept_baseline_per_atom_bias": float(torch.mean(per_atom).item()),
+                "energy_intercept_baseline_per_atom_max_abs": float(torch.max(torch.abs(per_atom)).item()),
+            }
+        )
+    return payload
+
+
 def energy_group_loocv_projection_metrics(
     source: torch.Tensor,
     target: torch.Tensor,
@@ -246,6 +376,9 @@ def energy_group_loocv_projection_metrics(
     sample_weights: torch.Tensor | None = None,
     atom_counts: torch.Tensor | None = None,
     baseline_features: torch.Tensor | None = None,
+    include_intercept: bool = False,
+    standardize_features: bool = False,
+    ridge_values: tuple[float, ...] | list[float] | None = None,
 ) -> dict[str, Any]:
     import torch
 
@@ -273,114 +406,158 @@ def energy_group_loocv_projection_metrics(
         fit_x = torch.cat([x, baseline], dim=-1)
         baseline_dim = int(baseline.shape[1])
     all_weights = _as_sample_weights(sample_weights, int(x.shape[0])) if sample_weights is not None else None
-
-    residual_chunks: list[torch.Tensor] = []
-    eval_target_chunks: list[torch.Tensor] = []
-    eval_index_chunks: list[torch.Tensor] = []
-    residual_norm_chunks: list[torch.Tensor] = []
-    target_norm_chunks: list[torch.Tensor] = []
-    fold_payloads: list[dict[str, float | int | str | bool]] = []
-    weight_sum = 0.0
-    min_fit_rows: int | None = None
-    any_underdetermined = False
-    for group in unique_groups:
-        eval_rows = torch.tensor([idx for idx, label in enumerate(labels) if label == group], dtype=torch.long)
-        fit_rows = torch.tensor([idx for idx, label in enumerate(labels) if label != group], dtype=torch.long)
-        if eval_rows.numel() < 1 or fit_rows.numel() < 1:
-            raise ValueError(f"group {group!r} does not leave non-empty fit/eval rows")
-        fit_weights = all_weights[fit_rows] if all_weights is not None else None
-        coeff, _fit_residual, _fit_scale, fold_weight_sum = _ridge_projection_residual(
-            fit_x[fit_rows],
-            y[fit_rows],
-            ridge=ridge,
-            sample_weights=fit_weights,
-        )
-        residual = y[eval_rows] - fit_x[eval_rows] @ coeff
-        residual_chunks.append(residual)
-        eval_target_chunks.append(y[eval_rows])
-        eval_index_chunks.append(eval_rows)
-        weight_sum += fold_weight_sum
-        min_fit_rows = int(fit_rows.numel()) if min_fit_rows is None else min(min_fit_rows, int(fit_rows.numel()))
-        any_underdetermined = any_underdetermined or bool(fit_x.shape[1] >= fit_rows.numel())
-        if all_weights is None:
-            residual_for_norm = residual
-            target_for_norm = y[eval_rows]
-        else:
-            eval_scale = torch.sqrt(all_weights[eval_rows]).unsqueeze(-1)
-            residual_for_norm = residual * eval_scale
-            target_for_norm = y[eval_rows] * eval_scale
-        residual_norm_chunks.append(residual_for_norm)
-        target_norm_chunks.append(target_for_norm)
-        flat = residual.flatten()
-        fold_payloads.append(
-            {
-                "group": str(group),
-                "fit_num_samples": int(fit_rows.numel()),
-                "eval_num_samples": int(eval_rows.numel()),
-                "energy_rmse": float(torch.sqrt(torch.mean(flat.square())).item()),
-                "energy_mae": float(torch.mean(torch.abs(flat)).item()),
-                "energy_max_abs": float(torch.max(torch.abs(flat)).item()),
-                "energy_underdetermined": bool(fit_x.shape[1] >= fit_rows.numel()),
-            }
-        )
-
-    residual_all = torch.cat(residual_chunks, dim=0)
-    target_all = torch.cat(eval_target_chunks, dim=0)
-    eval_rows_all = torch.cat(eval_index_chunks, dim=0)
-    residual_for_norm_all = torch.cat(residual_norm_chunks, dim=0)
-    target_for_norm_all = torch.cat(target_norm_chunks, dim=0)
-    residual_norm = torch.linalg.vector_norm(residual_for_norm_all)
-    target_norm = torch.linalg.vector_norm(target_for_norm_all)
-    relative = residual_norm / target_norm.clamp_min(torch.finfo(y.dtype).tiny)
-    flat_residual = residual_all.flatten()
-    min_fit = int(min_fit_rows or 0)
-    payload: dict[str, Any] = {
-        "energy_split_mode": "group-loocv",
-        "energy_group_holdout_key": group_key,
-        "energy_group_count": int(len(unique_groups)),
-        "energy_group_holdout_groups": list(unique_groups),
-        "energy_group_folds": fold_payloads,
-        "energy_uses_group_as_feature": False,
-        "energy_num_samples": int(residual_all.shape[0]),
-        "energy_fit_num_samples": int(sum(int(fold["fit_num_samples"]) for fold in fold_payloads)),
-        "energy_eval_num_samples": int(residual_all.shape[0]),
-        "energy_min_fit_num_samples": min_fit,
-        "energy_source_dim": int(x.shape[1]),
-        "energy_baseline_dim": int(baseline_dim),
-        "energy_fit_dim": int(fit_x.shape[1]),
-        "energy_degrees_of_freedom": int(min_fit - fit_x.shape[1]),
-        "energy_underdetermined": bool(any_underdetermined),
-        "energy_target_dim": int(y.shape[1]),
-        "energy_residual_frobenius": float(residual_norm.item()),
-        "energy_target_frobenius": float(target_norm.item()),
-        "relative_energy_residual": float(relative.item()),
-        "energy_rmse": float(torch.sqrt(torch.mean(flat_residual.square())).item()),
-        "energy_mae": float(torch.mean(torch.abs(flat_residual)).item()),
-        "energy_bias": float(torch.mean(flat_residual).item()),
-        "energy_max_abs": float(torch.max(torch.abs(flat_residual)).item()),
-        "energy_ridge": float(ridge),
-        "energy_weighted": sample_weights is not None,
-        "energy_weight_sum": float(weight_sum),
-        "energy_per_atom_rmse": None,
-        "energy_per_atom_mae": None,
-        "energy_per_atom_bias": None,
-        "energy_per_atom_max_abs": None,
-    }
+    counts = None
     if atom_counts is not None:
         counts = atom_counts.detach().to(dtype=torch.float64, device="cpu").flatten()
         if counts.numel() != int(x.shape[0]):
             raise ValueError(f"atom_counts must contain {x.shape[0]} values, got {counts.numel()}")
         if bool((counts <= 0.0).any().item()):
             raise ValueError("atom_counts must be positive")
-        per_atom = residual_all.flatten() / counts[eval_rows_all]
-        payload.update(
-            {
-                "energy_per_atom_rmse": float(torch.sqrt(torch.mean(per_atom.square())).item()),
-                "energy_per_atom_mae": float(torch.mean(torch.abs(per_atom)).item()),
-                "energy_per_atom_bias": float(torch.mean(per_atom).item()),
-                "energy_per_atom_max_abs": float(torch.max(torch.abs(per_atom)).item()),
-            }
-        )
+
+    def run_one_ridge(ridge_value: float) -> dict[str, Any]:
+        residual_chunks: list[torch.Tensor] = []
+        eval_target_chunks: list[torch.Tensor] = []
+        eval_index_chunks: list[torch.Tensor] = []
+        residual_norm_chunks: list[torch.Tensor] = []
+        target_norm_chunks: list[torch.Tensor] = []
+        fold_payloads: list[dict[str, float | int | str | bool]] = []
+        weight_sum = 0.0
+        min_fit_rows: int | None = None
+        any_underdetermined = False
+        fold_fit_dims: list[int] = []
+        for group in unique_groups:
+            eval_rows = torch.tensor([idx for idx, label in enumerate(labels) if label == group], dtype=torch.long)
+            fit_rows = torch.tensor([idx for idx, label in enumerate(labels) if label != group], dtype=torch.long)
+            if eval_rows.numel() < 1 or fit_rows.numel() < 1:
+                raise ValueError(f"group {group!r} does not leave non-empty fit/eval rows")
+            fold_fit_x = fit_x[fit_rows]
+            fold_eval_x = fit_x[eval_rows]
+            if bool(standardize_features):
+                fold_fit_x, fold_eval_x = _standardize_fit_eval_features(fold_fit_x, fold_eval_x)
+            if bool(include_intercept):
+                fold_fit_x = _append_intercept_column(fold_fit_x)
+                fold_eval_x = _append_intercept_column(fold_eval_x)
+            fit_weights = all_weights[fit_rows] if all_weights is not None else None
+            coeff, _fit_residual, _fit_scale, fold_weight_sum = _ridge_projection_residual(
+                fold_fit_x,
+                y[fit_rows],
+                ridge=float(ridge_value),
+                sample_weights=fit_weights,
+            )
+            residual = y[eval_rows] - fold_eval_x @ coeff
+            residual_chunks.append(residual)
+            eval_target_chunks.append(y[eval_rows])
+            eval_index_chunks.append(eval_rows)
+            weight_sum += fold_weight_sum
+            min_fit_rows = int(fit_rows.numel()) if min_fit_rows is None else min(min_fit_rows, int(fit_rows.numel()))
+            any_underdetermined = any_underdetermined or bool(fold_fit_x.shape[1] >= fit_rows.numel())
+            fold_fit_dims.append(int(fold_fit_x.shape[1]))
+            if all_weights is None:
+                residual_for_norm = residual
+                target_for_norm = y[eval_rows]
+            else:
+                eval_scale = torch.sqrt(all_weights[eval_rows]).unsqueeze(-1)
+                residual_for_norm = residual * eval_scale
+                target_for_norm = y[eval_rows] * eval_scale
+            residual_norm_chunks.append(residual_for_norm)
+            target_norm_chunks.append(target_for_norm)
+            flat = residual.flatten()
+            fold_payloads.append(
+                {
+                    "group": str(group),
+                    "fit_num_samples": int(fit_rows.numel()),
+                    "eval_num_samples": int(eval_rows.numel()),
+                    "energy_rmse": float(torch.sqrt(torch.mean(flat.square())).item()),
+                    "energy_mae": float(torch.mean(torch.abs(flat)).item()),
+                    "energy_max_abs": float(torch.max(torch.abs(flat)).item()),
+                    "energy_underdetermined": bool(fold_fit_x.shape[1] >= fit_rows.numel()),
+                    "energy_fit_dim": int(fold_fit_x.shape[1]),
+                }
+            )
+
+        residual_all = torch.cat(residual_chunks, dim=0)
+        target_all = torch.cat(eval_target_chunks, dim=0)
+        eval_rows_all = torch.cat(eval_index_chunks, dim=0)
+        residual_for_norm_all = torch.cat(residual_norm_chunks, dim=0)
+        target_for_norm_all = torch.cat(target_norm_chunks, dim=0)
+        residual_norm = torch.linalg.vector_norm(residual_for_norm_all)
+        target_norm = torch.linalg.vector_norm(target_for_norm_all)
+        relative = residual_norm / target_norm.clamp_min(torch.finfo(y.dtype).tiny)
+        flat_residual = residual_all.flatten()
+        min_fit = int(min_fit_rows or 0)
+        max_fit_dim = max(fold_fit_dims) if fold_fit_dims else int(fit_x.shape[1])
+        payload: dict[str, Any] = {
+            "energy_split_mode": "group-loocv",
+            "energy_group_holdout_key": group_key,
+            "energy_group_count": int(len(unique_groups)),
+            "energy_group_holdout_groups": list(unique_groups),
+            "energy_group_folds": fold_payloads,
+            "energy_uses_group_as_feature": False,
+            "energy_fit_intercept": bool(include_intercept),
+            "energy_standardize_features": bool(standardize_features),
+            "energy_num_samples": int(residual_all.shape[0]),
+            "energy_fit_num_samples": int(sum(int(fold["fit_num_samples"]) for fold in fold_payloads)),
+            "energy_eval_num_samples": int(residual_all.shape[0]),
+            "energy_min_fit_num_samples": min_fit,
+            "energy_source_dim": int(x.shape[1]),
+            "energy_baseline_dim": int(baseline_dim),
+            "energy_fit_dim": int(max_fit_dim),
+            "energy_degrees_of_freedom": int(min_fit - max_fit_dim),
+            "energy_underdetermined": bool(any_underdetermined),
+            "energy_target_dim": int(y.shape[1]),
+            "energy_residual_frobenius": float(residual_norm.item()),
+            "energy_target_frobenius": float(target_norm.item()),
+            "relative_energy_residual": float(relative.item()),
+            "energy_rmse": float(torch.sqrt(torch.mean(flat_residual.square())).item()),
+            "energy_mae": float(torch.mean(torch.abs(flat_residual)).item()),
+            "energy_bias": float(torch.mean(flat_residual).item()),
+            "energy_max_abs": float(torch.max(torch.abs(flat_residual)).item()),
+            "energy_ridge": float(ridge_value),
+            "energy_weighted": sample_weights is not None,
+            "energy_weight_sum": float(weight_sum),
+            "energy_per_atom_rmse": None,
+            "energy_per_atom_mae": None,
+            "energy_per_atom_bias": None,
+            "energy_per_atom_max_abs": None,
+        }
+        if counts is not None:
+            per_atom = residual_all.flatten() / counts[eval_rows_all]
+            payload.update(
+                {
+                    "energy_per_atom_rmse": float(torch.sqrt(torch.mean(per_atom.square())).item()),
+                    "energy_per_atom_mae": float(torch.mean(torch.abs(per_atom)).item()),
+                    "energy_per_atom_bias": float(torch.mean(per_atom).item()),
+                    "energy_per_atom_max_abs": float(torch.max(torch.abs(per_atom)).item()),
+                }
+            )
+        return payload
+
+    ridge_grid = _normalize_ridge_values(float(ridge), ridge_values)
+    ridge_payloads = [run_one_ridge(value) for value in ridge_grid]
+    selected = min(
+        ridge_payloads,
+        key=lambda payload: (_energy_selection_metric(payload)[0], float(payload["energy_ridge"])),
+    )
+    payload = dict(selected)
+    payload["energy_ridge_grid"] = [float(value) for value in ridge_grid]
+    payload["energy_selected_ridge"] = float(selected["energy_ridge"])
+    payload["energy_ridge_rows"] = [
+        {
+            "energy_ridge": float(item["energy_ridge"]),
+            "energy_rmse": float(item["energy_rmse"]),
+            "energy_per_atom_rmse": item.get("energy_per_atom_rmse"),
+            "relative_energy_residual": float(item["relative_energy_residual"]),
+            "energy_underdetermined": bool(item["energy_underdetermined"]),
+        }
+        for item in ridge_payloads
+    ]
+    baseline = constant_group_loocv_energy_baseline_metrics(y, group_labels=labels, atom_counts=counts)
+    payload.update(baseline)
+    selected_value, selected_metric = _energy_selection_metric(payload)
+    baseline_key = "energy_intercept_baseline_per_atom_rmse" if selected_metric == "energy_per_atom_rmse" else "energy_intercept_baseline_rmse"
+    baseline_value = payload.get(baseline_key)
+    payload["energy_intercept_baseline_metric"] = baseline_key
+    payload["energy_beats_intercept_baseline"] = bool(baseline_value is not None and selected_value < float(baseline_value))
     return payload
 
 
@@ -873,6 +1050,9 @@ def make_projection_diagnostic_rows(
     energy_eval_indices: torch.Tensor | list[int] | tuple[int, ...] | None = None,
     energy_group_labels: list[str] | tuple[str, ...] | None = None,
     energy_group_key: str | None = None,
+    energy_fit_intercept: bool = False,
+    energy_standardize_features: bool = False,
+    energy_ridge_values: tuple[float, ...] | list[float] | None = None,
     force_targets: torch.Tensor | None = None,
     force_fit_indices: torch.Tensor | list[int] | tuple[int, ...] | None = None,
     force_eval_indices: torch.Tensor | list[int] | tuple[int, ...] | None = None,
@@ -931,6 +1111,9 @@ def make_projection_diagnostic_rows(
                         sample_weights=graph_sample_weights,
                         atom_counts=atom_counts,
                         baseline_features=energy_baseline_features,
+                        include_intercept=bool(energy_fit_intercept),
+                        standardize_features=bool(energy_standardize_features),
+                        ridge_values=energy_ridge_values,
                     )
                 )
             else:
@@ -1184,6 +1367,7 @@ def rank_active_set_candidate_rows(
     gain_mode: str = "absolute",
     max_force_regression_fraction: float | None = None,
     require_energy_gain: bool = False,
+    require_beat_intercept: bool = False,
 ) -> list[dict[str, Any]]:
     baseline_rows = [row for row in rows if str(row.get("candidate")) == str(baseline_candidate)]
     if len(baseline_rows) != 1:
@@ -1218,6 +1402,15 @@ def rank_active_set_candidate_rows(
         rejection_reasons: list[str] = []
         if bool(require_energy_gain) and energy_gain <= 0.0:
             rejection_reasons.append("energy_gain_required")
+        if bool(require_beat_intercept):
+            if energy_metric == "energy_per_atom_rmse":
+                intercept_metric = "energy_intercept_baseline_per_atom_rmse"
+            else:
+                intercept_metric = "energy_intercept_baseline_rmse"
+            candidate_energy_value = _safe_float_metric(candidate, energy_metric or "")
+            intercept_value = _safe_float_metric(candidate, intercept_metric)
+            if candidate_energy_value >= intercept_value:
+                rejection_reasons.append("intercept_baseline_not_beaten")
         force_regression_fraction = None
         if max_force_regression_fraction is not None:
             if force_metric is None:
@@ -1247,6 +1440,7 @@ def rank_active_set_candidate_rows(
                 "active_set_projection_metric": projection_metric,
                 "active_set_gain_mode": str(gain_mode),
                 "active_set_require_energy_gain": bool(require_energy_gain),
+                "active_set_require_beat_intercept": bool(require_beat_intercept),
                 "active_set_max_force_regression_fraction": (
                     None if max_force_regression_fraction is None else float(max_force_regression_fraction)
                 ),
@@ -1579,6 +1773,18 @@ def _load_graphs(
     ]
 
 
+def _parse_ridge_grid(value: str | None) -> tuple[float, ...] | None:
+    if value is None or not str(value).strip():
+        return None
+    values = tuple(float(part.strip()) for part in str(value).split(",") if part.strip())
+    if not values:
+        raise ValueError("--energy-ridge-grid must contain at least one value")
+    for ridge in values:
+        if ridge != ridge or ridge < 0.0:
+            raise ValueError("--energy-ridge-grid values must be finite and non-negative")
+    return values
+
+
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--configs", type=Path, required=True)
@@ -1609,6 +1815,9 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--stage165-variant", default="stage157_direct_b32_rel0p25_mixed2048")
     parser.add_argument("--residual-group-key", default="case_id")
     parser.add_argument("--energy-baseline", choices=("element_counts", "none"), default="element_counts")
+    parser.add_argument("--energy-fit-intercept", action="store_true", help="Append a fold-local intercept column for energy projection diagnostics.")
+    parser.add_argument("--energy-standardize-features", action="store_true", help="Standardize energy projection features using fit rows in each fold.")
+    parser.add_argument("--energy-ridge-grid", default=None, help="Comma-separated ridge values for diagnostic energy projection sweep.")
     parser.add_argument("--energy-split-mode", choices=("stride", "group-loocv"), default="stride")
     parser.add_argument("--energy-group-key", default=None, help="Extxyz info key used only to form group-heldout energy projection folds.")
     parser.add_argument("--energy-eval-stride", type=int, default=0, help="Use every Nth config as held-out energy projection evaluation; 0 disables split.")
@@ -1626,6 +1835,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--active-set-gain-mode", choices=("absolute", "relative"), default="absolute")
     parser.add_argument("--active-set-max-force-regression-fraction", type=float, default=None, help="Reject active-set candidates whose force RMSE regresses by more than this fraction relative to the baseline.")
     parser.add_argument("--active-set-require-energy-gain", action="store_true", help="Reject active-set candidates unless the selected energy metric improves over the baseline.")
+    parser.add_argument("--active-set-require-beat-intercept", action="store_true", help="Reject active-set candidates unless they beat the group-heldout intercept-only energy baseline.")
     return parser.parse_args()
 
 
@@ -1636,6 +1846,7 @@ def main() -> None:
 
     dtype = torch.float64 if args.default_dtype == "float64" else torch.float32
     device = torch.device("cpu")
+    energy_ridge_values = _parse_ridge_grid(args.energy_ridge_grid)
     reference_cross_radial_sketch_channels = (
         int(args.reference_atomic_cross_radial_sketch_channels)
         if args.reference_atomic_cross_radial_sketch_channels is not None
@@ -1816,6 +2027,9 @@ def main() -> None:
         energy_eval_indices=energy_eval_indices,
         energy_group_labels=energy_group_labels,
         energy_group_key=energy_group_key,
+        energy_fit_intercept=bool(args.energy_fit_intercept),
+        energy_standardize_features=bool(args.energy_standardize_features),
+        energy_ridge_values=energy_ridge_values,
         force_targets=force_targets,
         force_fit_indices=force_fit_indices,
         force_eval_indices=force_eval_indices,
@@ -1837,6 +2051,7 @@ def main() -> None:
                 else float(args.active_set_max_force_regression_fraction)
             ),
             "require_energy_gain": bool(args.active_set_require_energy_gain),
+            "require_beat_intercept": bool(args.active_set_require_beat_intercept),
         }
         active_set_rows = rank_active_set_candidate_rows(
             ranked_rows,
@@ -1847,6 +2062,7 @@ def main() -> None:
             gain_mode=str(args.active_set_gain_mode),
             max_force_regression_fraction=args.active_set_max_force_regression_fraction,
             require_energy_gain=bool(args.active_set_require_energy_gain),
+            require_beat_intercept=bool(args.active_set_require_beat_intercept),
         )
     payload = {
         "schema_version": "rtece_projection_diagnostic.v1",
@@ -1883,6 +2099,9 @@ def main() -> None:
         "energy_eval_stride": int(args.energy_eval_stride) if energy_targets is not None and energy_group_labels is None else 0,
         "energy_eval_offset": int(args.energy_eval_offset) if energy_targets is not None and energy_group_labels is None else 0,
         "energy_baseline": str(args.energy_baseline) if energy_targets is not None else None,
+        "energy_fit_intercept": bool(args.energy_fit_intercept) if energy_targets is not None else None,
+        "energy_standardize_features": bool(args.energy_standardize_features) if energy_targets is not None else None,
+        "energy_ridge_grid": [float(value) for value in energy_ridge_values] if energy_ridge_values is not None and energy_targets is not None else None,
         "energy_baseline_atomic_numbers": [int(value) for value in energy_baseline_atomic_numbers],
         "force_target_key": str(args.force_target_key) if args.force_target_key else None,
         "force_target_num_configs": int(len(graphs)) if force_targets is not None else 0,
