@@ -1,0 +1,26 @@
+{
+  "checks": {
+    "candidate_names": true,
+    "contains_l2": true,
+    "contains_t3_edge": true,
+    "dataset": true,
+    "fixed_head": true,
+    "label_keys": true,
+    "nested_paths": true,
+    "no_forbidden_sbatch_tokens": true,
+    "not_head_only": true,
+    "physical_followups": true,
+    "production_entrypoint": true,
+    "required_metrics": true,
+    "rmse_primary": true,
+    "schema_version": true,
+    "splits": true,
+    "stage": true,
+    "stage182_dihedral_priority": true,
+    "wrapper_names": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "no_forbidden_sbatch_tokens": true,
+  "schema_version": "rtece_stage183_3bpa_representation_ladder_audit.v1"
+}

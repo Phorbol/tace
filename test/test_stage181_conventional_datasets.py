@@ -340,3 +340,98 @@ def test_stage182_summary_marks_missing_results_and_orders_by_force_rmse(tmp_pat
     assert any(row["status"] == "missing" and row["row_name"] == "deepmd_dpa1_zero_train300k" for row in summary["rows"])
     assert "rmse_f_mev_a" in summary["markdown"]
     assert "missing" in summary["markdown"]
+
+
+def test_stage183_3bpa_representation_ladder_manifest_is_doc_grounded_and_nested(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage183_3bpa_representation_ladder import (
+        BENCHMARK_SPLITS,
+        audit_stage183_manifest,
+        make_stage183_manifest,
+        materialize_stage183,
+    )
+
+    payload = make_stage183_manifest(output_root=tmp_path / "stage183", dataset_root=tmp_path / "dataset_3BPA")
+    result = materialize_stage183(payload)
+    audit = audit_stage183_manifest(payload)
+
+    assert result["audit"]["contract_pass"]
+    assert audit["contract_pass"], audit["failed_checks"]
+    assert payload["stage"] == "stage183_3bpa_representation_ladder"
+    assert payload["dataset"]["name"] == "3BPA"
+    assert payload["dataset"]["benchmark_splits"] == BENCHMARK_SPLITS
+    assert payload["stage182_analysis"]["primary_failure_mode"] == "dihedral_pes_gap"
+    assert payload["stage182_analysis"]["priority_axes"] == ["l2_atomic_quadrupole", "t3_cavity_edge_relational"]
+    assert "TECE_design_space.md" in "\n".join(payload["theory_alignment"])
+    assert "rTECE_review.md" in "\n".join(payload["theory_alignment"])
+
+    rows = payload["rows"]
+    assert [row["name"] for row in rows] == [
+        "stage183_l0_local_species",
+        "stage183_l1_cross",
+        "stage183_l2_atomic_quadrupole",
+        "stage183_t3_cavity_vecq",
+    ]
+    previous_paths: set[str] = set()
+    for row in rows:
+        current_paths = set(row["student_config"]["scalar_path_ids"])
+        assert previous_paths <= current_paths
+        previous_paths = current_paths
+        assert row["student_config"]["hidden_channels"] == "64,64"
+        assert row["capacity_allocation"] != "widen_final_head_only"
+    assert "atomic.quadrupole_norm" in rows[2]["student_config"]["scalar_path_ids"]
+    assert "atomic.quadrupole_cross_radial_frobenius" in rows[2]["student_config"]["scalar_path_ids"]
+    assert "edge.cavity.vector_dot" in rows[3]["student_config"]["scalar_path_ids"]
+    assert "edge.cavity.quadrupole_frobenius" in rows[3]["student_config"]["scalar_path_ids"]
+
+
+def test_stage183_3bpa_wrappers_are_sai_safe_and_use_production_label_keys(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage183_3bpa_representation_ladder import (
+        BENCHMARK_SPLITS,
+        FORBIDDEN_SBATCH_TOKENS,
+        make_stage183_manifest,
+        materialize_stage183,
+    )
+
+    payload = make_stage183_manifest(output_root=tmp_path / "stage183", dataset_root=tmp_path / "dataset_3BPA")
+    result = materialize_stage183(payload)
+    wrapper_text = "\n".join(
+        Path(path).read_text(encoding="utf-8")
+        for group in ["wrappers", "benchmark_wrappers"]
+        for path in result[group].values()
+    )
+
+    for forbidden in FORBIDDEN_SBATCH_TOKENS:
+        assert forbidden not in wrapper_text
+    assert "tace.scripts.rtece_train_scalar" in wrapper_text
+    assert "benchmark_rtece_scalar.py" in wrapper_text
+    assert "--energy-key energy" in wrapper_text
+    assert "--forces-key forces" in wrapper_text
+    assert "--moment-l-max 2" in wrapper_text
+    assert "--atomic-cross-radial-projection learnable" in wrapper_text
+    assert "--scalar-path-ids atomic.radial_density,atomic.species_basis_density,atomic.local_l0_lowrank_density,atomic.vector_norm,atomic.vector_cross_radial_dot,atomic.quadrupole_norm,atomic.quadrupole_cross_radial_frobenius,edge.cavity.vector_dot,edge.cavity.quadrupole_frobenius" in wrapper_text
+    for split in BENCHMARK_SPLITS:
+        assert f"{split}.xyz" in wrapper_text
+
+
+def test_stage183_analysis_prioritizes_l2_and_edge_from_stage182_dih_gap(tmp_path):
+    import json
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage183_3bpa_representation_ladder import analyze_stage182_for_stage183
+
+    summary_path = tmp_path / "stage182_summary.json"
+    summary_path.write_text(json.dumps({
+        "rows": [
+            {"row_name": "nep4_train300k", "engine": "nep", "split": "test_300K", "status": "completed", "rmse_f_mev_a": 100.0, "rmse_e_mev_atom": 2.0},
+            {"row_name": "rtece_l1_local_l0_train300k", "engine": "rtece", "split": "test_300K", "status": "completed", "rmse_f_mev_a": 120.0, "rmse_e_mev_atom": 3.0},
+            {"row_name": "nep4_train300k", "engine": "nep", "split": "test_dih", "status": "completed", "rmse_f_mev_a": 100.0, "rmse_e_mev_atom": 2.0},
+            {"row_name": "rtece_l1_local_l0_train300k", "engine": "rtece", "split": "test_dih", "status": "completed", "rmse_f_mev_a": 220.0, "rmse_e_mev_atom": 14.0},
+        ],
+    }), encoding="utf-8")
+
+    analysis = analyze_stage182_for_stage183(summary_path)
+
+    assert analysis["primary_failure_mode"] == "dihedral_pes_gap"
+    assert analysis["force_rmse_ratios"]["test_dih"] > analysis["force_rmse_ratios"]["test_300K"]
+    assert analysis["energy_rmse_ratios"]["test_dih"] > analysis["energy_rmse_ratios"]["test_300K"]
+    assert analysis["priority_axes"] == ["l2_atomic_quadrupole", "t3_cavity_edge_relational"]
+    assert analysis["next_decision"] == "representation_ladder_before_more_kernel_work"
+

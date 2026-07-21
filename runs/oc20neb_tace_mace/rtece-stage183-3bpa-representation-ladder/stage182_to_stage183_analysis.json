@@ -1,0 +1,24 @@
+{
+  "energy_rmse_ratios": {
+    "test_1200K": 1.071517903663397,
+    "test_300K": 2.3255456828868506,
+    "test_600K": 1.2912367651314411,
+    "test_dih": 6.3542714160276725
+  },
+  "force_rmse_ratios": {
+    "test_1200K": 1.0824152002553344,
+    "test_300K": 1.1236104682081354,
+    "test_600K": 1.140099742442772,
+    "test_dih": 1.828566732949008
+  },
+  "next_decision": "representation_ladder_before_more_kernel_work",
+  "primary_failure_mode": "dihedral_pes_gap",
+  "priority_axes": [
+    "l2_atomic_quadrupole",
+    "t3_cavity_edge_relational"
+  ],
+  "rationale": "Stage182 shows the L1/local-L0 student is roughly NEP-close on ID/temperature force RMSE but much worse on the dihedral PES split; the clean next test is L2 atomic quadrupoles and then cavity edge-relational sketches before kernel work or head widening.",
+  "schema_version": "rtece_stage183_stage182_analysis.v1",
+  "source_summary": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/stage182_summary.json",
+  "status": "completed"
+}
