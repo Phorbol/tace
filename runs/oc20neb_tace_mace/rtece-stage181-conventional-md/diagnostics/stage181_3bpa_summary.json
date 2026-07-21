@@ -1,0 +1,89 @@
+{
+  "benchmark_job": "688878",
+  "benchmark_rows": [
+    {
+      "atoms": 13824,
+      "atoms_per_second": 1648462.6210008617,
+      "benchmark_json": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/diagnostics/stage181_3bpa_train300K/test_300K_benchmark.json",
+      "e_mae_mev_atom": 3.3832893386394964,
+      "e_max_mev_atom": 11.441839294329165,
+      "e_rmse_mev_atom": 4.208790001097433,
+      "f_mae_mev_a": 98.87456864476337,
+      "f_max_mev_a": 1163.9533057113647,
+      "f_rmse_mev_a": 135.76741975582013,
+      "peak_allocated_mb": 618.65966796875,
+      "split": "test_300K"
+    },
+    {
+      "atoms": 13824,
+      "atoms_per_second": 1573111.7306788284,
+      "benchmark_json": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/diagnostics/stage181_3bpa_train300K/test_600K_benchmark.json",
+      "e_mae_mev_atom": 3.486832050199424,
+      "e_max_mev_atom": 16.352626179502327,
+      "e_rmse_mev_atom": 4.501703355863679,
+      "f_mae_mev_a": 150.90888706777457,
+      "f_max_mev_a": 3631.353812233887,
+      "f_rmse_mev_a": 211.2014569146738,
+      "peak_allocated_mb": 620.63330078125,
+      "split": "test_600K"
+    },
+    {
+      "atoms": 13824,
+      "atoms_per_second": 1800502.2703168914,
+      "benchmark_json": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/diagnostics/stage181_3bpa_train300K/test_1200K_benchmark.json",
+      "e_mae_mev_atom": 6.872021093517457,
+      "e_max_mev_atom": 31.39875636932427,
+      "e_rmse_mev_atom": 8.900220768820907,
+      "f_mae_mev_a": 253.32740462859672,
+      "f_max_mev_a": 3290.784103460693,
+      "f_rmse_mev_a": 361.9803465445121,
+      "peak_allocated_mb": 606.08984375,
+      "split": "test_1200K"
+    },
+    {
+      "atoms": 13824,
+      "atoms_per_second": 1774193.199827033,
+      "benchmark_json": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/diagnostics/stage181_3bpa_train300K/test_dih_benchmark.json",
+      "e_mae_mev_atom": 15.223297025644172,
+      "e_max_mev_atom": 28.69800111983312,
+      "e_rmse_mev_atom": 16.150556834462726,
+      "f_mae_mev_a": 134.86785058707375,
+      "f_max_mev_a": 1654.092889013672,
+      "f_rmse_mev_a": 212.4271861841165,
+      "peak_allocated_mb": 618.4130859375,
+      "split": "test_dih"
+    }
+  ],
+  "interpretation": {
+    "energy_generalization": "energy RMSE remains low on ID and temperature OOD but degrades on dihedral PES",
+    "force_generalization": "force RMSE and force max errors degrade strongly under 600K/1200K and dihedral OOD",
+    "next_priority": "compare scratch vs renormalized initialization on this cleaner deployment-split dataset before further architecture tuning",
+    "throughput": "autograd-force throughput is about 1.57M-1.80M atoms/s for 512 x 27-atom batches on one V100"
+  },
+  "schema_version": "rtece_stage181_3bpa_summary.v1",
+  "stage": "stage181_conventional_md",
+  "train_job": "688836",
+  "training": {
+    "atomic_energies": {
+      "1": -723.2941603028981,
+      "6": -723.2941603029013,
+      "7": -120.54902671714973,
+      "8": -60.274513358574715
+    },
+    "best_step": 19936,
+    "best_valid_loss": 0.1804322749376297,
+    "local_l0_chemistry_rank": 4,
+    "scalar_path_ids": [
+      "atomic.radial_density",
+      "atomic.species_basis_density",
+      "atomic.local_l0_lowrank_density",
+      "atomic.vector_norm",
+      "atomic.vector_cross_radial_dot"
+    ],
+    "species_basis_mode": "learnable_embedding",
+    "steps": 20000,
+    "train_configs": 500,
+    "valid_configs": 64,
+    "variant": "stage181_3bpa_l1_local_l0_student"
+  }
+}
