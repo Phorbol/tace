@@ -1,0 +1,20 @@
+{
+  "checks": {
+    "artifacts": true,
+    "baseline_candidate": true,
+    "candidate_ladder": true,
+    "contains_edge_frame_projection": true,
+    "contains_edge_relational": true,
+    "heldout_split": true,
+    "no_case_id_feature": true,
+    "reference_matches_supernet": true,
+    "requires_energy_gain": true,
+    "schema_version": true,
+    "stage": true,
+    "target_semantics": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "no_forbidden_sbatch_flags": true,
+  "schema_version": "rtece_stage171_manifest_audit.v1"
+}

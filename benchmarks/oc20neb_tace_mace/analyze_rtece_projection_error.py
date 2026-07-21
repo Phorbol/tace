@@ -1242,6 +1242,93 @@ def _load_energy_targets(
     )
 
 
+def _resolve_stage165_benchmark_path(stage165_json: Path, benchmark_path: str) -> Path:
+    path = Path(benchmark_path)
+    if path.is_absolute() or path.exists():
+        return path
+    candidate = stage165_json.parent / path
+    if candidate.exists():
+        return candidate
+    return path
+
+
+def _select_stage165_row(payload: dict[str, Any], *, variant: str | None) -> dict[str, Any]:
+    rows = list(payload.get("rows") or [])
+    if not rows:
+        raise ValueError("Stage165 JSON must contain at least one row")
+    if variant:
+        matches = [dict(row) for row in rows if str(row.get("variant")) == str(variant)]
+        if len(matches) != 1:
+            raise ValueError(f"expected exactly one Stage165 row for variant {variant!r}, found {len(matches)}")
+        return matches[0]
+    return min(rows, key=lambda row: float(row.get("raw_e_rmse_mev_atom", float("inf"))))
+
+
+def load_stage165_case_offset_residual_targets(
+    configs: Path,
+    *,
+    stage165_json: Path,
+    group_key: str = "case_id",
+    variant: str | None = None,
+    limit_configs: int,
+) -> tuple[torch.Tensor, torch.Tensor, dict[str, Any]]:
+    """Load Stage165 case-offset residuals as total-meV graph targets.
+
+    The group key is used only to look up the residual label for each structure.
+    It is not returned as a descriptor or model feature.
+    """
+    import ase.io
+    import torch
+
+    stage165_path = Path(stage165_json)
+    stage165_payload = json.loads(stage165_path.read_text(encoding="utf-8"))
+    stage165_row = _select_stage165_row(stage165_payload, variant=variant)
+    benchmark_path = _resolve_stage165_benchmark_path(stage165_path, str(stage165_row["benchmark_path"]))
+    benchmark_payload = json.loads(benchmark_path.read_text(encoding="utf-8"))
+    offsets_eV_per_atom = dict(benchmark_payload.get("group_mean_offsets_eV_per_atom") or {})
+    if not offsets_eV_per_atom:
+        raise ValueError(f"benchmark {benchmark_path} does not contain group_mean_offsets_eV_per_atom")
+
+    atoms_list = ase.io.read(str(configs), index=f":{int(limit_configs)}")
+    if not isinstance(atoms_list, list):
+        atoms_list = [atoms_list]
+    targets_mev_total: list[float] = []
+    atom_counts: list[int] = []
+    groups: list[str] = []
+    missing_groups: list[str] = []
+    for config_idx, atoms in enumerate(atoms_list):
+        if group_key not in atoms.info:
+            raise KeyError(f"configuration {config_idx} missing residual group key {group_key!r}")
+        group = str(atoms.info[group_key])
+        groups.append(group)
+        if group not in offsets_eV_per_atom:
+            missing_groups.append(group)
+            continue
+        count = int(len(atoms))
+        atom_counts.append(count)
+        targets_mev_total.append(float(offsets_eV_per_atom[group]) * 1000.0 * float(count))
+    if missing_groups:
+        unique_missing = sorted(set(missing_groups))
+        raise KeyError(f"Stage165 benchmark lacks offsets for groups: {unique_missing[:8]}")
+    metadata = {
+        "target_source": "stage165_case_offset_residual",
+        "target_units": "meV_total",
+        "offset_units": "meV_per_atom",
+        "stage165_json": str(stage165_json),
+        "stage165_variant": str(stage165_row.get("variant")),
+        "benchmark_path": str(benchmark_path),
+        "group_key": str(group_key),
+        "group_count": int(len(set(groups))),
+        "config_count": int(len(groups)),
+        "uses_case_id_as_feature": False,
+    }
+    return (
+        torch.tensor(targets_mev_total, dtype=torch.float64),
+        torch.tensor(atom_counts, dtype=torch.float64),
+        metadata,
+    )
+
+
 def _read_atoms_forces(atoms: Any, key: str, config_idx: int) -> Any:
     if key in atoms.arrays:
         return atoms.arrays[key]
@@ -1332,6 +1419,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--ridge", type=float, default=1.0e-12)
     parser.add_argument("--sample-weight-json", type=Path, default=None)
     parser.add_argument("--energy-target-key", default=None, help="Optional extxyz energy key for graph-summed label projection ranking.")
+    parser.add_argument("--residual-target-mode", choices=("none", "stage165-case-offset"), default="none")
+    parser.add_argument("--stage165-json", type=Path, default=None)
+    parser.add_argument("--stage165-variant", default="stage157_direct_b32_rel0p25_mixed2048")
+    parser.add_argument("--residual-group-key", default="case_id")
     parser.add_argument("--energy-baseline", choices=("element_counts", "none"), default="element_counts")
     parser.add_argument("--energy-eval-stride", type=int, default=0, help="Use every Nth config as held-out energy projection evaluation; 0 disables split.")
     parser.add_argument("--energy-eval-offset", type=int, default=0)
@@ -1399,7 +1490,30 @@ def main() -> None:
     else:
         sample_weights = None
         weight_source = None
-    if args.energy_target_key:
+    residual_target_metadata = None
+    if args.residual_target_mode != "none":
+        if args.energy_target_key:
+            raise ValueError("--energy-target-key and --residual-target-mode are mutually exclusive")
+        if args.stage165_json is None:
+            raise ValueError("--stage165-json is required for residual target mode")
+        energy_targets, atom_counts, residual_target_metadata = load_stage165_case_offset_residual_targets(
+            args.configs,
+            stage165_json=args.stage165_json,
+            group_key=str(args.residual_group_key),
+            variant=str(args.stage165_variant) if args.stage165_variant else None,
+            limit_configs=int(args.limit_configs),
+        )
+        if args.energy_baseline == "element_counts":
+            energy_baseline_features, energy_baseline_atomic_numbers = graph_element_count_matrix(graphs)
+        else:
+            energy_baseline_features = None
+            energy_baseline_atomic_numbers = []
+        energy_fit_indices, energy_eval_indices = deterministic_eval_split(
+            int(energy_targets.numel()),
+            eval_stride=int(args.energy_eval_stride),
+            eval_offset=int(args.energy_eval_offset),
+        )
+    elif args.energy_target_key:
         energy_targets, atom_counts = _load_energy_targets(
             args.configs,
             energy_key=str(args.energy_target_key),
@@ -1534,6 +1648,8 @@ def main() -> None:
         "sample_weight_source": weight_source,
         "weighted": sample_weights is not None,
         "energy_target_key": str(args.energy_target_key) if args.energy_target_key else None,
+        "residual_target_mode": str(args.residual_target_mode),
+        "residual_target_metadata": residual_target_metadata,
         "energy_target_num_configs": int(energy_targets.numel()) if energy_targets is not None else 0,
         "energy_fit_num_configs": int(energy_fit_indices.numel()) if energy_fit_indices is not None else 0,
         "energy_eval_num_configs": int(energy_eval_indices.numel()) if energy_eval_indices is not None else 0,

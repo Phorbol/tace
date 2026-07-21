@@ -8972,6 +8972,97 @@ def test_stage169_rtece_descriptor_proxy_uses_feature_cache_and_safe_sbatch(tmp_
     assert "--cpus-per-task" not in text
 
 
+def test_projection_analyzer_loads_stage165_case_offset_residual_targets(tmp_path):
+    import json
+
+    import ase.io
+    import torch
+    from ase import Atoms
+
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import (
+        load_stage165_case_offset_residual_targets,
+    )
+
+    configs = tmp_path / "valid.extxyz"
+    atoms_a = Atoms("H2", positions=[[0.0, 0.0, 0.0], [0.75, 0.0, 0.0]])
+    atoms_a.info["case_id"] = "case-a"
+    atoms_b = Atoms("H3", positions=[[0.0, 0.0, 0.0], [0.75, 0.0, 0.0], [1.50, 0.0, 0.0]])
+    atoms_b.info["case_id"] = "case-b"
+    ase.io.write(configs, [atoms_a, atoms_b], format="extxyz")
+
+    benchmark = tmp_path / "bench.json"
+    benchmark.write_text(json.dumps({
+        "variant": "chosen",
+        "group_mean_offsets_eV_per_atom": {"case-a": 0.001, "case-b": -0.002},
+    }))
+    stage165 = tmp_path / "stage165.json"
+    stage165.write_text(json.dumps({
+        "rows": [
+            {"variant": "other", "benchmark_path": "missing.json", "raw_e_rmse_mev_atom": 99.0},
+            {"variant": "chosen", "benchmark_path": str(benchmark), "raw_e_rmse_mev_atom": 1.0},
+        ]
+    }))
+
+    targets, counts, metadata = load_stage165_case_offset_residual_targets(
+        configs,
+        stage165_json=stage165,
+        group_key="case_id",
+        variant="chosen",
+        limit_configs=2,
+    )
+
+    assert torch.allclose(targets, torch.tensor([2.0, -6.0], dtype=torch.float64))
+    assert torch.allclose(counts, torch.tensor([2.0, 3.0], dtype=torch.float64))
+    assert metadata["target_units"] == "meV_total"
+    assert metadata["offset_units"] == "meV_per_atom"
+    assert metadata["uses_case_id_as_feature"] is False
+
+
+def test_stage171_residual_active_set_manifest_is_tece_aligned_and_sbatch_safe(tmp_path):
+    from pathlib import Path
+
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage171_residual_active_set import (
+        audit_stage171_manifest,
+        make_stage171_manifest,
+        materialize_stage171,
+    )
+
+    manifest = make_stage171_manifest(
+        output_root=tmp_path / "stage171",
+        stage165_json="stage165.json",
+        configs="valid.extxyz",
+        limit_configs=64,
+        energy_eval_stride=4,
+    )
+    audit = audit_stage171_manifest(manifest)
+
+    assert audit["contract_pass"] is True
+    assert manifest["schema_version"] == "rtece_stage171_residual_active_set.v1"
+    assert manifest["target_semantics"] == "stage165_case_offset_residual_mev_atom"
+    assert manifest["uses_case_id_as_feature"] is False
+    assert manifest["non_deployable_feature_policy"] == "case_id_group_id_image_id_are_grouping_or_split_metadata_only"
+    assert any("edge.cavity.vector_dot" in candidate["path_ids"] for candidate in manifest["candidates"])
+    assert any(
+        path_id.startswith("edge.cavity.") and "projection" in path_id
+        for candidate in manifest["candidates"]
+        for path_id in candidate["path_ids"]
+    )
+    assert manifest["active_set"]["baseline_candidate"] == "t1_l0_species_radial"
+    assert "Stage170" in "\n".join(manifest["review_basis"])
+
+    materialized = materialize_stage171(manifest)
+    wrapper = Path(materialized["artifacts"]["wrapper"])
+    text = wrapper.read_text()
+    assert "set -eo pipefail" in text
+    assert "--residual-target-mode stage165-case-offset" in text
+    assert "--active-set-baseline-candidate t1_l0_species_radial" in text
+    assert "--active-set-require-energy-gain" in text
+    assert "--export" not in text
+    assert "--mem" not in text
+    assert "--cpus-per-task" not in text
+    assert "set -u" not in text
+
+
 def test_stage145_summary_keeps_rmse_first_and_missing_outputs_explicit(tmp_path):
     import json
 

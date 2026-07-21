@@ -1,0 +1,236 @@
+{
+  "active_set": {
+    "baseline_candidate": "t1_l0_species_radial",
+    "energy_weight": 1.0,
+    "force_weight": 0.0,
+    "gain_mode": "absolute",
+    "projection_weight": 0.25,
+    "require_energy_gain": true
+  },
+  "artifacts": {
+    "manifest": "runs/oc20neb_tace_mace/rtece-stage171-residual-active-set/stage171_manifest.json",
+    "manifest_audit": "runs/oc20neb_tace_mace/rtece-stage171-residual-active-set/stage171_manifest_audit.json",
+    "projection_json": "runs/oc20neb_tace_mace/rtece-stage171-residual-active-set/projection_outputs/stage171_limit512_residual_active_set_projection.json",
+    "stage_plan": "runs/oc20neb_tace_mace/rtece-stage171-residual-active-set/stage171_plan.md",
+    "wrapper": "runs/oc20neb_tace_mace/rtece-stage171-residual-active-set/stage171_residual_active_set.sbatch"
+  },
+  "atomic_cross_radial_sketch_channels": 3,
+  "candidates": [
+    {
+      "cost_proxy": {
+        "atomic_paths": 2,
+        "edge_frame_projection_paths": 0,
+        "edge_paths": 0,
+        "moment_l_max": 0,
+        "scalar_paths": 2
+      },
+      "marginal_paths": [
+        "atomic.radial_density",
+        "atomic.species_basis_density"
+      ],
+      "name": "t1_l0_species_radial",
+      "path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density"
+      ],
+      "rationale": "Lowest deployable scalar baseline: radial density plus low-rank species density, no angular or edge state.",
+      "tece_tier": "T1_scalar_endpoint"
+    },
+    {
+      "cost_proxy": {
+        "atomic_paths": 4,
+        "edge_frame_projection_paths": 0,
+        "edge_paths": 0,
+        "moment_l_max": 1,
+        "scalar_paths": 4
+      },
+      "marginal_paths": [
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot"
+      ],
+      "name": "t1_l1_atomic_cross",
+      "path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot"
+      ],
+      "rationale": "Add L=1 atomic moment contractions before quadrupole or edge-relational cost.",
+      "tece_tier": "T1_atomic_scalar_moments"
+    },
+    {
+      "cost_proxy": {
+        "atomic_paths": 6,
+        "edge_frame_projection_paths": 0,
+        "edge_paths": 0,
+        "moment_l_max": 2,
+        "scalar_paths": 6
+      },
+      "marginal_paths": [
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius"
+      ],
+      "name": "t1_l2_atomic_cross",
+      "path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius"
+      ],
+      "rationale": "Current L=2 atomic scalarized endpoint with no explicit source-target edge relation.",
+      "tece_tier": "T1_atomic_scalar_moments"
+    },
+    {
+      "cost_proxy": {
+        "atomic_paths": 6,
+        "edge_frame_projection_paths": 0,
+        "edge_paths": 1,
+        "moment_l_max": 2,
+        "scalar_paths": 7
+      },
+      "marginal_paths": [
+        "edge.cavity.vector_dot"
+      ],
+      "name": "t2_cavity_vector",
+      "path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius",
+        "edge.cavity.vector_dot"
+      ],
+      "rationale": "First rTECE edge-relational scalar sketch: cavity vector dot product.",
+      "tece_tier": "T2_rtece_edge_relational"
+    },
+    {
+      "cost_proxy": {
+        "atomic_paths": 6,
+        "edge_frame_projection_paths": 0,
+        "edge_paths": 2,
+        "moment_l_max": 2,
+        "scalar_paths": 8
+      },
+      "marginal_paths": [
+        "edge.cavity.quadrupole_frobenius"
+      ],
+      "name": "t2_cavity_quadrupole",
+      "path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius",
+        "edge.cavity.vector_dot",
+        "edge.cavity.quadrupole_frobenius"
+      ],
+      "rationale": "Add the lowest L=2 cavity relation identified by the TECE/rTECE review.",
+      "tece_tier": "T2_rtece_edge_relational"
+    },
+    {
+      "cost_proxy": {
+        "atomic_paths": 6,
+        "edge_frame_projection_paths": 4,
+        "edge_paths": 6,
+        "moment_l_max": 2,
+        "scalar_paths": 12
+      },
+      "marginal_paths": [
+        "edge.cavity.target_vector_projection",
+        "edge.cavity.source_vector_projection",
+        "edge.cavity.target_quadrupole_projection",
+        "edge.cavity.source_quadrupole_projection"
+      ],
+      "name": "t2_edge_frame_projection",
+      "path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius",
+        "edge.cavity.vector_dot",
+        "edge.cavity.quadrupole_frobenius",
+        "edge.cavity.target_vector_projection",
+        "edge.cavity.source_vector_projection",
+        "edge.cavity.target_quadrupole_projection",
+        "edge.cavity.source_quadrupole_projection"
+      ],
+      "rationale": "Add edge-frame m_total=0 projections d.u and uQu for source-target local geometry.",
+      "tece_tier": "T2_rtece_edge_frame_projection"
+    },
+    {
+      "cost_proxy": {
+        "atomic_paths": 6,
+        "edge_frame_projection_paths": 4,
+        "edge_paths": 7,
+        "moment_l_max": 2,
+        "scalar_paths": 13
+      },
+      "marginal_paths": [
+        "edge.direct.radial"
+      ],
+      "name": "t2_edge_frame_plus_direct",
+      "path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius",
+        "edge.cavity.vector_dot",
+        "edge.cavity.quadrupole_frobenius",
+        "edge.cavity.target_vector_projection",
+        "edge.cavity.source_vector_projection",
+        "edge.cavity.target_quadrupole_projection",
+        "edge.cavity.source_quadrupole_projection",
+        "edge.direct.radial"
+      ],
+      "rationale": "Residual projection supernet: edge-frame relational sketches plus direct radial edge channel.",
+      "tece_tier": "T2_rtece_residual_supernet"
+    }
+  ],
+  "comparison_question": "Can a deployable TECE/rTECE scalar path subset explain the Stage165/170 case-offset residual that dominates absolute energy RMSE, without adding non-deployable case-id offsets or widening only the final head?",
+  "configs": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "diagnostic_semantics": "deployable_rtece_semantic_path_projection_against_stage170_low_frequency_energy_residual",
+  "energy_eval_offset": 0,
+  "energy_eval_stride": 4,
+  "group_key": "case_id",
+  "limit_configs": 512,
+  "non_deployable_feature_policy": "case_id_group_id_image_id_are_grouping_or_split_metadata_only",
+  "num_radial": 12,
+  "reference_path_ids": [
+    "atomic.radial_density",
+    "atomic.species_basis_density",
+    "atomic.vector_norm",
+    "atomic.vector_cross_radial_dot",
+    "atomic.quadrupole_norm",
+    "atomic.quadrupole_cross_radial_frobenius",
+    "edge.cavity.vector_dot",
+    "edge.cavity.quadrupole_frobenius",
+    "edge.cavity.target_vector_projection",
+    "edge.cavity.source_vector_projection",
+    "edge.cavity.target_quadrupole_projection",
+    "edge.cavity.source_quadrupole_projection",
+    "edge.direct.radial"
+  ],
+  "review_basis": [
+    "Stage170: current absolute E RMSE is dominated by case/site/adsorbate low-frequency offsets, not a simple E0 toggle.",
+    "TECE_design_space.md stage B: projection/importance and active-set search should choose the low-cost subspace before full distillation.",
+    "TECE_design_space.md T2: the most valuable rTECE tier is sparse atomic scalar contractions plus 8-32 edge-relational m_total=0 sketches.",
+    "rTECE_review.md: do not add case-id features; use explicit semantic scalar paths, teacher/cache/downfolding, and deployable route manifests."
+  ],
+  "ridge": 1e-08,
+  "schema_version": "rtece_stage171_residual_active_set.v1",
+  "species_basis_channels": 24,
+  "species_basis_mode": "learnable_embedding",
+  "stage": "stage171_residual_active_set",
+  "stage165_json": "runs/oc20neb_tace_mace/rtece-stage165-energy-baseline-triage/stage165_energy_baseline_triage.json",
+  "stage165_variant": "stage157_direct_b32_rel0p25_mixed2048",
+  "target_semantics": "stage165_case_offset_residual_mev_atom",
+  "uses_case_id_as_feature": false
+}
