@@ -56,12 +56,218 @@
   "interpretation": {
     "dft_benchmark_claim": "renorm initialization improves DFT E RMSE, F RMSE, F max, relative-image RMSE, and barrier RMSE at essentially unchanged throughput/memory for the matched Stage180 validation benchmark",
     "not_yet_proven": "E/F benchmark, max errors, relative-energy, dimer, rattle-relax, throughput, and memory Pareto still need matched diagnostics before a scientific win claim",
+    "physical_diagnostics_claim": "renorm-init improves matched DFT/teacher E-F RMSE and max-force tail, relative-image and barrier errors, and dimer short-range repulsion at unchanged scaling; rattle final RMSD improves but force tail worsens sharply, so physical closure remains incomplete.",
     "training_loss_claim": "renorm initialization improves matched validation loss versus scratch for the fixed Stage180 student"
   },
   "jobs": {
     "initializer": "689028",
     "renorm_dft_benchmark": "689120",
+    "renorm_physical_scaling": "689145",
     "renorm_train": "689033"
+  },
+  "matched_physical_diagnostics": {
+    "renorm_initialized_same_student": {
+      "dft": {
+        "atoms_per_second": 1228316.3684768393,
+        "barrier_rmse_mev_atom": 12.313644910004939,
+        "mae_e_mev_atom": 45.68424339914875,
+        "mae_f_mev_a": 43.26022493535937,
+        "max_abs_e_mev_atom": 166.06379029474456,
+        "max_abs_f_mev_a": 1638.53456955719,
+        "peak_allocated_mb": 742.22265625,
+        "peak_reserved_mb": 868.0,
+        "relative_image_rmse_mev_atom": 8.65720348365237,
+        "rmse_e_mev_atom": 65.75519805804868,
+        "rmse_f_mev_a": 100.82697638292868
+      },
+      "physical_row": {
+        "atoms_per_second": 1228316.3684768393,
+        "benchmark_gate_pass": true,
+        "dft_e_rmse_mev_atom": 65.75519805804868,
+        "dft_f_max_abs_mev_a": 1638.53456955719,
+        "dft_f_rmse_mev_a": 100.82697638292868,
+        "dimer_gate_pass": true,
+        "dimer_max_abs_short_force_ev_a": 206.9810791015625,
+        "dimer_min_short_energy_lift_eV": 20.156270503997803,
+        "num_parameters": 21079,
+        "physical_gate_pass": false,
+        "physical_score": 13.081707028760189,
+        "rattle_converged_fraction": 0.0,
+        "rattle_gate_pass": false,
+        "rattle_max_fmax_ev_a": 10.833064641255298,
+        "rattle_mean_final_rmsd_a": 0.12397769981682646,
+        "teacher_e_rmse_mev_atom": 57.993249337276396,
+        "teacher_f_max_abs_mev_a": 1566.622763510742,
+        "teacher_f_rmse_mev_a": 97.09756153332133
+      },
+      "rattle_summary": {
+        "converged_fraction": 0.0,
+        "max_final_rmsd_a": 0.1634597503324708,
+        "max_fmax_ev_a": 10.833064641255298,
+        "mean_final_rmsd_a": 0.12397769981682646,
+        "mean_initial_rmsd_a": 0.08539850967268522,
+        "mean_max_fmax_ev_a": 3.9882243280097436,
+        "num_configs": 16
+      },
+      "scaling": [
+        {
+          "atoms": 1600,
+          "atoms_per_second": 301008.46108287515,
+          "configs": 32,
+          "file": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/diagnostics/renorm_initialized_same_student/renorm_initialized_same_student_scaling_limit32.json",
+          "peak_allocated_mb": 126.70166015625,
+          "peak_reserved_mb": 176.0,
+          "seconds_per_pass": 0.005315465200692415
+        },
+        {
+          "atoms": 5298,
+          "atoms_per_second": 875655.3256005859,
+          "configs": 128,
+          "file": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/diagnostics/renorm_initialized_same_student/renorm_initialized_same_student_scaling_limit128.json",
+          "peak_allocated_mb": 297.73974609375,
+          "peak_reserved_mb": 346.0,
+          "seconds_per_pass": 0.006050325790420174
+        },
+        {
+          "atoms": 31831,
+          "atoms_per_second": 1525371.6760129402,
+          "configs": 512,
+          "file": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/diagnostics/renorm_initialized_same_student/renorm_initialized_same_student_scaling_limit512.json",
+          "peak_allocated_mb": 1803.9228515625,
+          "peak_reserved_mb": 2134.0,
+          "seconds_per_pass": 0.02086770096793771
+        },
+        {
+          "atoms": 59193,
+          "atoms_per_second": 1686206.7985756092,
+          "configs": 1024,
+          "file": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/diagnostics/renorm_initialized_same_student/renorm_initialized_same_student_scaling_limit1024.json",
+          "peak_allocated_mb": 3168.87353515625,
+          "peak_reserved_mb": 3752.0,
+          "seconds_per_pass": 0.03510423516854644
+        }
+      ],
+      "teacher": {
+        "atoms_per_second": 1252127.762225597,
+        "barrier_rmse_mev_atom": 10.655237376269005,
+        "mae_e_mev_atom": 37.20237123649576,
+        "mae_f_mev_a": 42.77342546405525,
+        "max_abs_e_mev_atom": 148.69264157670503,
+        "max_abs_f_mev_a": 1566.622763510742,
+        "peak_allocated_mb": 742.22265625,
+        "peak_reserved_mb": 868.0,
+        "relative_image_rmse_mev_atom": 8.121269948275739,
+        "rmse_e_mev_atom": 57.993249337276396,
+        "rmse_f_mev_a": 97.09756153332133
+      }
+    },
+    "scratch_same_student": {
+      "dft": {
+        "atoms_per_second": 1223288.1378776089,
+        "barrier_rmse_mev_atom": 31.954356649892507,
+        "mae_e_mev_atom": 124.04552552390649,
+        "mae_f_mev_a": 33.08362322163917,
+        "max_abs_e_mev_atom": 322.6929480835703,
+        "max_abs_f_mev_a": 4530.538136734772,
+        "peak_allocated_mb": 742.22265625,
+        "peak_reserved_mb": 868.0,
+        "relative_image_rmse_mev_atom": 17.054650318003837,
+        "rmse_e_mev_atom": 150.24141784076397,
+        "rmse_f_mev_a": 121.9823390250464
+      },
+      "physical_row": {
+        "atoms_per_second": 1223288.1378776089,
+        "benchmark_gate_pass": false,
+        "dft_e_rmse_mev_atom": 150.24141784076397,
+        "dft_f_max_abs_mev_a": 4530.538136734772,
+        "dft_f_rmse_mev_a": 121.9823390250464,
+        "dimer_gate_pass": true,
+        "dimer_max_abs_short_force_ev_a": 0.08699671179056168,
+        "dimer_min_short_energy_lift_eV": -0.0156707763671875,
+        "num_parameters": 21079,
+        "physical_gate_pass": false,
+        "physical_score": 5.052983858145616,
+        "rattle_converged_fraction": 0.375,
+        "rattle_gate_pass": true,
+        "rattle_max_fmax_ev_a": 0.2139717366302354,
+        "rattle_mean_final_rmsd_a": 0.3053617067369602,
+        "teacher_e_rmse_mev_atom": 139.61433784084593,
+        "teacher_f_max_abs_mev_a": 4501.704029284191,
+        "teacher_f_rmse_mev_a": 120.28783342816935
+      },
+      "rattle_summary": {
+        "converged_fraction": 0.375,
+        "max_final_rmsd_a": 0.6645480784212955,
+        "max_fmax_ev_a": 0.2139717366302354,
+        "mean_final_rmsd_a": 0.3053617067369602,
+        "mean_initial_rmsd_a": 0.08539850967268522,
+        "mean_max_fmax_ev_a": 0.10624636512552822,
+        "num_configs": 16
+      },
+      "scaling": [
+        {
+          "atoms": 1600,
+          "atoms_per_second": 327128.9470059828,
+          "configs": 32,
+          "file": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/diagnostics/scratch_same_student/scratch_same_student_scaling_limit32.json",
+          "peak_allocated_mb": 126.70166015625,
+          "peak_reserved_mb": 176.0,
+          "seconds_per_pass": 0.004891037661582232
+        },
+        {
+          "atoms": 5298,
+          "atoms_per_second": 888157.3687324522,
+          "configs": 128,
+          "file": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/diagnostics/scratch_same_student/scratch_same_student_scaling_limit128.json",
+          "peak_allocated_mb": 297.73974609375,
+          "peak_reserved_mb": 346.0,
+          "seconds_per_pass": 0.005965159088373184
+        },
+        {
+          "atoms": 31831,
+          "atoms_per_second": 1524481.3863407052,
+          "configs": 512,
+          "file": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/diagnostics/scratch_same_student/scratch_same_student_scaling_limit512.json",
+          "peak_allocated_mb": 1803.9228515625,
+          "peak_reserved_mb": 2134.0,
+          "seconds_per_pass": 0.020879887603223325
+        },
+        {
+          "atoms": 59193,
+          "atoms_per_second": 1682683.0305036763,
+          "configs": 1024,
+          "file": "runs/oc20neb_tace_mace/rtece-stage180-minimal-renormalization-proof/diagnostics/scratch_same_student/scratch_same_student_scaling_limit1024.json",
+          "peak_allocated_mb": 3168.87353515625,
+          "peak_reserved_mb": 3752.0,
+          "seconds_per_pass": 0.03517774823121726
+        }
+      ],
+      "teacher": {
+        "atoms_per_second": 1258338.9566177893,
+        "barrier_rmse_mev_atom": 30.670980490630612,
+        "mae_e_mev_atom": 114.93623445814433,
+        "mae_f_mev_a": 35.30843876868572,
+        "max_abs_e_mev_atom": 305.32179936553075,
+        "max_abs_f_mev_a": 4501.704029284191,
+        "peak_allocated_mb": 742.22265625,
+        "peak_reserved_mb": 868.0,
+        "relative_image_rmse_mev_atom": 16.90045340031811,
+        "rmse_e_mev_atom": 139.61433784084593,
+        "rmse_f_mev_a": 120.28783342816935
+      }
+    }
+  },
+  "matched_physical_ratios_renorm_over_scratch": {
+    "atoms_per_second_limit1024": 1.0020941365712104,
+    "barrier_rmse": 0.3853510507164713,
+    "dft_max_f": 0.3616644469387707,
+    "dft_rmse_e": 0.43766358839704567,
+    "dft_rmse_f": 0.8265702821309736,
+    "rattle_max_fmax": 50.628483985134544,
+    "rattle_mean_final_rmsd": 0.4060027733720435,
+    "relative_image_rmse": 0.5076154199721905,
+    "teacher_rmse_e": 0.41538175974007835,
+    "teacher_rmse_f": 0.8072101622089964
   },
   "renorm_initialized": {
     "best_step": 19776,
