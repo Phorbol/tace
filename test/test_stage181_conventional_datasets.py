@@ -472,3 +472,99 @@ def test_stage183_summary_ranks_rows_by_force_rmse_and_includes_train_loss(tmp_p
     assert "train_best_valid_loss" in summary["markdown"]
     assert "stage183_l2_atomic_quadrupole" in summary["markdown"]
 
+
+def test_stage184_3bpa_physical_manifest_tracks_continuous_rattle_and_l2_priority(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage184_3bpa_physical_validation import (
+        audit_stage184_manifest,
+        make_stage184_manifest,
+        materialize_stage184,
+    )
+
+    payload = make_stage184_manifest(output_root=tmp_path / "stage184", dataset_root=tmp_path / "dataset_3BPA")
+    result = materialize_stage184(payload)
+    audit = audit_stage184_manifest(payload)
+
+    assert result["audit"]["contract_pass"]
+    assert audit["contract_pass"], audit["failed_checks"]
+    assert payload["stage"] == "stage184_3bpa_physical_validation"
+    assert payload["stage183_decision"]["current_pareto_candidate"] == "stage183_l2_atomic_quadrupole"
+    assert payload["physical_contract"]["rattle_policy"] == "continuous_rmsd_not_binary_gate"
+    assert payload["physical_contract"]["dimer_distance_scales"] == {"min": 0.5, "max": 5.0}
+    assert payload["physical_contract"]["rattle_configs"] == "test_300K.xyz"
+    assert {row["name"] for row in payload["rows"]} == {
+        "stage183_l0_local_species",
+        "stage183_l1_cross",
+        "stage183_l2_atomic_quadrupole",
+        "stage183_t3_cavity_vecq",
+        "nep4_train300k",
+    }
+    assert any(row["engine"] == "nep" for row in payload["rows"])
+    assert "TECE_design_space.md" in "\n".join(payload["theory_alignment"])
+    assert "rTECE_review.md" in "\n".join(payload["theory_alignment"])
+
+
+def test_stage184_3bpa_physical_wrappers_are_sai_safe_and_reuse_existing_tools(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage184_3bpa_physical_validation import (
+        FORBIDDEN_SBATCH_TOKENS,
+        make_stage184_manifest,
+        materialize_stage184,
+    )
+
+    payload = make_stage184_manifest(output_root=tmp_path / "stage184", dataset_root=tmp_path / "dataset_3BPA")
+    result = materialize_stage184(payload)
+    wrapper_text = "\n".join(Path(path).read_text(encoding="utf-8") for path in result["wrappers"].values())
+
+    for forbidden in FORBIDDEN_SBATCH_TOKENS:
+        assert forbidden not in wrapper_text
+    assert "dimer_scan_rtece.py" in wrapper_text
+    assert "rattle_relax_rtece.py" in wrapper_text
+    assert "physical_stage145_community.py" in wrapper_text
+    assert "summarize_rtece_stage184" not in wrapper_text
+    assert "--min-scale 0.5" in wrapper_text
+    assert "--max-scale 5.0" in wrapper_text
+    assert "--configs" in wrapper_text
+    assert "test_300K.xyz" in wrapper_text
+    assert "--rattle-std 0.05" in wrapper_text
+    assert "module load gpumd" in wrapper_text
+
+
+def test_stage184_summary_reads_rtece_and_nep_physical_outputs_as_continuous_metrics(tmp_path):
+    import json
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage184_3bpa_physical_validation import (
+        make_stage184_manifest,
+        summarize_stage184_results,
+    )
+
+    payload = make_stage184_manifest(output_root=tmp_path / "stage184", dataset_root=tmp_path / "dataset_3BPA")
+    rows = {row["name"]: row for row in payload["rows"]}
+    rtece = rows["stage183_l2_atomic_quadrupole"]
+    Path(rtece["dimer_json"]).parent.mkdir(parents=True, exist_ok=True)
+    Path(rtece["dimer_json"]).write_text(json.dumps({
+        "pair_summaries": [
+            {"pair": "C-N", "summary": {"has_nonfinite": False, "short_force_repulsive": True, "short_minus_long_energy_eV": 1.0}},
+            {"pair": "C-O", "summary": {"has_nonfinite": False, "short_force_repulsive": True, "short_minus_long_energy_eV": 0.8}},
+        ]
+    }), encoding="utf-8")
+    Path(rtece["rattle_json"]).write_text(json.dumps({
+        "summary": {"num_configs": 2, "converged_fraction": 0.5, "mean_final_rmsd_a": 0.12, "max_final_rmsd_a": 0.2, "max_fmax_ev_a": 0.6, "focus_groups": []}
+    }), encoding="utf-8")
+    nep = rows["nep4_train300k"]
+    Path(nep["community_physical_json"]).parent.mkdir(parents=True, exist_ok=True)
+    Path(nep["community_physical_json"]).write_text(json.dumps({
+        "status": "completed",
+        "dimer_scan": {"pair_summaries": [{"pair": "C-N", "summary": {"has_nonfinite": False, "short_force_repulsive": False}}]},
+        "rattle_relax": {"summary": {"num_configs": 1, "converged_fraction": 1.0, "mean_final_rmsd_a": 0.05, "max_final_rmsd_a": 0.05, "max_fmax_ev_a": 0.1, "focus_groups": []}},
+    }), encoding="utf-8")
+
+    summary = summarize_stage184_results(payload)
+
+    assert summary["schema_version"] == "rtece_stage184_physical_validation_summary.v1"
+    l2_row = next(row for row in summary["rows"] if row["row_name"] == "stage183_l2_atomic_quadrupole")
+    nep_row = next(row for row in summary["rows"] if row["row_name"] == "nep4_train300k")
+    assert l2_row["status"] == "completed"
+    assert l2_row["dimer_short_repulsive_fraction"] == 1.0
+    assert l2_row["rattle_mean_final_rmsd_a"] == 0.12
+    assert nep_row["dimer_short_repulsive_fraction"] == 0.0
+    assert summary["rattle_policy"] == "continuous_rmsd_not_binary_gate"
+    assert "rattle_mean_final_rmsd_a" in summary["markdown"]
+

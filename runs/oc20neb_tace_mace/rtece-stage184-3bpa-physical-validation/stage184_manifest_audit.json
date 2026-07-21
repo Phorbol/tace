@@ -1,0 +1,19 @@
+{
+  "checks": {
+    "continuous_rattle": true,
+    "dimer_scale": true,
+    "has_nep": true,
+    "has_rtece": true,
+    "l2_priority": true,
+    "no_forbidden_sbatch_tokens": true,
+    "reuses_existing_tools": true,
+    "row_set": true,
+    "schema_version": true,
+    "stage": true,
+    "wrapper_names": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "no_forbidden_sbatch_tokens": true,
+  "schema_version": "rtece_stage184_3bpa_physical_validation_audit.v1"
+}
