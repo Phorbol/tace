@@ -99,6 +99,10 @@ def make_stage180_manifest(
             "atomic_cross_radial_projection": "learnable",
             "short_range_repulsion_potential": "none",
         },
+        "projection_config": {
+            "force_component_sample_count": 64,
+            "force_eval_stride": 4,
+        },
         "training_config": {
             "entrypoint": "tace.scripts.rtece_train_scalar",
             "trainer_backend": "lightning",
@@ -291,6 +295,9 @@ def write_projection_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
     wrapper = Path(path)
     body = _wrapper_header(payload, job_name="rtece-st180-proj", time_limit="01:00:00")
     out = Path(payload["artifacts"]["diagnostics_root"]) / "stage180_projection_diagnostic.json"
+    projection = payload.get("projection_config", {})
+    force_component_sample_count = int(projection.get("force_component_sample_count", 64))
+    force_eval_stride = int(projection.get("force_eval_stride", 4))
     body.extend(
         [
             f"mkdir -p {shlex.quote(str(out.parent))}",
@@ -306,7 +313,7 @@ def write_projection_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
                 "--limit-configs \"${PROJECTION_LIMIT_CONFIGS}\" --default-dtype float64 --neighborlist-backend matscipy "
                 "--energy-target-key energy --energy-baseline element_counts --energy-fit-intercept --energy-standardize-features "
                 "--energy-ridge-grid 1e-12,1e-10,1e-8,1e-6 --energy-split-mode group-loocv --energy-group-key case_id "
-                "--force-target-key forces --force-component-sample-count 6000 --force-eval-stride 4"
+                f"--force-target-key forces --force-component-sample-count {force_component_sample_count} --force-eval-stride {force_eval_stride}"
             ),
             "",
         ]

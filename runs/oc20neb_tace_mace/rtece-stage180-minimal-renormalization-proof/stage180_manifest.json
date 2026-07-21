@@ -69,6 +69,10 @@
     "atoms/s scaling",
     "peak allocated/reserved memory"
   ],
+  "projection_config": {
+    "force_component_sample_count": 64,
+    "force_eval_stride": 4
+  },
   "projection_limit_configs": 256,
   "reference_teacher_proxy_path_ids": [
     "atomic.radial_density",

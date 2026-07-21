@@ -2099,6 +2099,44 @@ def test_rtece_projection_config_accepts_local_l0_chemistry_rank():
     assert descriptor_dim(config) == 10 + 160 + 40
 
 
+def test_rtece_projection_descriptor_matrices_accept_trainable_local_front():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import (
+        _descriptor_matrices,
+        _force_descriptor_matrix,
+        build_projection_config,
+    )
+
+    config = build_projection_config(
+        "local_l0_projection_context",
+        (
+            "atomic.radial_density",
+            "atomic.species_basis_density",
+            "atomic.local_l0_lowrank_density",
+        ),
+        cutoff=2.0,
+        num_radial=4,
+        species_basis_channels=3,
+        species_basis_mode="learnable_embedding",
+        local_l0_chemistry_rank=2,
+    )
+    graph = RTECEGraph(
+        z=torch.tensor([6, 8, 1], dtype=torch.long),
+        pos=torch.tensor(
+            [[0.0, 0.0, 0.0], [0.7, 0.1, 0.0], [-0.2, 0.6, 0.1]],
+            dtype=torch.float64,
+        ),
+        edge_index=complete_directed_edges(3),
+        batch=torch.zeros(3, dtype=torch.long),
+    )
+
+    atom_descriptors, graph_descriptors = _descriptor_matrices([graph], config)
+    force_descriptors = _force_descriptor_matrix([graph], config, force_row_indices=torch.tensor([0, 3]))
+
+    assert atom_descriptors.shape == (3, descriptor_dim(config))
+    assert graph_descriptors.shape == (1, descriptor_dim(config))
+    assert force_descriptors.shape == (2, descriptor_dim(config))
+
+
 def test_rtece_projection_cli_help_does_not_import_torch_or_tace():
     root = __import__("pathlib").Path(__file__).resolve().parents[1]
     script = "import importlib.abc\nimport sys\nblocked_roots = ('torch', 'tace')\nclass HeavyImportProbe(importlib.abc.MetaPathFinder):\n    def find_spec(self, fullname, path=None, target=None):\n        if fullname in blocked_roots or any(fullname.startswith(root + '.') for root in blocked_roots):\n            raise ImportError(f'blocked heavy import {fullname}')\n        return None\nsys.meta_path.insert(0, HeavyImportProbe())\nfrom benchmarks.oc20neb_tace_mace import analyze_rtece_projection_error as mod\nsys.argv = ['analyze_rtece_projection_error.py', '--help']\ntry:\n    mod.main()\nexcept SystemExit as exc:\n    raise SystemExit(exc.code)"

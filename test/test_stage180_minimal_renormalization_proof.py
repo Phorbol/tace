@@ -96,3 +96,5 @@ def test_stage180_projection_wrapper_passes_local_l0_projection_args(tmp_path):
 
     assert "--species-basis-mode learnable_embedding" in text
     assert "--local-l0-chemistry-rank 4" in text
+    assert "--force-component-sample-count 64" in text
+    assert "--force-component-sample-count 6000" not in text

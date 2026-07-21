@@ -648,6 +648,8 @@ def _force_descriptor_matrix(
         else _normalize_row_indices(force_row_indices, total_force_rows, "force_row_indices")
     )
 
+    context = _descriptor_context(config, device=graphs[0].pos.device, dtype=graphs[0].pos.dtype)
+
     def descriptor_sum(graph: RTECEGraph, pos: torch.Tensor) -> torch.Tensor:
         graph_with_pos = RTECEGraph(
             z=graph.z,
@@ -658,7 +660,7 @@ def _force_descriptor_matrix(
             edge_shifts=graph.edge_shifts,
             edge_batch=graph.edge_batch,
         )
-        return rtece_descriptors(graph_with_pos, config).sum(dim=0)
+        return rtece_descriptors(graph_with_pos, config, **context).sum(dim=0)
 
     if selected_rows is None:
         matrices = []
@@ -801,13 +803,30 @@ def _force_component_weights_from_atom_weights(
     return weights.repeat_interleave(3)
 
 
+def _descriptor_context(config: RTECEScalarConfig, *, device: torch.device, dtype: torch.dtype) -> dict[str, Any]:
+    from tace.models.rtece_scalar import RTECEScalarModel
+
+    model = RTECEScalarModel(config).to(device=device, dtype=dtype)
+    model.eval()
+    for parameter in model.parameters():
+        parameter.requires_grad_(False)
+    return {
+        "radial_mixing": model.radial_mixing,
+        "atomic_cross_radial_projection": model._atomic_cross_radial_projection_weight(),
+        "species_basis_embedding": model._species_basis_embedding_weight(),
+        "radial_species_adapter": model.radial_species_adapter,
+        "local_l0_chemistry_front": model.local_l0_chemistry_front,
+    }
+
+
 def _descriptor_matrices(graphs: list[RTECEGraph], config: RTECEScalarConfig) -> tuple[torch.Tensor, torch.Tensor]:
     import torch
     from tace.models.rtece_scalar import rtece_descriptors
 
     if not graphs:
         raise ValueError("projection diagnostic requires at least one graph")
-    per_graph = [rtece_descriptors(graph, config).detach().cpu() for graph in graphs]
+    context = _descriptor_context(config, device=graphs[0].pos.device, dtype=graphs[0].pos.dtype)
+    per_graph = [rtece_descriptors(graph, config, **context).detach().cpu() for graph in graphs]
     return torch.cat(per_graph, dim=0), torch.stack([values.sum(dim=0) for values in per_graph], dim=0)
 
 
