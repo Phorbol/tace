@@ -1,0 +1,75 @@
+{
+  "artifacts": {
+    "manifest": "runs/oc20neb_tace_mace/rtece-stage174-lowfreq-feature-probe/stage174_manifest.json",
+    "manifest_audit": "runs/oc20neb_tace_mace/rtece-stage174-lowfreq-feature-probe/stage174_manifest_audit.json",
+    "results_json": "runs/oc20neb_tace_mace/rtece-stage174-lowfreq-feature-probe/stage174_results_summary.json",
+    "results_md": "runs/oc20neb_tace_mace/rtece-stage174-lowfreq-feature-probe/stage174_results_summary.md",
+    "stage_plan": "runs/oc20neb_tace_mace/rtece-stage174-lowfreq-feature-probe/stage174_plan.md",
+    "wrapper": "runs/oc20neb_tace_mace/rtece-stage174-lowfreq-feature-probe/stage174_lowfreq_feature_probe.sbatch"
+  },
+  "comparison_question": "After Stage173 showed current rTECE path descriptors do not beat an intercept-only unseen-case offset baseline, can deployable low-frequency chemistry/site/front summaries provide a group-heldout coordinate worth promoting into the next trainable rTECE front module?",
+  "configs": "/home/gengjianrui/workdir_sjtu-caoxiaoming/gengjianrui/Phorbol-mace-dpa4-training-accel/runs/oc20neb_fullcase200_fps_extxyz/valid.extxyz",
+  "diagnostic_semantics": "deployable_low_frequency_chemistry_site_front_probe_after_stage173_rejection",
+  "energy_split_mode": "group-loocv",
+  "feature_families": [
+    {
+      "forbidden_feature_names": [],
+      "name": "composition_fraction",
+      "requires_tags": false,
+      "tece_semantics": "low_frequency_species_composition_scalar"
+    },
+    {
+      "forbidden_feature_names": [],
+      "name": "tag_composition",
+      "requires_tags": true,
+      "tece_semantics": "tag_conditioned_adsorbate_slab_species_scalar"
+    },
+    {
+      "forbidden_feature_names": [],
+      "name": "geometry_z_profile",
+      "requires_tags": false,
+      "tece_semantics": "coarse_cell_and_surface_normal_geometry_scalar"
+    },
+    {
+      "forbidden_feature_names": [],
+      "name": "composition_tag_geometry",
+      "requires_tags": true,
+      "tece_semantics": "tag_conditioned_low_frequency_site_front_scalar"
+    },
+    {
+      "forbidden_feature_names": [],
+      "name": "pair_histogram",
+      "requires_tags": false,
+      "tece_semantics": "coarse_local_pair_radial_histogram_scalar"
+    }
+  ],
+  "group_key": "case_id",
+  "limit_configs": 512,
+  "non_deployable_feature_policy": "case_id_source_key_source_frame_group_id_image_id_are_grouping_or_provenance_metadata_only",
+  "projection_diagnostics": {
+    "fit_intercept": true,
+    "intercept_baseline": "group_loocv_train_mean_per_atom_residual_times_eval_atom_count",
+    "promotion_gate": "candidate_energy_per_atom_rmse_must_beat_intercept_baseline",
+    "ridge_grid": [
+      1e-08,
+      1e-06,
+      0.0001,
+      0.01,
+      1.0,
+      100.0
+    ],
+    "standardize_features": true
+  },
+  "review_basis": [
+    "Stage170: raw absolute E RMSE is dominated by low-frequency case/site/adsorbate offsets.",
+    "Stage173: robust current rTECE semantic path descriptors do not beat the intercept-only group-heldout baseline.",
+    "rTECE_review.md: low-rank species chemistry and per-element references are required, while case/source metadata must not become deployable features.",
+    "TECE_design_space.md: model degradation should retain high-value low-cost scalar coordinates selected by heldout physical/error benefit."
+  ],
+  "schema_version": "rtece_stage174_lowfreq_feature_probe.v1",
+  "stage": "stage174_lowfreq_feature_probe",
+  "stage165_json": "runs/oc20neb_tace_mace/rtece-stage165-energy-baseline-triage/stage165_energy_baseline_triage.json",
+  "stage165_variant": "stage157_direct_b32_rel0p25_mixed2048",
+  "target_semantics": "stage165_case_offset_residual_mev_atom",
+  "uses_case_id_as_feature": false
+}

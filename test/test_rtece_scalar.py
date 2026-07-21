@@ -11054,3 +11054,128 @@ def test_stage148_energy_decomposition_preserves_along_path_shape_error():
     assert metrics["relative_image_rmse_mev_atom"] == pytest.approx((10000.0 / 3) ** 0.5)
     assert metrics["barrier_rmse_mev_atom"] == pytest.approx(0.0)
 
+
+def test_stage174_lowfreq_feature_builder_uses_tags_without_case_metadata():
+    from ase import Atoms
+
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_lowfreq_features import lowfreq_feature_row_from_atoms
+
+    atoms = Atoms(
+        "CNOGa",
+        positions=[
+            [0.0, 0.0, 0.0],
+            [0.8, 0.0, 0.2],
+            [1.6, 0.0, 0.4],
+            [0.0, 1.0, 2.0],
+        ],
+        cell=[6.0, 6.0, 8.0],
+        pbc=True,
+    )
+    atoms.set_tags([2, 2, 1, 0])
+    atoms.info["case_id"] = "non_deployable_case"
+    atoms.info["source_key"] = "non_deployable_source"
+    atoms.info["source_frame"] = 17
+
+    row, metadata = lowfreq_feature_row_from_atoms(atoms, include_tags=True, include_geometry=True)
+
+    assert row["frac_z6"] == pytest.approx(0.25)
+    assert row["tag2_count_z6"] == pytest.approx(1.0)
+    assert row["tag2_count_z7"] == pytest.approx(1.0)
+    assert row["tag2_frac_atoms"] == pytest.approx(0.5)
+    assert "pos_z_span" in row
+    assert metadata["requires_tags"] is True
+    assert set(metadata["rejected_metadata_keys"]) == {"case_id", "source_key", "source_frame"}
+    assert not any("case_id" in name or "source_key" in name or "source_frame" in name for name in row)
+
+
+def test_stage174_lowfreq_probe_can_beat_intercept_on_tag_composition_fixture():
+    from ase import Atoms
+
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_lowfreq_features import (
+        evaluate_lowfreq_feature_family,
+        lowfreq_feature_matrix,
+    )
+
+    atoms_list = []
+    targets = []
+    atom_counts = []
+    group_labels = []
+    tag2_counts = [0, 1, 2, 3]
+    for group_idx, tag2_count in enumerate(tag2_counts):
+        for copy_idx in range(2):
+            atoms = Atoms(
+                "CCCC",
+                positions=[
+                    [0.0, 0.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0],
+                    [0.0, 0.0, 1.0],
+                ],
+                cell=[5.0, 5.0, 5.0],
+                pbc=True,
+            )
+            atoms.set_tags([2 if idx < tag2_count else 0 for idx in range(4)])
+            atoms.info["case_id"] = f"group_{group_idx}"
+            atoms.info["source_key"] = f"forbidden_{copy_idx}"
+            atoms_list.append(atoms)
+            group_labels.append(f"group_{group_idx}")
+            atom_counts.append(float(len(atoms)))
+            targets.append(float(tag2_count) * 100.0 * float(len(atoms)))
+
+    features, feature_names, feature_metadata = lowfreq_feature_matrix(atoms_list, feature_family="tag_composition")
+    metrics = evaluate_lowfreq_feature_family(
+        features,
+        torch.tensor(targets, dtype=torch.float64),
+        atom_counts=torch.tensor(atom_counts, dtype=torch.float64),
+        group_labels=group_labels,
+        group_key="case_id",
+        feature_family="tag_composition",
+        feature_names=feature_names,
+        feature_metadata=feature_metadata,
+    )
+
+    assert feature_metadata["requires_tags"] is True
+    assert "tag2_frac_atoms" in feature_names
+    assert metrics["energy_beats_intercept_baseline"] is True
+    assert metrics["energy_per_atom_rmse"] < metrics["energy_intercept_baseline_per_atom_rmse"]
+
+
+def test_stage174_lowfreq_feature_probe_manifest_is_tece_aligned_and_sbatch_safe(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage174_lowfreq_feature_probe import (
+        audit_stage174_manifest,
+        make_stage174_manifest,
+        materialize_stage174,
+    )
+
+    manifest = make_stage174_manifest(
+        output_root=tmp_path / "stage174",
+        configs="/tmp/fake_valid.extxyz",
+        stage165_json="/tmp/stage165.json",
+        limit_configs=32,
+    )
+    audit = audit_stage174_manifest(manifest)
+
+    assert audit["contract_pass"] is True
+    assert manifest["schema_version"] == "rtece_stage174_lowfreq_feature_probe.v1"
+    assert manifest["stage"] == "stage174_lowfreq_feature_probe"
+    assert manifest["target_semantics"] == "stage165_case_offset_residual_mev_atom"
+    assert manifest["energy_split_mode"] == "group-loocv"
+    assert manifest["uses_case_id_as_feature"] is False
+    assert "Stage173" in "\n".join(manifest["review_basis"])
+    assert manifest["projection_diagnostics"]["fit_intercept"] is True
+    assert manifest["projection_diagnostics"]["standardize_features"] is True
+    assert manifest["projection_diagnostics"]["ridge_grid"] == [1.0e-8, 1.0e-6, 1.0e-4, 1.0e-2, 1.0, 100.0]
+    families = {family["name"]: family for family in manifest["feature_families"]}
+    assert families["composition_fraction"]["requires_tags"] is False
+    assert families["tag_composition"]["requires_tags"] is True
+    assert all("case_id" not in feature for family in families.values() for feature in family.get("forbidden_feature_names", []))
+
+    materialized = materialize_stage174(manifest)
+    wrapper = (tmp_path / "stage174" / "stage174_lowfreq_feature_probe.sbatch").read_text(encoding="utf-8")
+    assert materialized["stage"] == "stage174_lowfreq_feature_probe"
+    assert "--export" not in wrapper
+    assert "--mem" not in wrapper
+    assert "--cpus-per-task" not in wrapper
+    assert "set -u" not in wrapper
+    assert "--energy-ridge-grid 1e-08,1e-06,0.0001,0.01,1,100" in wrapper
+
