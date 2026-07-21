@@ -1,0 +1,285 @@
+{
+  "baseline_stage157_rel0p25": {
+    "best_step": 16896,
+    "best_valid_loss": 0.0759364441037178,
+    "dft": {
+      "atoms_per_second": 500402.22630368394,
+      "barrier_rmse_mev_atom": 11.402551116757193,
+      "bias_e_mev_atom": 9.87211271659197,
+      "configs_per_second": 8656.629664571357,
+      "energy_per_atom_shift": 0.0,
+      "first_image_anchor_rmse_mev_atom": 11.461093614164332,
+      "global_offset_rmse_mev_atom": 51.60240569808541,
+      "group_mean_offset_rmse_mev_atom": 4.76899892317605,
+      "mae_e_mev_atom": 35.442889350217385,
+      "mae_f_mev_a": 41.82262941676011,
+      "max_abs_e_mev_atom": 204.98604174742866,
+      "max_abs_f_mev_a": 2092.9614936904904,
+      "num_groups": 22,
+      "num_images": 1024,
+      "relative_image_rmse_mev_atom": 7.10409388625699,
+      "rmse_e_mev_atom": 52.53824210343257,
+      "rmse_f_mev_a": 94.15889889773099,
+      "short_range_repulsion_potential": "zbl"
+    },
+    "job": {
+      "elapsed": "00:19:31",
+      "exit_code": "0:0",
+      "job_id": "687504",
+      "max_rss_batch": "1591180K",
+      "state": "COMPLETED"
+    },
+    "num_parameters": 54886,
+    "relative_energy_weight": 0.25,
+    "relative_metadata_enabled": true,
+    "teacher": {
+      "atoms_per_second": 500560.9974158243,
+      "barrier_rmse_mev_atom": 9.068448739512421,
+      "bias_e_mev_atom": 5.8960382588701385,
+      "group_mean_offset_rmse_mev_atom": 4.086479802378792,
+      "mae_e_mev_atom": 19.935222336301077,
+      "mae_f_mev_a": 42.103313628941834,
+      "max_abs_e_mev_atom": 111.07587210739715,
+      "max_abs_f_mev_a": 1851.6878481555177,
+      "relative_image_rmse_mev_atom": 6.169871192889433,
+      "rmse_e_mev_atom": 28.339892913297454,
+      "rmse_f_mev_a": 90.45331021316072
+    },
+    "variant": "stage157_direct_b32_rel0p25_mixed2048"
+  },
+  "created": "2026-07-21",
+  "interpretation": {
+    "best_stage158_dft_e_max_mev_atom": 186.75623124999984,
+    "best_stage158_dft_e_max_variant": "stage158_cavity_uv_uquproj_b32_rel0p25_mixed2048",
+    "best_stage158_dft_e_rmse_mev_atom": 55.09752881355391,
+    "best_stage158_dft_e_rmse_variant": "stage158_cavity_uquproj_b32_rel0p25_mixed2048",
+    "best_stage158_dft_f_rmse_mev_a": 98.61199606254944,
+    "best_stage158_dft_f_rmse_variant": "stage158_cavity_uvproj_b32_rel0p25_mixed2048",
+    "promoted": false,
+    "reason_not_promoted": "No Stage158 edge-frame projection row improves the Stage157 rel0.25 Pareto point on DFT E RMSE or F RMSE; E max improves for uQu/combined but with worse E/F RMSE, worse relative/barrier metrics, and lower throughput for uQu/combined."
+  },
+  "rows": [
+    {
+      "best_step": 15296,
+      "best_valid_loss": 0.0765710398554802,
+      "dft": {
+        "atoms_per_second": 331262.94765915006,
+        "barrier_rmse_mev_atom": 13.348278228493184,
+        "bias_e_mev_atom": 12.426701875686032,
+        "configs_per_second": 5730.63129766982,
+        "first_image_anchor_rmse_mev_atom": 13.157044401961233,
+        "global_offset_rmse_mev_atom": 53.677879632612395,
+        "group_mean_offset_rmse_mev_atom": 5.587906291788023,
+        "mae_e_mev_atom": 35.705394073475766,
+        "mae_f_mev_a": 46.276732960984326,
+        "max_abs_e_mev_atom": 191.41228655557737,
+        "max_abs_f_mev_a": 2130.152765472412,
+        "num_groups": 22,
+        "num_images": 1024,
+        "relative_image_rmse_mev_atom": 8.354317547696395,
+        "rmse_e_mev_atom": 55.09752881355391,
+        "rmse_f_mev_a": 99.12312934309041
+      },
+      "dft_vs_stage157_rel0p25": {
+        "atoms_per_second_ratio": 0.6619933530393873,
+        "barrier_delta_mev_atom": 1.9457271117359909,
+        "mae_e_delta_mev_atom": 0.26250472325838103,
+        "mae_f_delta_mev_a": 4.454103544224218,
+        "max_abs_e_delta_mev_atom": -13.57375519185129,
+        "max_abs_f_delta_mev_a": 37.19127178192139,
+        "relative_image_delta_mev_atom": 1.2502236614394047,
+        "rmse_e_delta_mev_atom": 2.5592867101213344,
+        "rmse_f_delta_mev_a": 4.964230445359419
+      },
+      "increment": [
+        "edge.cavity.target_quadrupole_projection",
+        "edge.cavity.source_quadrupole_projection"
+      ],
+      "job": {
+        "elapsed": "00:22:12",
+        "exit_code": "0:0",
+        "job_id": "687541",
+        "max_rss_batch": "1529700K",
+        "state": "COMPLETED"
+      },
+      "num_parameters": 55144,
+      "relative_energy_weight": 0.25,
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius",
+        "edge.cavity.vector_dot",
+        "edge.direct.radial",
+        "edge.cavity.target_quadrupole_projection",
+        "edge.cavity.source_quadrupole_projection"
+      ],
+      "teacher": {
+        "atoms_per_second": 331358.58328461496,
+        "barrier_rmse_mev_atom": 10.840268257863249,
+        "bias_e_mev_atom": 8.450661170727338,
+        "group_mean_offset_rmse_mev_atom": 4.910170736132454,
+        "mae_e_mev_atom": 22.30712481549736,
+        "mae_f_mev_a": 46.157612291313825,
+        "max_abs_e_mev_atom": 97.50327581091773,
+        "max_abs_f_mev_a": 2164.201260050659,
+        "relative_image_rmse_mev_atom": 7.346783219301823,
+        "rmse_e_mev_atom": 32.33580611834733,
+        "rmse_f_mev_a": 95.75212965537112
+      },
+      "variant": "stage158_cavity_uquproj_b32_rel0p25_mixed2048"
+    },
+    {
+      "best_step": 19136,
+      "best_valid_loss": 0.08685117214918137,
+      "dft": {
+        "atoms_per_second": 328408.75837376784,
+        "barrier_rmse_mev_atom": 12.825876516696956,
+        "bias_e_mev_atom": 18.782736744060742,
+        "configs_per_second": 5681.255698726847,
+        "first_image_anchor_rmse_mev_atom": 12.051251348764279,
+        "global_offset_rmse_mev_atom": 57.24952730111641,
+        "group_mean_offset_rmse_mev_atom": 5.401415590430817,
+        "mae_e_mev_atom": 45.61743165659477,
+        "mae_f_mev_a": 47.78661176336266,
+        "max_abs_e_mev_atom": 186.75623124999984,
+        "max_abs_f_mev_a": 2620.8825507659913,
+        "num_groups": 22,
+        "num_images": 1024,
+        "relative_image_rmse_mev_atom": 7.354318145423073,
+        "rmse_e_mev_atom": 60.25196740188625,
+        "rmse_f_mev_a": 102.02417653961923
+      },
+      "dft_vs_stage157_rel0p25": {
+        "atoms_per_second_ratio": 0.6562895628974744,
+        "barrier_delta_mev_atom": 1.4233253999397633,
+        "mae_e_delta_mev_atom": 10.174542306377383,
+        "mae_f_delta_mev_a": 5.963982346602549,
+        "max_abs_e_delta_mev_atom": -18.229810497428815,
+        "max_abs_f_delta_mev_a": 527.9210570755008,
+        "relative_image_delta_mev_atom": 0.2502242591660826,
+        "rmse_e_delta_mev_atom": 7.713725298453674,
+        "rmse_f_delta_mev_a": 7.865277641888241
+      },
+      "increment": [
+        "edge.cavity.target_vector_projection",
+        "edge.cavity.source_vector_projection",
+        "edge.cavity.target_quadrupole_projection",
+        "edge.cavity.source_quadrupole_projection"
+      ],
+      "job": {
+        "elapsed": "00:22:00",
+        "exit_code": "0:0",
+        "job_id": "687542",
+        "max_rss_batch": "1683364K",
+        "state": "COMPLETED"
+      },
+      "num_parameters": 55402,
+      "relative_energy_weight": 0.25,
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius",
+        "edge.cavity.vector_dot",
+        "edge.direct.radial",
+        "edge.cavity.target_vector_projection",
+        "edge.cavity.source_vector_projection",
+        "edge.cavity.target_quadrupole_projection",
+        "edge.cavity.source_quadrupole_projection"
+      ],
+      "teacher": {
+        "atoms_per_second": 328556.81708924554,
+        "barrier_rmse_mev_atom": 10.428656136691798,
+        "bias_e_mev_atom": 14.806660819242317,
+        "group_mean_offset_rmse_mev_atom": 4.811678808307912,
+        "mae_e_mev_atom": 29.868654104182454,
+        "mae_f_mev_a": 47.489900874358305,
+        "max_abs_e_mev_atom": 104.15140787760417,
+        "max_abs_f_mev_a": 2465.7667828588865,
+        "relative_image_rmse_mev_atom": 6.349776181188741,
+        "rmse_e_mev_atom": 37.809920698824556,
+        "rmse_f_mev_a": 98.03810102607858
+      },
+      "variant": "stage158_cavity_uv_uquproj_b32_rel0p25_mixed2048"
+    },
+    {
+      "best_step": 17344,
+      "best_valid_loss": 0.08486802875995636,
+      "dft": {
+        "atoms_per_second": 494683.09796116926,
+        "barrier_rmse_mev_atom": 12.902415249828044,
+        "bias_e_mev_atom": 14.4498038675933,
+        "configs_per_second": 8557.692502698585,
+        "first_image_anchor_rmse_mev_atom": 13.233930695747196,
+        "global_offset_rmse_mev_atom": 67.87903705703683,
+        "group_mean_offset_rmse_mev_atom": 5.341219394549277,
+        "mae_e_mev_atom": 47.17317014098192,
+        "mae_f_mev_a": 45.72210275365668,
+        "max_abs_e_mev_atom": 210.05118711926409,
+        "max_abs_f_mev_a": 2154.207711397705,
+        "num_groups": 22,
+        "num_images": 1024,
+        "relative_image_rmse_mev_atom": 7.647413964162069,
+        "rmse_e_mev_atom": 69.40000362825994,
+        "rmse_f_mev_a": 98.61199606254944
+      },
+      "dft_vs_stage157_rel0p25": {
+        "atoms_per_second_ratio": 0.9885709374541354,
+        "barrier_delta_mev_atom": 1.4998641330708509,
+        "mae_e_delta_mev_atom": 11.730280790764532,
+        "mae_f_delta_mev_a": 3.8994733368965697,
+        "max_abs_e_delta_mev_atom": 5.065145371835428,
+        "max_abs_f_delta_mev_a": 61.24621770721478,
+        "relative_image_delta_mev_atom": 0.5433200779050784,
+        "rmse_e_delta_mev_atom": 16.861761524827365,
+        "rmse_f_delta_mev_a": 4.453097164818445
+      },
+      "increment": [
+        "edge.cavity.target_vector_projection",
+        "edge.cavity.source_vector_projection"
+      ],
+      "job": {
+        "elapsed": "00:19:57",
+        "exit_code": "0:0",
+        "job_id": "687540",
+        "max_rss_batch": "1732552K",
+        "state": "COMPLETED"
+      },
+      "num_parameters": 55144,
+      "relative_energy_weight": 0.25,
+      "scalar_path_ids": [
+        "atomic.radial_density",
+        "atomic.species_basis_density",
+        "atomic.vector_norm",
+        "atomic.vector_cross_radial_dot",
+        "atomic.quadrupole_norm",
+        "atomic.quadrupole_cross_radial_frobenius",
+        "edge.cavity.vector_dot",
+        "edge.direct.radial",
+        "edge.cavity.target_vector_projection",
+        "edge.cavity.source_vector_projection"
+      ],
+      "teacher": {
+        "atoms_per_second": 494270.31447485765,
+        "barrier_rmse_mev_atom": 10.457298192781652,
+        "bias_e_mev_atom": 10.473758948686982,
+        "group_mean_offset_rmse_mev_atom": 4.69938608404619,
+        "mae_e_mev_atom": 32.40982625759588,
+        "mae_f_mev_a": 46.04975555299363,
+        "max_abs_e_mev_atom": 138.29641631155303,
+        "max_abs_f_mev_a": 2196.3356737698364,
+        "relative_image_rmse_mev_atom": 6.696355542954448,
+        "rmse_e_mev_atom": 46.87908099379853,
+        "rmse_f_mev_a": 95.41153059328273
+      },
+      "variant": "stage158_cavity_uvproj_b32_rel0p25_mixed2048"
+    }
+  ],
+  "schema_version": "rtece_stage158_cavity_frame_projections.v1",
+  "source": "runs/oc20neb_tace_mace/rtece-stage158-cavity-frame-projections"
+}
