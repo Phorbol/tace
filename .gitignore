@@ -35,6 +35,7 @@ checkpoints/
 build/
 __pycache__/
 tmp/
+*_nep_prediction_pass*/
 xzm/
 draw/
 3bpa/
