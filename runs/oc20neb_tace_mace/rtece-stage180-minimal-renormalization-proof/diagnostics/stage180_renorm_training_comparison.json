@@ -1,4 +1,38 @@
 {
+  "dft_benchmark": {
+    "renorm_initialized": {
+      "atoms_per_second": 1228316.3684768393,
+      "barrier_rmse_mev_atom": 12.313644910004939,
+      "mae_e_mev_atom": 45.68424339914875,
+      "mae_f_mev_a": 43.26022493535937,
+      "max_abs_e_mev_atom": 166.06379029474456,
+      "max_abs_f_mev_a": 1638.53456955719,
+      "peak_allocated_mb": 742.22265625,
+      "peak_reserved_mb": 868.0,
+      "relative_image_rmse_mev_atom": 8.65720348365237,
+      "rmse_e_mev_atom": 65.75519805804868,
+      "rmse_f_mev_a": 100.82697638292868
+    },
+    "scratch": {
+      "atoms_per_second": 1223288.1378776089,
+      "barrier_rmse_mev_atom": 31.954356649892507,
+      "mae_e_mev_atom": 124.04552552390649,
+      "mae_f_mev_a": 33.08362322163917,
+      "max_abs_e_mev_atom": 322.6929480835703,
+      "max_abs_f_mev_a": 4530.538136734772,
+      "peak_allocated_mb": 742.22265625,
+      "peak_reserved_mb": 868.0,
+      "relative_image_rmse_mev_atom": 17.054650318003837,
+      "rmse_e_mev_atom": 150.24141784076397,
+      "rmse_f_mev_a": 121.9823390250464
+    }
+  },
+  "dft_metric_ratios_renorm_over_scratch": {
+    "atoms_per_second": 1.0041104221021502,
+    "max_abs_f": 0.3616644469387707,
+    "rmse_e": 0.43766358839704567,
+    "rmse_f": 0.8265702821309736
+  },
   "initializer": {
     "final_loss": 1.4466845989227295,
     "init_limit_configs": 2048,
@@ -20,11 +54,13 @@
     }
   },
   "interpretation": {
+    "dft_benchmark_claim": "renorm initialization improves DFT E RMSE, F RMSE, F max, relative-image RMSE, and barrier RMSE at essentially unchanged throughput/memory for the matched Stage180 validation benchmark",
     "not_yet_proven": "E/F benchmark, max errors, relative-energy, dimer, rattle-relax, throughput, and memory Pareto still need matched diagnostics before a scientific win claim",
     "training_loss_claim": "renorm initialization improves matched validation loss versus scratch for the fixed Stage180 student"
   },
   "jobs": {
     "initializer": "689028",
+    "renorm_dft_benchmark": "689120",
     "renorm_train": "689033"
   },
   "renorm_initialized": {
