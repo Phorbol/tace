@@ -8566,6 +8566,62 @@ def test_stage145_summary_preserves_relative_neb_energy_metrics(tmp_path):
 
 
 
+def test_stage162_energy_offset_summary_ranks_case_offsets(tmp_path):
+    import json
+
+    from benchmarks.oc20neb_tace_mace.summarize_rtece_energy_offsets import (
+        render_energy_offset_markdown,
+        summarize_energy_offset_benchmarks,
+    )
+
+    benchmark = tmp_path / "stage157_dft_benchmark.json"
+    benchmark.write_text(
+        json.dumps(
+            {
+                "rmse_e_mev_atom": 50.0,
+                "mae_e_mev_atom": 35.0,
+                "max_abs_e_mev_atom": 205.0,
+                "group_mean_offset_rmse_mev_atom": 5.0,
+                "first_image_anchor_rmse_mev_atom": 11.0,
+                "relative_image_rmse_mev_atom": 7.0,
+                "barrier_rmse_mev_atom": 12.0,
+                "rmse_f_mev_a": 94.0,
+                "mae_f_mev_a": 42.0,
+                "max_abs_f_mev_a": 2090.0,
+                "atoms_per_second": 500000.0,
+                "group_mean_offsets_eV_per_atom": {
+                    "case_a": -0.012,
+                    "case_b": 0.105,
+                    "case_c": -0.050,
+                },
+            }
+        )
+    )
+
+    summary = summarize_energy_offset_benchmarks(
+        [{"name": "stage157_rel0p25", "path": str(benchmark)}],
+        top_k=2,
+    )
+
+    assert summary["schema_version"] == "rtece_energy_offset_summary.v1"
+    row = summary["rows"][0]
+    assert row["raw_e_rmse_mev_atom"] == pytest.approx(50.0)
+    assert row["group_offset_e_rmse_mev_atom"] == pytest.approx(5.0)
+    assert row["raw_rmse_removed_by_group_offset_fraction"] == pytest.approx(0.9)
+    assert row["top_group_offsets_mev_atom"][0] == {
+        "group": "case_b",
+        "offset_mev_atom": pytest.approx(105.0),
+        "abs_offset_mev_atom": pytest.approx(105.0),
+    }
+    assert row["top_group_offsets_mev_atom"][1]["group"] == "case_c"
+
+    markdown = render_energy_offset_markdown(summary)
+    assert "raw E RMSE" in markdown
+    assert "group-offset E RMSE" in markdown
+    assert "case_b:+105.000" in markdown
+    assert "stage157_rel0p25" in markdown
+
+
 def test_stage145_nep_calculator_adds_vacuum_cell_for_nonperiodic_dimer(tmp_path, monkeypatch):
     import numpy as np
     from ase import Atoms

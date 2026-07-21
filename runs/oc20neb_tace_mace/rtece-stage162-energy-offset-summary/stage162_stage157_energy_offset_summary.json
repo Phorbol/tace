@@ -1,0 +1,147 @@
+{
+  "primary_energy_question": "raw_energy_rmse_vs_case_group_offset_and_relative_neb_shape",
+  "rows": [
+    {
+      "atoms": 59193,
+      "atoms_per_second": 500307.88372502645,
+      "barrier_e_rmse_mev_atom": 11.171011379617562,
+      "configs": 1024,
+      "first_anchor_e_rmse_mev_atom": 10.989131642204514,
+      "force_mae_mev_a": 42.68999639325238,
+      "force_max_mev_a": 2095.4591667251584,
+      "force_rmse_mev_a": 95.22415444938636,
+      "global_offset_e_rmse_mev_atom": 55.84886393401886,
+      "group_offset_e_rmse_mev_atom": 4.811258325788081,
+      "name": "rel0",
+      "num_groups": 22,
+      "path": "runs/oc20neb_tace_mace/rtece-stage157-relative-neb-loss/relative_loss_runs/stage157_direct_b32_rel0_mixed2048/stage157_direct_b32_rel0_mixed2048_dft_benchmark.json",
+      "raw_e_mae_mev_atom": 40.886400264364944,
+      "raw_e_max_mev_atom": 219.7828178550236,
+      "raw_e_rmse_mev_atom": 58.06686680072889,
+      "raw_rmse_removed_by_group_offset_fraction": 0.917142794318503,
+      "relative_image_e_rmse_mev_atom": 7.207435849900074,
+      "top_group_offsets_mev_atom": [
+        {
+          "abs_offset_mev_atom": 214.95402132876484,
+          "group": "dissociation_id_212_7241_50_011-0_neb1.0",
+          "offset_mev_atom": 214.95402132876484
+        },
+        {
+          "abs_offset_mev_atom": 117.9264044527215,
+          "group": "dissociation_id_252_5588_26_011-1_neb1.0",
+          "offset_mev_atom": 117.9264044527215
+        },
+        {
+          "abs_offset_mev_atom": 100.502758130252,
+          "group": "dissociation_id_195_6923_47_111-1_neb1.0",
+          "offset_mev_atom": 100.502758130252
+        },
+        {
+          "abs_offset_mev_atom": 93.76965347683398,
+          "group": "dissociation_id_281_2644_33_200-4_neb1.0",
+          "offset_mev_atom": 93.76965347683398
+        },
+        {
+          "abs_offset_mev_atom": 75.75124792127406,
+          "group": "dissociation_id_271_7189_22_211-5_neb1.0",
+          "offset_mev_atom": 75.75124792127406
+        }
+      ]
+    },
+    {
+      "atoms": 59193,
+      "atoms_per_second": 500402.22630368394,
+      "barrier_e_rmse_mev_atom": 11.402551116757193,
+      "configs": 1024,
+      "first_anchor_e_rmse_mev_atom": 11.461093614164332,
+      "force_mae_mev_a": 41.82262941676011,
+      "force_max_mev_a": 2092.9614936904904,
+      "force_rmse_mev_a": 94.15889889773099,
+      "global_offset_e_rmse_mev_atom": 51.60240569808541,
+      "group_offset_e_rmse_mev_atom": 4.76899892317605,
+      "name": "rel0p25",
+      "num_groups": 22,
+      "path": "runs/oc20neb_tace_mace/rtece-stage157-relative-neb-loss/relative_loss_runs/stage157_direct_b32_rel0p25_mixed2048/stage157_direct_b32_rel0p25_mixed2048_dft_benchmark.json",
+      "raw_e_mae_mev_atom": 35.442889350217385,
+      "raw_e_max_mev_atom": 204.98604174742866,
+      "raw_e_rmse_mev_atom": 52.53824210343257,
+      "raw_rmse_removed_by_group_offset_fraction": 0.9092280454723385,
+      "relative_image_e_rmse_mev_atom": 7.10409388625699,
+      "top_group_offsets_mev_atom": [
+        {
+          "abs_offset_mev_atom": 199.68137096868014,
+          "group": "dissociation_id_212_7241_50_011-0_neb1.0",
+          "offset_mev_atom": 199.68137096868014
+        },
+        {
+          "abs_offset_mev_atom": 94.94596757760941,
+          "group": "dissociation_id_252_5588_26_011-1_neb1.0",
+          "offset_mev_atom": 94.94596757760941
+        },
+        {
+          "abs_offset_mev_atom": 89.98858718119997,
+          "group": "dissociation_id_195_6923_47_111-1_neb1.0",
+          "offset_mev_atom": 89.98858718119997
+        },
+        {
+          "abs_offset_mev_atom": 89.66478919914111,
+          "group": "dissociation_id_281_2644_33_200-4_neb1.0",
+          "offset_mev_atom": 89.66478919914111
+        },
+        {
+          "abs_offset_mev_atom": 79.59823119917134,
+          "group": "dissociation_id_236_2395_27_000-0_neb1.0",
+          "offset_mev_atom": -79.59823119917134
+        }
+      ]
+    },
+    {
+      "atoms": 59193,
+      "atoms_per_second": 499832.6217806935,
+      "barrier_e_rmse_mev_atom": 11.138932367186602,
+      "configs": 1024,
+      "first_anchor_e_rmse_mev_atom": 11.319881531701869,
+      "force_mae_mev_a": 42.285383924667,
+      "force_max_mev_a": 2150.410596092224,
+      "force_rmse_mev_a": 95.8977577430389,
+      "global_offset_e_rmse_mev_atom": 52.68635895510231,
+      "group_offset_e_rmse_mev_atom": 4.774365959342814,
+      "name": "rel1p0",
+      "num_groups": 22,
+      "path": "runs/oc20neb_tace_mace/rtece-stage157-relative-neb-loss/relative_loss_runs/stage157_direct_b32_rel1p0_mixed2048/stage157_direct_b32_rel1p0_mixed2048_dft_benchmark.json",
+      "raw_e_mae_mev_atom": 36.15602401319045,
+      "raw_e_max_mev_atom": 201.19645388152676,
+      "raw_e_rmse_mev_atom": 53.22877387776032,
+      "raw_rmse_removed_by_group_offset_fraction": 0.9103047917221027,
+      "relative_image_e_rmse_mev_atom": 7.087202862803054,
+      "top_group_offsets_mev_atom": [
+        {
+          "abs_offset_mev_atom": 195.99435670490504,
+          "group": "dissociation_id_212_7241_50_011-0_neb1.0",
+          "offset_mev_atom": 195.99435670490504
+        },
+        {
+          "abs_offset_mev_atom": 93.49812737485618,
+          "group": "dissociation_id_236_2395_27_000-0_neb1.0",
+          "offset_mev_atom": -93.49812737485618
+        },
+        {
+          "abs_offset_mev_atom": 91.00603878120518,
+          "group": "dissociation_id_252_5588_26_011-1_neb1.0",
+          "offset_mev_atom": 91.00603878120518
+        },
+        {
+          "abs_offset_mev_atom": 86.81223763434879,
+          "group": "dissociation_id_195_6923_47_111-1_neb1.0",
+          "offset_mev_atom": 86.81223763434879
+        },
+        {
+          "abs_offset_mev_atom": 85.81179343365963,
+          "group": "dissociation_id_281_2644_33_200-4_neb1.0",
+          "offset_mev_atom": 85.81179343365963
+        }
+      ]
+    }
+  ],
+  "schema_version": "rtece_energy_offset_summary.v1"
+}
