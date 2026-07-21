@@ -1,7 +1,41 @@
 {
-  "markdown": "# Stage182 3BPA Conventional Closure Summary\n\n| row | engine | split | status | rmse_f_mev_a | rmse_e_mev_atom | max_abs_f_mev_a | atoms_per_second | peak_memory_mb |\n| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |\n| deepmd_dpa1_zero_train300k | deepmd | test_300K | completed | 227.427 | 5.117 | 1494.783 | 5712.055 | 30.000 |\n| deepmd_dpa1_zero_train300k | deepmd | test_600K | completed | 316.658 | 8.662 | 3264.115 | 5741.583 | 30.000 |\n| deepmd_dpa1_zero_train300k | deepmd | test_1200K | completed | 502.222 | 14.253 | 7547.579 | 5712.594 | 30.000 |\n| deepmd_dpa1_zero_train300k | deepmd | test_dih | completed | 165.849 | 5.117 | 664.213 | 5719.393 | 30.000 |\n| nep4_train300k | nep | test_300K | missing |  |  |  |  |  |\n| rtece_l1_local_l0_train300k | rtece | test_300K | missing |  |  |  |  |  |\n| nep4_train300k | nep | test_600K | missing |  |  |  |  |  |\n| rtece_l1_local_l0_train300k | rtece | test_600K | missing |  |  |  |  |  |\n| nep4_train300k | nep | test_1200K | missing |  |  |  |  |  |\n| rtece_l1_local_l0_train300k | rtece | test_1200K | missing |  |  |  |  |  |\n| nep4_train300k | nep | test_dih | missing |  |  |  |  |  |\n| rtece_l1_local_l0_train300k | rtece | test_dih | missing |  |  |  |  |  |\n",
+  "markdown": "# Stage182 3BPA Conventional Closure Summary\n\n| row | engine | split | status | rmse_f_mev_a | rmse_e_mev_atom | max_abs_f_mev_a | atoms_per_second | peak_memory_mb |\n| --- | --- | --- | --- | ---: | ---: | ---: | ---: | ---: |\n| nep4_train300k | nep | test_300K | completed | 120.831 | 1.809 | 936.124 | 53794.849 | 0.000 |\n| rtece_l1_local_l0_train300k | rtece | test_300K | completed | 135.767 | 4.207 | 1163.925 | 1734404.857 | 728.000 |\n| deepmd_dpa1_zero_train300k | deepmd | test_300K | completed | 227.427 | 5.117 | 1494.783 | 5712.055 | 30.000 |\n| nep4_train300k | nep | test_600K | completed | 185.249 | 3.486 | 1838.539 | 55074.209 | 0.000 |\n| rtece_l1_local_l0_train300k | rtece | test_600K | completed | 211.202 | 4.502 | 3631.495 | 1740838.415 | 728.000 |\n| deepmd_dpa1_zero_train300k | deepmd | test_600K | completed | 316.658 | 8.662 | 3264.115 | 5741.583 | 30.000 |\n| nep4_train300k | nep | test_1200K | completed | 334.422 | 8.306 | 5036.708 | 50475.288 | 0.000 |\n| rtece_l1_local_l0_train300k | rtece | test_1200K | completed | 361.983 | 8.901 | 3291.066 | 1765246.122 | 718.000 |\n| deepmd_dpa1_zero_train300k | deepmd | test_1200K | completed | 502.222 | 14.253 | 7547.579 | 5712.594 | 30.000 |\n| nep4_train300k | nep | test_dih | completed | 116.172 | 2.541 | 551.741 | 46814.700 | 0.000 |\n| deepmd_dpa1_zero_train300k | deepmd | test_dih | completed | 165.849 | 5.117 | 664.213 | 5719.393 | 30.000 |\n| rtece_l1_local_l0_train300k | rtece | test_dih | completed | 212.428 | 16.145 | 1653.824 | 1766475.527 | 728.000 |\n",
   "primary_ranking_metric": "rmse_f_mev_a",
   "rows": [
+    {
+      "atoms_per_second": 53794.84888994036,
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/nep4_train300k/test_300K_benchmark.json",
+      "engine": "nep",
+      "mae_e_mev_atom": 1.3885707725657321,
+      "mae_f_mev_a": 88.9376751064863,
+      "max_abs_e_mev_atom": 7.550141453167371,
+      "max_abs_f_mev_a": 936.1236800000001,
+      "peak_allocated_mb": 0.0,
+      "peak_memory_mb": 0.0,
+      "peak_reserved_mb": 0.0,
+      "rmse_e_mev_atom": 1.8088817151544956,
+      "rmse_f_mev_a": 120.83120093446757,
+      "row_name": "nep4_train300k",
+      "split": "test_300K",
+      "status": "completed"
+    },
+    {
+      "atoms_per_second": 1734404.857006225,
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/rtece_l1_local_l0_train300k/test_300K_benchmark.json",
+      "engine": "rtece",
+      "mae_e_mev_atom": 3.3813924988274273,
+      "mae_f_mev_a": 98.87439237452766,
+      "max_abs_e_mev_atom": 11.441839294329165,
+      "max_abs_f_mev_a": 1163.924814691162,
+      "peak_allocated_mb": 618.65966796875,
+      "peak_memory_mb": 728.0,
+      "peak_reserved_mb": 728.0,
+      "rmse_e_mev_atom": 4.206637063530499,
+      "rmse_f_mev_a": 135.76720876394018,
+      "row_name": "rtece_l1_local_l0_train300k",
+      "split": "test_300K",
+      "status": "completed"
+    },
     {
       "atoms_per_second": 5712.054751292898,
       "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/deepmd_dpa1_zero_train300k/test_300K_benchmark.json",
@@ -17,6 +51,40 @@
       "rmse_f_mev_a": 227.4270708399686,
       "row_name": "deepmd_dpa1_zero_train300k",
       "split": "test_300K",
+      "status": "completed"
+    },
+    {
+      "atoms_per_second": 55074.20898086948,
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/nep4_train300k/test_600K_benchmark.json",
+      "engine": "nep",
+      "mae_e_mev_atom": 2.6197522580359958,
+      "mae_f_mev_a": 131.745047035448,
+      "max_abs_e_mev_atom": 15.145741496477664,
+      "max_abs_f_mev_a": 1838.5391199999997,
+      "peak_allocated_mb": 0.0,
+      "peak_memory_mb": 0.0,
+      "peak_reserved_mb": 0.0,
+      "rmse_e_mev_atom": 3.4862306098111198,
+      "rmse_f_mev_a": 185.2486395632636,
+      "row_name": "nep4_train300k",
+      "split": "test_600K",
+      "status": "completed"
+    },
+    {
+      "atoms_per_second": 1740838.4146584168,
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/rtece_l1_local_l0_train300k/test_600K_benchmark.json",
+      "engine": "rtece",
+      "mae_e_mev_atom": 3.4861032570545456,
+      "mae_f_mev_a": 150.90892361693128,
+      "max_abs_e_mev_atom": 16.352626179502327,
+      "max_abs_f_mev_a": 3631.494956032715,
+      "peak_allocated_mb": 620.63330078125,
+      "peak_memory_mb": 728.0,
+      "peak_reserved_mb": 728.0,
+      "rmse_e_mev_atom": 4.501549135114722,
+      "rmse_f_mev_a": 211.20192791078225,
+      "row_name": "rtece_l1_local_l0_train300k",
+      "split": "test_600K",
       "status": "completed"
     },
     {
@@ -37,6 +105,40 @@
       "status": "completed"
     },
     {
+      "atoms_per_second": 50475.2884845392,
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/nep4_train300k/test_1200K_benchmark.json",
+      "engine": "nep",
+      "mae_e_mev_atom": 6.3851243534448034,
+      "mae_f_mev_a": 227.48444930083673,
+      "max_abs_e_mev_atom": 30.29577466440969,
+      "max_abs_f_mev_a": 5036.70843,
+      "peak_allocated_mb": 0.0,
+      "peak_memory_mb": 0.0,
+      "peak_reserved_mb": 0.0,
+      "rmse_e_mev_atom": 8.306497481600973,
+      "rmse_f_mev_a": 334.4217996844206,
+      "row_name": "nep4_train300k",
+      "split": "test_1200K",
+      "status": "completed"
+    },
+    {
+      "atoms_per_second": 1765246.1223195922,
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/rtece_l1_local_l0_train300k/test_1200K_benchmark.json",
+      "engine": "rtece",
+      "mae_e_mev_atom": 6.873010089104842,
+      "mae_f_mev_a": 253.32897149722632,
+      "max_abs_e_mev_atom": 31.39875636932427,
+      "max_abs_f_mev_a": 3291.065914221191,
+      "peak_allocated_mb": 606.08984375,
+      "peak_memory_mb": 718.0,
+      "peak_reserved_mb": 718.0,
+      "rmse_e_mev_atom": 8.900560768270362,
+      "rmse_f_mev_a": 361.98323723883345,
+      "row_name": "rtece_l1_local_l0_train300k",
+      "split": "test_1200K",
+      "status": "completed"
+    },
+    {
       "atoms_per_second": 5712.594124309981,
       "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/deepmd_dpa1_zero_train300k/test_1200K_benchmark.json",
       "engine": "deepmd",
@@ -51,6 +153,23 @@
       "rmse_f_mev_a": 502.22206932425087,
       "row_name": "deepmd_dpa1_zero_train300k",
       "split": "test_1200K",
+      "status": "completed"
+    },
+    {
+      "atoms_per_second": 46814.70026230459,
+      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/nep4_train300k/test_dih_benchmark.json",
+      "engine": "nep",
+      "mae_e_mev_atom": 2.225295114238672,
+      "mae_f_mev_a": 81.96483118374975,
+      "max_abs_e_mev_atom": 7.664268895529892,
+      "max_abs_f_mev_a": 551.7413699999997,
+      "peak_allocated_mb": 0.0,
+      "peak_memory_mb": 0.0,
+      "peak_reserved_mb": 0.0,
+      "rmse_e_mev_atom": 2.540869940443139,
+      "rmse_f_mev_a": 116.17187053974446,
+      "row_name": "nep4_train300k",
+      "split": "test_dih",
       "status": "completed"
     },
     {
@@ -71,60 +190,21 @@
       "status": "completed"
     },
     {
-      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/nep4_train300k/test_300K_benchmark.json",
-      "engine": "nep",
-      "row_name": "nep4_train300k",
-      "split": "test_300K",
-      "status": "missing"
-    },
-    {
-      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/rtece_l1_local_l0_train300k/test_300K_benchmark.json",
-      "engine": "rtece",
-      "row_name": "rtece_l1_local_l0_train300k",
-      "split": "test_300K",
-      "status": "missing"
-    },
-    {
-      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/nep4_train300k/test_600K_benchmark.json",
-      "engine": "nep",
-      "row_name": "nep4_train300k",
-      "split": "test_600K",
-      "status": "missing"
-    },
-    {
-      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/rtece_l1_local_l0_train300k/test_600K_benchmark.json",
-      "engine": "rtece",
-      "row_name": "rtece_l1_local_l0_train300k",
-      "split": "test_600K",
-      "status": "missing"
-    },
-    {
-      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/nep4_train300k/test_1200K_benchmark.json",
-      "engine": "nep",
-      "row_name": "nep4_train300k",
-      "split": "test_1200K",
-      "status": "missing"
-    },
-    {
-      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/rtece_l1_local_l0_train300k/test_1200K_benchmark.json",
-      "engine": "rtece",
-      "row_name": "rtece_l1_local_l0_train300k",
-      "split": "test_1200K",
-      "status": "missing"
-    },
-    {
-      "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/nep4_train300k/test_dih_benchmark.json",
-      "engine": "nep",
-      "row_name": "nep4_train300k",
-      "split": "test_dih",
-      "status": "missing"
-    },
-    {
+      "atoms_per_second": 1766475.5266692291,
       "benchmark_output": "runs/oc20neb_tace_mace/rtece-stage182-3bpa-closure/diagnostics/rtece_l1_local_l0_train300k/test_dih_benchmark.json",
       "engine": "rtece",
+      "mae_e_mev_atom": 15.218069477539428,
+      "mae_f_mev_a": 134.86820278101618,
+      "max_abs_e_mev_atom": 28.69800111983312,
+      "max_abs_f_mev_a": 1653.8239528564454,
+      "peak_allocated_mb": 618.4130859375,
+      "peak_memory_mb": 728.0,
+      "peak_reserved_mb": 728.0,
+      "rmse_e_mev_atom": 16.145377234401774,
+      "rmse_f_mev_a": 212.42802234820215,
       "row_name": "rtece_l1_local_l0_train300k",
       "split": "test_dih",
-      "status": "missing"
+      "status": "completed"
     }
   ],
   "schema_version": "rtece_stage182_3bpa_closure_summary.v1",

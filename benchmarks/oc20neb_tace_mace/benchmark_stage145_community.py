@@ -61,6 +61,18 @@ def _maybe_collect_cuda_peak_memory(torch_module) -> dict[str, float | None]:
         torch_module.cuda.synchronize()
     return _memory_payload_from_torch(torch_module)
 
+
+def _community_memory_payload(engine: str, torch_module) -> dict[str, float | str | None]:
+    if str(engine) == "nep":
+        return {
+            **_empty_memory_payload(),
+            "memory_measurement_protocol": "external_nep_process_not_captured",
+        }
+    return {
+        **_maybe_collect_cuda_peak_memory(torch_module),
+        "memory_measurement_protocol": "torch_cuda_peak_memory_for_inprocess_backends_or_null",
+    }
+
 def _flatten_relative_energy_metrics(metrics: dict[str, object]) -> dict[str, object]:
     flattened = dict(metrics)
     schema = flattened.pop("schema_version", None)
@@ -289,7 +301,7 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         image_indices=image_indices,
     )
     mean_time = float(np.mean(pass_times)) if pass_times else None
-    memory_payload = _maybe_collect_cuda_peak_memory(torch_for_memory)
+    memory_payload = _community_memory_payload(args.engine, torch_for_memory)
     payload = {
         "schema_version": "community_baseline_dft_benchmark.v1",
         "row_name": str(args.row_name),
@@ -307,7 +319,6 @@ def run_benchmark(args: argparse.Namespace) -> dict[str, Any]:
         "mean_time_s": mean_time,
         "atoms_per_second": float(total_atoms / mean_time) if mean_time and mean_time > 0 else None,
         **memory_payload,
-        "memory_measurement_protocol": "torch_cuda_peak_memory_for_inprocess_backends_or_null",
         "relative_energy_errors_available": True,
         **metrics,
         **_flatten_relative_energy_metrics(relative_metrics),

@@ -11927,3 +11927,14 @@ def test_rtece_benchmark_help_exposes_label_key_arguments():
     assert result.returncode == 0, result.stderr
     assert "--energy-key" in result.stdout
     assert "--forces-key" in result.stdout
+
+
+def test_stage145_community_memory_payload_marks_external_nep_memory_unmeasured():
+    from benchmarks.oc20neb_tace_mace.benchmark_stage145_community import _community_memory_payload
+
+    payload = _community_memory_payload("nep", torch_module=None)
+
+    assert payload["peak_memory_mb"] is None
+    assert payload["peak_allocated_mb"] is None
+    assert payload["peak_reserved_mb"] is None
+    assert payload["memory_measurement_protocol"] == "external_nep_process_not_captured"
