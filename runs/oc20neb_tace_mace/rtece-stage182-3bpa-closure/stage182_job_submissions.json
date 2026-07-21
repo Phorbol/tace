@@ -1,7 +1,7 @@
 {
   "benchmark_jobs": {
     "deepmd_dpa1_zero_train300k": 689360,
-    "nep4_train300k": 689396,
+    "nep4_train300k": 689400,
     "rtece_l1_local_l0_train300k": 689384
   },
   "failed_jobs": {
@@ -14,5 +14,8 @@
     "deepmd_dpa1_zero_train300k": 689342,
     "nep4_train300k": 689343,
     "rtece_l1_local_l0_train300k": 689344
+  },
+  "superseded_jobs": {
+    "nep4_train300k_benchmark_memory_zero_before_fix": 689396
   }
 }
