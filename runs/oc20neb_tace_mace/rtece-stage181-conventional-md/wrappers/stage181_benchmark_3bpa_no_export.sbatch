@@ -16,6 +16,7 @@ ENV_DIR=/home/gengjianrui/bin/.venvs/tace-mace-cu126
 TACE_PYTHON="${ENV_DIR}/bin/python"
 PATH="${ENV_DIR}/bin:${PATH}"
 DATASET_ROOT=datasets/3BPA/dataset_3BPA
+RMD17_ROOT=datasets/rMD17
 RESULTS_ROOT=runs/oc20neb_tace_mace/rtece-stage181-conventional-md/results
 DIAGNOSTICS_ROOT=runs/oc20neb_tace_mace/rtece-stage181-conventional-md/diagnostics
 mkdir -p /home/gengjianrui/bin/logs "${RESULTS_ROOT}" "${DIAGNOSTICS_ROOT}"

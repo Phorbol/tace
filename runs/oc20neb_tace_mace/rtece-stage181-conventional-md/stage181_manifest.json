@@ -11,7 +11,9 @@
     "stage_plan": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/stage181_plan.md",
     "wrappers": {
       "benchmark_3bpa": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/wrappers/stage181_benchmark_3bpa_no_export.sbatch",
-      "train_3bpa_300k": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/wrappers/stage181_train_3bpa_300k_no_export.sbatch"
+      "benchmark_rmd17_ethanol": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/wrappers/stage181_benchmark_rmd17_ethanol_no_export.sbatch",
+      "train_3bpa_300k": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/wrappers/stage181_train_3bpa_300k_no_export.sbatch",
+      "train_rmd17_ethanol": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/wrappers/stage181_train_rmd17_ethanol_no_export.sbatch"
     }
   },
   "benchmark_splits": [
@@ -43,6 +45,23 @@
     "User Stage181 suggestion: 3BPA is eV/A extxyz; rMD17 must be converted from kcal/mol and kcal/mol/A."
   ],
   "rmd17_root": "datasets/rMD17",
+  "rmd17_smoke": {
+    "molecule": "ethanol",
+    "source_units": {
+      "distance": "A",
+      "energy": "kcal/mol",
+      "forces": "kcal/mol/A"
+    },
+    "target_units": {
+      "distance": "A",
+      "energy": "eV",
+      "forces": "eV/A"
+    },
+    "test_file": "datasets/rMD17/converted_extxyz/rmd17_ethanol_test.extxyz",
+    "train_configs_recommended_max": 1000,
+    "train_file": "datasets/rMD17/converted_extxyz/rmd17_ethanol_train.extxyz",
+    "valid_file": "datasets/rMD17/converted_extxyz/rmd17_ethanol_valid.extxyz"
+  },
   "schema_version": "rtece_stage181_conventional_md.v1",
   "scientific_question": "Can the same TECE-derived scalar-sketched student be evaluated on clean molecular MD splits where temperature and dihedral OOD generalization are explicit?",
   "stage": "stage181_conventional_md",

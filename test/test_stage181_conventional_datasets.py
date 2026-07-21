@@ -70,7 +70,12 @@ def test_stage181_manifest_and_wrappers_are_sai_safe(tmp_path):
     assert payload["student_config"]["local_l0_chemistry_rank"] == 4
 
     wrappers = payload["artifacts"]["wrappers"]
-    assert set(wrappers) == {"train_3bpa_300k", "benchmark_3bpa"}
+    assert set(wrappers) == {
+        "train_3bpa_300k",
+        "benchmark_3bpa",
+        "train_rmd17_ethanol",
+        "benchmark_rmd17_ethanol",
+    }
     wrapper_text = "\n".join(Path(path).read_text(encoding="utf-8") for path in wrappers.values())
     assert "--export" not in wrapper_text
     assert "#SBATCH --mem" not in wrapper_text
@@ -84,3 +89,77 @@ def test_stage181_manifest_and_wrappers_are_sai_safe(tmp_path):
     assert "--species-basis-mode learnable_embedding" in wrapper_text
     assert "--local-l0-chemistry-rank 4" in wrapper_text
     assert "--no-fit-energy-shift" not in wrapper_text
+
+
+def test_3bpa_validation_reads_extxyz_splits_and_label_keys(tmp_path):
+    from ase import Atoms
+    from ase.io import write
+    from benchmarks.oc20neb_tace_mace.prepare_stage181_conventional_datasets import validate_3bpa_dataset
+
+    root = tmp_path / "dataset_3BPA"
+    root.mkdir()
+    configs = []
+    for idx in range(2):
+        atoms = Atoms(numbers=[6, 1], positions=[[0.0, 0.0, 0.0], [1.0 + 0.1 * idx, 0.0, 0.0]])
+        atoms.info["energy"] = -1.0 + 0.1 * idx
+        atoms.arrays["forces"] = np.array([[0.1, 0.0, 0.0], [-0.1, 0.0, 0.0]], dtype=np.float64)
+        configs.append(atoms)
+    split_filenames = [
+        "train_300K.xyz",
+        "train_mixedT.xyz",
+        "test_300K.xyz",
+        "test_600K.xyz",
+        "test_1200K.xyz",
+        "test_dih.xyz",
+    ]
+    for filename in split_filenames:
+        write(root / filename, configs, format="extxyz")
+    iso = Atoms(numbers=[1], positions=[[0.0, 0.0, 0.0]])
+    iso.info["energy"] = 0.0
+    iso.arrays["forces"] = np.zeros((1, 3), dtype=np.float64)
+    write(root / "iso_atoms.xyz", [iso], format="extxyz")
+
+    report = validate_3bpa_dataset(root, max_configs_per_split=1)
+
+    assert report["schema_version"] == "rtece_stage181_3bpa_validation.v1"
+    assert report["contract_pass"], report["failed_checks"]
+    assert report["units"] == {"energy": "eV", "forces": "eV/A", "distance": "A"}
+    assert report["splits"]["train_300K"]["num_configs_checked"] == 1
+    assert report["splits"]["train_300K"]["num_atoms_first"] == 2
+    assert report["splits"]["test_dih"]["has_energy"]
+    assert report["splits"]["test_dih"]["has_forces"]
+
+
+def test_stage181_manifest_includes_rmd17_smoke_wrappers(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage181_conventional_md import (
+        audit_stage181_manifest,
+        make_stage181_manifest,
+        materialize_stage181,
+    )
+
+    payload = make_stage181_manifest(
+        output_root=tmp_path / "stage181",
+        dataset_root=tmp_path / "dataset_3BPA",
+        rmd17_root=tmp_path / "rMD17",
+    )
+    materialize_stage181(payload)
+    audit = audit_stage181_manifest(payload)
+
+    assert audit["contract_pass"], audit["failed_checks"]
+    assert payload["rmd17_smoke"]["molecule"] == "ethanol"
+    assert payload["rmd17_smoke"]["train_configs_recommended_max"] == 1000
+    wrappers = payload["artifacts"]["wrappers"]
+    assert set(wrappers) == {
+        "train_3bpa_300k",
+        "benchmark_3bpa",
+        "train_rmd17_ethanol",
+        "benchmark_rmd17_ethanol",
+    }
+    wrapper_text = "\n".join(Path(path).read_text(encoding="utf-8") for path in wrappers.values())
+    assert "converted_extxyz/rmd17_ethanol_train.extxyz" in wrapper_text
+    assert "converted_extxyz/rmd17_ethanol_valid.extxyz" in wrapper_text
+    assert "converted_extxyz/rmd17_ethanol_test.extxyz" in wrapper_text
+    assert "--export" not in wrapper_text
+    assert "#SBATCH --mem" not in wrapper_text
+    assert "--cpus-per-task" not in wrapper_text
+    assert "set -u" not in wrapper_text

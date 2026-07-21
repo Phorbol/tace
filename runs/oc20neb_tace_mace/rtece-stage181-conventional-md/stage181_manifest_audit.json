@@ -3,6 +3,7 @@
     "benchmark_splits": true,
     "no_forbidden_sbatch_flags": true,
     "primary_dataset": true,
+    "rmd17_smoke_units": true,
     "schema": true,
     "secondary_dataset": true,
     "stage": true,

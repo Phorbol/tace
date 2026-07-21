@@ -116,6 +116,90 @@ def make_3bpa_dataset_manifest(root: str | Path) -> dict[str, Any]:
     }
 
 
+def _has_energy(atoms: Any) -> bool:
+    if "energy" in getattr(atoms, "info", {}):
+        return True
+    try:
+        float(atoms.get_potential_energy())
+    except Exception:
+        return False
+    return True
+
+
+def _has_forces(atoms: Any) -> bool:
+    if "forces" in getattr(atoms, "arrays", {}):
+        forces = np.asarray(atoms.arrays["forces"])
+        return forces.ndim == 2 and forces.shape[1] == 3 and forces.shape[0] == len(atoms)
+    try:
+        forces = np.asarray(atoms.get_forces())
+    except Exception:
+        return False
+    return forces.ndim == 2 and forces.shape[1] == 3 and forces.shape[0] == len(atoms)
+
+
+def validate_3bpa_dataset(root: str | Path, *, max_configs_per_split: int | None = 4) -> dict[str, Any]:
+    """Read 3BPA extxyz splits and verify the label/unit contract used by Stage181."""
+    from ase.io import read
+
+    dataset_root = Path(root)
+    if max_configs_per_split is not None and int(max_configs_per_split) < 1:
+        raise ValueError("max_configs_per_split must be positive when provided")
+
+    split_reports: dict[str, dict[str, Any]] = {}
+    failed: list[str] = []
+    index = ":" if max_configs_per_split is None else f":{int(max_configs_per_split)}"
+    for split, spec in THREE_BPA_FILES.items():
+        path = dataset_root / spec["filename"]
+        report: dict[str, Any] = {
+            "filename": spec["filename"],
+            "path": str(path),
+            "role": spec["role"],
+            "exists": bool(path.exists()),
+            "num_configs_checked": 0,
+            "num_atoms_first": 0,
+            "has_energy": False,
+            "has_forces": False,
+        }
+        if not path.exists():
+            failed.append(f"{split}:missing_file")
+            split_reports[split] = report
+            continue
+        try:
+            frames = read(str(path), index=index)
+        except Exception as exc:
+            report["read_error"] = str(exc)
+            failed.append(f"{split}:read_error")
+            split_reports[split] = report
+            continue
+        if not isinstance(frames, list):
+            frames = [frames]
+        report["num_configs_checked"] = len(frames)
+        if not frames:
+            failed.append(f"{split}:empty")
+            split_reports[split] = report
+            continue
+        first = frames[0]
+        report["num_atoms_first"] = len(first)
+        report["has_energy"] = _has_energy(first)
+        report["has_forces"] = _has_forces(first)
+        if not report["has_energy"]:
+            failed.append(f"{split}:missing_energy")
+        if split != "iso_atoms" and not report["has_forces"]:
+            failed.append(f"{split}:missing_forces")
+        split_reports[split] = report
+
+    return {
+        "schema_version": "rtece_stage181_3bpa_validation.v1",
+        "dataset": "3BPA",
+        "root": str(dataset_root),
+        "contract_pass": not failed,
+        "failed_checks": failed,
+        "units": {"energy": "eV", "forces": "eV/A", "distance": "A"},
+        "labels": {"energy_key": "energy", "forces_key": "forces"},
+        "splits": split_reports,
+    }
+
+
 def make_rmd17_download_manifest(root: str | Path) -> dict[str, Any]:
     dataset_root = Path(root)
     molecules = [
@@ -166,6 +250,10 @@ def main() -> None:
     p_3bpa = sub.add_parser("3bpa-manifest")
     p_3bpa.add_argument("--root", type=Path, required=True)
     p_3bpa.add_argument("--output-json", type=Path, required=True)
+    p_3bpa_validate = sub.add_parser("3bpa-validate")
+    p_3bpa_validate.add_argument("--root", type=Path, required=True)
+    p_3bpa_validate.add_argument("--output-json", type=Path, default=None)
+    p_3bpa_validate.add_argument("--max-configs-per-split", type=int, default=4)
     p_manifest = sub.add_parser("rmd17-manifest")
     p_manifest.add_argument("--root", type=Path, required=True)
     p_manifest.add_argument("--output-json", type=Path, required=True)
@@ -186,6 +274,12 @@ def main() -> None:
         payload = make_3bpa_dataset_manifest(args.root)
         args.output_json.parent.mkdir(parents=True, exist_ok=True)
         args.output_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+        print(json.dumps(payload, indent=2, sort_keys=True))
+    elif args.command == "3bpa-validate":
+        payload = validate_3bpa_dataset(args.root, max_configs_per_split=args.max_configs_per_split)
+        if args.output_json is not None:
+            args.output_json.parent.mkdir(parents=True, exist_ok=True)
+            args.output_json.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
         print(json.dumps(payload, indent=2, sort_keys=True))
     elif args.command == "rmd17-manifest":
         payload = make_rmd17_download_manifest(args.root)

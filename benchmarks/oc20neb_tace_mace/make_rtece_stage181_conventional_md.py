@@ -56,6 +56,8 @@ def _artifacts(root: Path) -> dict[str, Any]:
         "wrappers": {
             "train_3bpa_300k": str(root / "wrappers" / "stage181_train_3bpa_300k_no_export.sbatch"),
             "benchmark_3bpa": str(root / "wrappers" / "stage181_benchmark_3bpa_no_export.sbatch"),
+            "train_rmd17_ethanol": str(root / "wrappers" / "stage181_train_rmd17_ethanol_no_export.sbatch"),
+            "benchmark_rmd17_ethanol": str(root / "wrappers" / "stage181_benchmark_rmd17_ethanol_no_export.sbatch"),
         },
     }
 
@@ -85,6 +87,15 @@ def make_stage181_manifest(
         },
         "dataset_root": str(dataset_root),
         "rmd17_root": str(rmd17_root),
+        "rmd17_smoke": {
+            "molecule": "ethanol",
+            "train_configs_recommended_max": 1000,
+            "train_file": str(Path(rmd17_root) / "converted_extxyz" / "rmd17_ethanol_train.extxyz"),
+            "valid_file": str(Path(rmd17_root) / "converted_extxyz" / "rmd17_ethanol_valid.extxyz"),
+            "test_file": str(Path(rmd17_root) / "converted_extxyz" / "rmd17_ethanol_test.extxyz"),
+            "source_units": {"energy": "kcal/mol", "forces": "kcal/mol/A", "distance": "A"},
+            "target_units": {"energy": "eV", "forces": "eV/A", "distance": "A"},
+        },
         "train_split": "train_300K",
         "valid_split": "test_300K",
         "benchmark_splits": list(BENCHMARK_SPLITS),
@@ -154,6 +165,7 @@ def _wrapper_header(payload: dict[str, Any], *, job_name: str, time_limit: str) 
         'TACE_PYTHON="${ENV_DIR}/bin/python"',
         'PATH="${ENV_DIR}/bin:${PATH}"',
         _shell_assign("DATASET_ROOT", payload["dataset_root"]),
+        _shell_assign("RMD17_ROOT", payload["rmd17_root"]),
         _shell_assign("RESULTS_ROOT", payload["artifacts"]["results_root"]),
         _shell_assign("DIAGNOSTICS_ROOT", payload["artifacts"]["diagnostics_root"]),
         'mkdir -p /home/gengjianrui/bin/logs "${RESULTS_ROOT}" "${DIAGNOSTICS_ROOT}"',
@@ -263,6 +275,97 @@ def write_benchmark_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
     return wrapper
 
 
+def _rmd17_train_command(payload: dict[str, Any], *, output_dir: str) -> str:
+    cfg = payload["student_config"]
+    train = payload["training_config"]
+    parts = [
+        'PYTHONPATH="${TACE_ROOT}:${PYTHONPATH:-}"',
+        '"${TACE_PYTHON}"',
+        "-m",
+        "tace.scripts.rtece_train_scalar",
+        "--variant",
+        "stage181_rmd17_ethanol_l1_local_l0_student",
+        "--scalar-path-ids",
+        _path_csv(payload["student_path_ids"]),
+        "--train-file",
+        '"${RMD17_ROOT}/converted_extxyz/rmd17_ethanol_train.extxyz"',
+        "--valid-file",
+        '"${RMD17_ROOT}/converted_extxyz/rmd17_ethanol_valid.extxyz"',
+        "--output-dir",
+        shlex.quote(output_dir),
+        "--max-steps",
+        str(train["max_steps"]),
+        "--trainer-backend",
+        train["trainer_backend"],
+        "--batch-size",
+        str(train["batch_size"]),
+        "--num-radial",
+        str(cfg["num_radial"]),
+        "--hidden-channels",
+        cfg["hidden_channels"],
+        "--species-basis-channels",
+        str(cfg["species_basis_channels"]),
+        "--species-basis-mode",
+        cfg["species_basis_mode"],
+        "--local-l0-chemistry-rank",
+        str(cfg["local_l0_chemistry_rank"]),
+        "--moment-l-max",
+        str(cfg["moment_l_max"]),
+        "--atomic-cross-radial-sketch-channels",
+        str(cfg["atomic_cross_radial_sketch_channels"]),
+        "--atomic-cross-radial-projection",
+        cfg["atomic_cross_radial_projection"],
+        "--lr",
+        str(train["lr"]),
+        "--energy-weight",
+        str(train["energy_weight"]),
+        "--force-weight",
+        str(train["force_weight"]),
+        "--lr-scheduler",
+        train["lr_scheduler"],
+        "--lr-warmup-steps",
+        str(train["lr_warmup_steps"]),
+        "--early-stopping-patience",
+        str(train["early_stopping_patience"]),
+        "--neighborlist-backend",
+        train["neighborlist_backend"],
+        "--device",
+        "cuda",
+        "--default-dtype",
+        "float32",
+        "--no-progress-bar",
+    ]
+    return " ".join(parts)
+
+
+def write_rmd17_train_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
+    wrapper = Path(path)
+    body = _wrapper_header(payload, job_name="rtece-st181-rmd17-train", time_limit="03:55:00")
+    out = str(Path(payload["artifacts"]["results_root"]) / "stage181_rmd17_ethanol")
+    body.extend([f"mkdir -p {shlex.quote(out)}", _rmd17_train_command(payload, output_dir=out), ""])
+    wrapper.parent.mkdir(parents=True, exist_ok=True)
+    wrapper.write_text("\n".join(body), encoding="utf-8")
+    return wrapper
+
+
+def write_rmd17_benchmark_wrapper(path: str | Path, payload: dict[str, Any]) -> Path:
+    wrapper = Path(path)
+    body = _wrapper_header(payload, job_name="rtece-st181-rmd17-bench", time_limit="01:00:00")
+    checkpoint = str(Path(payload["artifacts"]["results_root"]) / "stage181_rmd17_ethanol" / "rtece_scalar_best.pt")
+    output = str(Path(payload["artifacts"]["diagnostics_root"]) / "stage181_rmd17_ethanol_test_benchmark.json")
+    body.append(f"mkdir -p {shlex.quote(str(Path(output).parent))}")
+    body.append(
+        'PYTHONPATH="${TACE_ROOT}:${PYTHONPATH:-}" "${TACE_PYTHON}" benchmarks/oc20neb_tace_mace/benchmark_rtece_scalar.py '
+        f"--model {shlex.quote(checkpoint)} --configs \"${{RMD17_ROOT}}/converted_extxyz/rmd17_ethanol_test.extxyz\" "
+        f"--output {shlex.quote(output)} --variant stage181_rmd17_ethanol_test "
+        "--start-config 0 --limit-configs 512 --measure-passes 5 --device cuda --default-dtype float32 "
+        "--force-mode autograd --graph-construction-backend matscipy_neighborlist"
+    )
+    body.append("")
+    wrapper.parent.mkdir(parents=True, exist_ok=True)
+    wrapper.write_text("\n".join(body), encoding="utf-8")
+    return wrapper
+
 def render_stage_plan(payload: dict[str, Any]) -> str:
     lines = [
         "# Stage181 Conventional Molecular MD Validation",
@@ -273,6 +376,7 @@ def render_stage_plan(payload: dict[str, Any]) -> str:
         "",
         "- primary: 3BPA, eV/eV-A extxyz with 300K ID, 600K/1200K OOD, and dihedral PES splits",
         "- secondary: rMD17, npz source requiring kcal/mol to eV conversion before training",
+        "- rMD17 smoke wrappers expect converted ethanol train/valid/test extxyz files under `converted_extxyz/`",
         "",
         "## Student",
         "",
@@ -304,7 +408,14 @@ def audit_stage181_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         "units": payload.get("units") == {"energy": "eV", "forces": "eV/A", "distance": "A"},
         "student_paths": payload.get("student_path_ids") == STUDENT_PATH_IDS,
         "benchmark_splits": payload.get("benchmark_splits") == BENCHMARK_SPLITS,
-        "wrappers": set(wrappers) == {"train_3bpa_300k", "benchmark_3bpa"},
+        "wrappers": set(wrappers) == {
+            "train_3bpa_300k",
+            "benchmark_3bpa",
+            "train_rmd17_ethanol",
+            "benchmark_rmd17_ethanol",
+        },
+        "rmd17_smoke_units": payload.get("rmd17_smoke", {}).get("target_units")
+        == {"energy": "eV", "forces": "eV/A", "distance": "A"},
         "no_forbidden_sbatch_flags": not any(token in wrapper_text for token in forbidden),
     }
     failed = [key for key, ok in checks.items() if not ok]
@@ -331,6 +442,8 @@ def materialize_stage181(payload: dict[str, Any]) -> dict[str, Any]:
     )
     write_train_wrapper(artifacts["wrappers"]["train_3bpa_300k"], payload)
     write_benchmark_wrapper(artifacts["wrappers"]["benchmark_3bpa"], payload)
+    write_rmd17_train_wrapper(artifacts["wrappers"]["train_rmd17_ethanol"], payload)
+    write_rmd17_benchmark_wrapper(artifacts["wrappers"]["benchmark_rmd17_ethanol"], payload)
     audit = audit_stage181_manifest(payload)
     Path(artifacts["manifest"]).write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
     Path(artifacts["manifest_audit"]).write_text(json.dumps(audit, indent=2, sort_keys=True) + "\n", encoding="utf-8")

@@ -1,0 +1,88 @@
+{
+  "contract_pass": true,
+  "dataset": "3BPA",
+  "failed_checks": [],
+  "labels": {
+    "energy_key": "energy",
+    "forces_key": "forces"
+  },
+  "root": "datasets/3BPA/dataset_3BPA",
+  "schema_version": "rtece_stage181_3bpa_validation.v1",
+  "splits": {
+    "iso_atoms": {
+      "exists": true,
+      "filename": "iso_atoms.xyz",
+      "has_energy": true,
+      "has_forces": false,
+      "num_atoms_first": 1,
+      "num_configs_checked": 2,
+      "path": "datasets/3BPA/dataset_3BPA/iso_atoms.xyz",
+      "role": "isolated_atom_reference"
+    },
+    "test_1200K": {
+      "exists": true,
+      "filename": "test_1200K.xyz",
+      "has_energy": true,
+      "has_forces": true,
+      "num_atoms_first": 27,
+      "num_configs_checked": 2,
+      "path": "datasets/3BPA/dataset_3BPA/test_1200K.xyz",
+      "role": "strong_temperature_ood"
+    },
+    "test_300K": {
+      "exists": true,
+      "filename": "test_300K.xyz",
+      "has_energy": true,
+      "has_forces": true,
+      "num_atoms_first": 27,
+      "num_configs_checked": 2,
+      "path": "datasets/3BPA/dataset_3BPA/test_300K.xyz",
+      "role": "id_test_300K"
+    },
+    "test_600K": {
+      "exists": true,
+      "filename": "test_600K.xyz",
+      "has_energy": true,
+      "has_forces": true,
+      "num_atoms_first": 27,
+      "num_configs_checked": 2,
+      "path": "datasets/3BPA/dataset_3BPA/test_600K.xyz",
+      "role": "medium_temperature_ood"
+    },
+    "test_dih": {
+      "exists": true,
+      "filename": "test_dih.xyz",
+      "has_energy": true,
+      "has_forces": true,
+      "num_atoms_first": 27,
+      "num_configs_checked": 2,
+      "path": "datasets/3BPA/dataset_3BPA/test_dih.xyz",
+      "role": "dihedral_pes_ood"
+    },
+    "train_300K": {
+      "exists": true,
+      "filename": "train_300K.xyz",
+      "has_energy": true,
+      "has_forces": true,
+      "num_atoms_first": 27,
+      "num_configs_checked": 2,
+      "path": "datasets/3BPA/dataset_3BPA/train_300K.xyz",
+      "role": "train_id_300K"
+    },
+    "train_mixedT": {
+      "exists": true,
+      "filename": "train_mixedT.xyz",
+      "has_energy": true,
+      "has_forces": true,
+      "num_atoms_first": 27,
+      "num_configs_checked": 2,
+      "path": "datasets/3BPA/dataset_3BPA/train_mixedT.xyz",
+      "role": "train_mixed_temperature"
+    }
+  },
+  "units": {
+    "distance": "A",
+    "energy": "eV",
+    "forces": "eV/A"
+  }
+}
