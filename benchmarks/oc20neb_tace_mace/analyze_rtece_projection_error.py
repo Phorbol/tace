@@ -1018,6 +1018,8 @@ def rank_active_set_candidate_rows(
     force_weight: float = 1.0,
     projection_weight: float = 0.0,
     gain_mode: str = "absolute",
+    max_force_regression_fraction: float | None = None,
+    require_energy_gain: bool = False,
 ) -> list[dict[str, Any]]:
     baseline_rows = [row for row in rows if str(row.get("candidate")) == str(baseline_candidate)]
     if len(baseline_rows) != 1:
@@ -1049,6 +1051,24 @@ def rank_active_set_candidate_rows(
             + float(force_weight) * force_gain
             + float(projection_weight) * projection_gain
         )
+        rejection_reasons: list[str] = []
+        if bool(require_energy_gain) and energy_gain <= 0.0:
+            rejection_reasons.append("energy_gain_required")
+        force_regression_fraction = None
+        if max_force_regression_fraction is not None:
+            if force_metric is None:
+                rejection_reasons.append("force_metric_missing")
+            else:
+                baseline_force_value = _safe_float_metric(baseline, force_metric)
+                candidate_force_value = _safe_float_metric(candidate, force_metric)
+                if baseline_force_value < float("inf") and candidate_force_value < float("inf"):
+                    denom = max(abs(baseline_force_value), 1.0e-12)
+                    force_regression_fraction = max(0.0, (candidate_force_value - baseline_force_value) / denom)
+                    if force_regression_fraction > float(max_force_regression_fraction) + 1.0e-12:
+                        rejection_reasons.append("force_regression_fraction")
+                else:
+                    rejection_reasons.append("force_metric_missing")
+        constraints_passed = not rejection_reasons
         cost = _candidate_cost_proxy(candidate, baseline)
         candidate.update(
             {
@@ -1062,9 +1082,16 @@ def rank_active_set_candidate_rows(
                 "active_set_force_metric": force_metric,
                 "active_set_projection_metric": projection_metric,
                 "active_set_gain_mode": str(gain_mode),
+                "active_set_require_energy_gain": bool(require_energy_gain),
+                "active_set_max_force_regression_fraction": (
+                    None if max_force_regression_fraction is None else float(max_force_regression_fraction)
+                ),
+                "force_regression_fraction": force_regression_fraction,
+                "active_set_constraint_passed": bool(constraints_passed),
+                "active_set_rejection_reasons": rejection_reasons,
                 "weighted_marginal_gain": float(weighted_gain),
                 "marginal_gain_per_cost": float(weighted_gain / max(cost, 1.0e-12)),
-                "active_set_promoted": bool(weighted_gain > 0.0),
+                "active_set_promoted": bool(weighted_gain > 0.0 and constraints_passed),
             }
         )
         ranked.append(candidate)
@@ -1319,6 +1346,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--active-set-force-weight", type=float, default=1.0)
     parser.add_argument("--active-set-projection-weight", type=float, default=0.0)
     parser.add_argument("--active-set-gain-mode", choices=("absolute", "relative"), default="absolute")
+    parser.add_argument("--active-set-max-force-regression-fraction", type=float, default=None, help="Reject active-set candidates whose force RMSE regresses by more than this fraction relative to the baseline.")
+    parser.add_argument("--active-set-require-energy-gain", action="store_true", help="Reject active-set candidates unless the selected energy metric improves over the baseline.")
     return parser.parse_args()
 
 
@@ -1473,6 +1502,12 @@ def main() -> None:
             "force_weight": float(args.active_set_force_weight),
             "projection_weight": float(args.active_set_projection_weight),
             "gain_mode": str(args.active_set_gain_mode),
+            "max_force_regression_fraction": (
+                None
+                if args.active_set_max_force_regression_fraction is None
+                else float(args.active_set_max_force_regression_fraction)
+            ),
+            "require_energy_gain": bool(args.active_set_require_energy_gain),
         }
         active_set_rows = rank_active_set_candidate_rows(
             ranked_rows,
@@ -1481,6 +1516,8 @@ def main() -> None:
             force_weight=float(args.active_set_force_weight),
             projection_weight=float(args.active_set_projection_weight),
             gain_mode=str(args.active_set_gain_mode),
+            max_force_regression_fraction=args.active_set_max_force_regression_fraction,
+            require_energy_gain=bool(args.active_set_require_energy_gain),
         )
     payload = {
         "schema_version": "rtece_projection_diagnostic.v1",

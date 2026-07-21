@@ -2328,6 +2328,91 @@ def test_rtece_active_set_ranking_can_use_relative_metric_gains():
     assert ranked[1]["active_set_promoted"] is False
 
 
+def test_rtece_active_set_can_reject_excessive_force_regression():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import rank_active_set_candidate_rows
+
+    rows = [
+        {
+            "candidate": "baseline",
+            "path_ids": ["atomic.radial_density"],
+            "energy_per_atom_rmse": 40.0,
+            "force_rmse": 80.0,
+            "candidate_dim": 4,
+        },
+        {
+            "candidate": "energy_repair_force_bad",
+            "path_ids": ["atomic.radial_density", "edge.cavity.target_vector_projection"],
+            "energy_per_atom_rmse": 10.0,
+            "force_rmse": 104.0,
+            "candidate_dim": 6,
+        },
+        {
+            "candidate": "energy_repair_force_guarded",
+            "path_ids": ["atomic.radial_density", "edge.cavity.vector_dot"],
+            "energy_per_atom_rmse": 14.0,
+            "force_rmse": 84.0,
+            "candidate_dim": 6,
+        },
+    ]
+
+    ranked = rank_active_set_candidate_rows(
+        rows,
+        baseline_candidate="baseline",
+        energy_weight=1.0,
+        force_weight=1.0,
+        gain_mode="relative",
+        max_force_regression_fraction=0.10,
+        require_energy_gain=True,
+    )
+
+    by_candidate = {row["candidate"]: row for row in ranked}
+    guarded = by_candidate["energy_repair_force_guarded"]
+    force_bad = by_candidate["energy_repair_force_bad"]
+    assert guarded["active_set_promoted"] is True
+    assert guarded["active_set_constraint_passed"] is True
+    assert guarded["force_regression_fraction"] == pytest.approx(0.05)
+    assert force_bad["active_set_promoted"] is False
+    assert force_bad["active_set_constraint_passed"] is False
+    assert force_bad["force_regression_fraction"] == pytest.approx(0.30)
+    assert "force_regression_fraction" in force_bad["active_set_rejection_reasons"]
+
+
+def test_rtece_active_set_can_require_energy_gain():
+    from benchmarks.oc20neb_tace_mace.analyze_rtece_projection_error import rank_active_set_candidate_rows
+
+    rows = [
+        {
+            "candidate": "baseline",
+            "path_ids": ["atomic.radial_density"],
+            "energy_per_atom_rmse": 40.0,
+            "force_rmse": 80.0,
+            "candidate_dim": 4,
+        },
+        {
+            "candidate": "force_only",
+            "path_ids": ["atomic.radial_density", "edge.direct.radial"],
+            "energy_per_atom_rmse": 44.0,
+            "force_rmse": 40.0,
+            "candidate_dim": 6,
+        },
+    ]
+
+    ranked = rank_active_set_candidate_rows(
+        rows,
+        baseline_candidate="baseline",
+        energy_weight=1.0,
+        force_weight=2.0,
+        gain_mode="relative",
+        require_energy_gain=True,
+    )
+
+    assert ranked[0]["candidate"] == "force_only"
+    assert ranked[0]["weighted_marginal_gain"] > 0.0
+    assert ranked[0]["active_set_promoted"] is False
+    assert "energy_gain_required" in ranked[0]["active_set_rejection_reasons"]
+
+
+
 def test_rtece_projection_rows_cache_reference_descriptors(monkeypatch):
     from benchmarks.oc20neb_tace_mace import analyze_rtece_projection_error as mod
 
@@ -3068,6 +3153,8 @@ def test_rtece_projection_cli_emits_active_set_candidate_rows(tmp_path):
         "force_weight": 0.5,
         "projection_weight": 10.0,
         "gain_mode": "absolute",
+        "max_force_regression_fraction": None,
+        "require_energy_gain": False,
     }
     assert [row["candidate"] for row in payload["active_set_rows"]] == ["full_reference"]
     active_row = payload["active_set_rows"][0]
