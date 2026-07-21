@@ -1,0 +1,89 @@
+{
+  "artifacts": {
+    "dataset_manifests": {
+      "3BPA": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/datasets/3bpa_manifest.json",
+      "rMD17": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/datasets/rmd17_manifest.json"
+    },
+    "diagnostics_root": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/diagnostics",
+    "manifest": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/stage181_manifest.json",
+    "manifest_audit": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/stage181_manifest_audit.json",
+    "results_root": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/results",
+    "stage_plan": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/stage181_plan.md",
+    "wrappers": {
+      "benchmark_3bpa": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/wrappers/stage181_benchmark_3bpa_no_export.sbatch",
+      "train_3bpa_300k": "runs/oc20neb_tace_mace/rtece-stage181-conventional-md/wrappers/stage181_train_3bpa_300k_no_export.sbatch"
+    }
+  },
+  "benchmark_splits": [
+    "test_300K",
+    "test_600K",
+    "test_1200K",
+    "test_dih"
+  ],
+  "dataset_matrix": {
+    "primary": "3BPA",
+    "rationale": "3BPA is small, eV-based, and has ID/temperature/dihedral OOD splits; rMD17 adds larger single-molecule trajectories but must be converted from kcal/mol to eV before training.",
+    "secondary": "rMD17"
+  },
+  "dataset_root": "datasets/3BPA/dataset_3BPA",
+  "labels": {
+    "energy_key": "energy",
+    "forces_key": "forces"
+  },
+  "metrics_required": [
+    "E MAE/RMSE/max per split",
+    "F MAE/RMSE/max per split",
+    "test_600K/test_1200K temperature OOD degradation",
+    "test_dih dihedral PES error",
+    "atoms/s and peak memory per split"
+  ],
+  "review_basis": [
+    "TECE_design_space.md: deployment distribution mu and physical metric must define the low-cost projection target.",
+    "rTECE_review.md: use held-out deployment splits, not random config splits, to decide whether degradation is safe.",
+    "User Stage181 suggestion: 3BPA is eV/A extxyz; rMD17 must be converted from kcal/mol and kcal/mol/A."
+  ],
+  "rmd17_root": "datasets/rMD17",
+  "schema_version": "rtece_stage181_conventional_md.v1",
+  "scientific_question": "Can the same TECE-derived scalar-sketched student be evaluated on clean molecular MD splits where temperature and dihedral OOD generalization are explicit?",
+  "stage": "stage181_conventional_md",
+  "student_config": {
+    "atomic_cross_radial_projection": "learnable",
+    "atomic_cross_radial_sketch_channels": 3,
+    "hidden_channels": "64,64",
+    "local_l0_chemistry_rank": 4,
+    "moment_l_max": 1,
+    "num_radial": 10,
+    "short_range_repulsion_potential": "none",
+    "species_basis_channels": 16,
+    "species_basis_mode": "learnable_embedding",
+    "variant": "stage181_3bpa_l1_local_l0_student"
+  },
+  "student_path_ids": [
+    "atomic.radial_density",
+    "atomic.species_basis_density",
+    "atomic.local_l0_lowrank_density",
+    "atomic.vector_norm",
+    "atomic.vector_cross_radial_dot"
+  ],
+  "train_split": "train_300K",
+  "training_config": {
+    "batch_size": 32,
+    "early_stopping_patience": 250,
+    "energy_weight": 1.0,
+    "entrypoint": "tace.scripts.rtece_train_scalar",
+    "force_weight": 10.0,
+    "lr": 0.001,
+    "lr_scheduler": "plateau",
+    "lr_warmup_steps": 500,
+    "max_steps": 20000,
+    "neighborlist_backend": "matscipy",
+    "per_element_e0_fit": true,
+    "trainer_backend": "lightning"
+  },
+  "units": {
+    "distance": "A",
+    "energy": "eV",
+    "forces": "eV/A"
+  },
+  "valid_split": "test_300K"
+}

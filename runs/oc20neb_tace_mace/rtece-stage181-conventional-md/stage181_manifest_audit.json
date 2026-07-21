@@ -1,0 +1,17 @@
+{
+  "checks": {
+    "benchmark_splits": true,
+    "no_forbidden_sbatch_flags": true,
+    "primary_dataset": true,
+    "schema": true,
+    "secondary_dataset": true,
+    "stage": true,
+    "student_paths": true,
+    "units": true,
+    "wrappers": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "no_forbidden_sbatch_flags": true,
+  "schema_version": "rtece_stage181_manifest_audit.v1"
+}

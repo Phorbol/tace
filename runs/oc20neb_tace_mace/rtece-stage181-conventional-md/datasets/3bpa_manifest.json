@@ -1,0 +1,62 @@
+{
+  "dataset": "3BPA",
+  "labels": {
+    "energy_key": "energy",
+    "forces_key": "forces"
+  },
+  "root": "datasets/3BPA/dataset_3BPA",
+  "schema_version": "rtece_stage181_3bpa_dataset_manifest.v1",
+  "source": {
+    "archive_url": "https://github.com/davkovacs/BOTNet-datasets/raw/refs/heads/main/dataset_3BPA.tar.gz",
+    "repository": "https://github.com/davkovacs/BOTNet-datasets"
+  },
+  "splits": {
+    "iso_atoms": {
+      "exists": true,
+      "filename": "iso_atoms.xyz",
+      "path": "datasets/3BPA/dataset_3BPA/iso_atoms.xyz",
+      "role": "isolated_atom_reference"
+    },
+    "test_1200K": {
+      "exists": true,
+      "filename": "test_1200K.xyz",
+      "path": "datasets/3BPA/dataset_3BPA/test_1200K.xyz",
+      "role": "strong_temperature_ood"
+    },
+    "test_300K": {
+      "exists": true,
+      "filename": "test_300K.xyz",
+      "path": "datasets/3BPA/dataset_3BPA/test_300K.xyz",
+      "role": "id_test_300K"
+    },
+    "test_600K": {
+      "exists": true,
+      "filename": "test_600K.xyz",
+      "path": "datasets/3BPA/dataset_3BPA/test_600K.xyz",
+      "role": "medium_temperature_ood"
+    },
+    "test_dih": {
+      "exists": true,
+      "filename": "test_dih.xyz",
+      "path": "datasets/3BPA/dataset_3BPA/test_dih.xyz",
+      "role": "dihedral_pes_ood"
+    },
+    "train_300K": {
+      "exists": true,
+      "filename": "train_300K.xyz",
+      "path": "datasets/3BPA/dataset_3BPA/train_300K.xyz",
+      "role": "train_id_300K"
+    },
+    "train_mixedT": {
+      "exists": true,
+      "filename": "train_mixedT.xyz",
+      "path": "datasets/3BPA/dataset_3BPA/train_mixedT.xyz",
+      "role": "train_mixed_temperature"
+    }
+  },
+  "units": {
+    "distance": "A",
+    "energy": "eV",
+    "forces": "eV/A"
+  }
+}

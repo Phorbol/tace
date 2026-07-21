@@ -1,0 +1,74 @@
+{
+  "conversion_factor_energy": 0.0433641153,
+  "conversion_factor_forces": 0.0433641153,
+  "dataset": "rMD17",
+  "molecules": [
+    {
+      "converted_extxyz": "datasets/rMD17/converted_extxyz/rmd17_aspirin.extxyz",
+      "name": "aspirin",
+      "npz": "datasets/rMD17/rmd17_aspirin.npz"
+    },
+    {
+      "converted_extxyz": "datasets/rMD17/converted_extxyz/rmd17_azobenzene.extxyz",
+      "name": "azobenzene",
+      "npz": "datasets/rMD17/rmd17_azobenzene.npz"
+    },
+    {
+      "converted_extxyz": "datasets/rMD17/converted_extxyz/rmd17_benzene.extxyz",
+      "name": "benzene",
+      "npz": "datasets/rMD17/rmd17_benzene.npz"
+    },
+    {
+      "converted_extxyz": "datasets/rMD17/converted_extxyz/rmd17_ethanol.extxyz",
+      "name": "ethanol",
+      "npz": "datasets/rMD17/rmd17_ethanol.npz"
+    },
+    {
+      "converted_extxyz": "datasets/rMD17/converted_extxyz/rmd17_malonaldehyde.extxyz",
+      "name": "malonaldehyde",
+      "npz": "datasets/rMD17/rmd17_malonaldehyde.npz"
+    },
+    {
+      "converted_extxyz": "datasets/rMD17/converted_extxyz/rmd17_naphthalene.extxyz",
+      "name": "naphthalene",
+      "npz": "datasets/rMD17/rmd17_naphthalene.npz"
+    },
+    {
+      "converted_extxyz": "datasets/rMD17/converted_extxyz/rmd17_paracetamol.extxyz",
+      "name": "paracetamol",
+      "npz": "datasets/rMD17/rmd17_paracetamol.npz"
+    },
+    {
+      "converted_extxyz": "datasets/rMD17/converted_extxyz/rmd17_salicylic.extxyz",
+      "name": "salicylic",
+      "npz": "datasets/rMD17/rmd17_salicylic.npz"
+    },
+    {
+      "converted_extxyz": "datasets/rMD17/converted_extxyz/rmd17_toluene.extxyz",
+      "name": "toluene",
+      "npz": "datasets/rMD17/rmd17_toluene.npz"
+    },
+    {
+      "converted_extxyz": "datasets/rMD17/converted_extxyz/rmd17_uracil.extxyz",
+      "name": "uracil",
+      "npz": "datasets/rMD17/rmd17_uracil.npz"
+    }
+  ],
+  "root": "datasets/rMD17",
+  "schema_version": "rtece_stage181_rmd17_download_manifest.v1",
+  "source": {
+    "archive_url": "https://figshare.com/ndownloader/articles/12672038/versions/4",
+    "figshare_article": "12672038",
+    "version": 4
+  },
+  "source_units": {
+    "distance": "A",
+    "energy": "kcal/mol",
+    "forces": "kcal/mol/A"
+  },
+  "target_units": {
+    "distance": "A",
+    "energy": "eV",
+    "forces": "eV/A"
+  }
+}

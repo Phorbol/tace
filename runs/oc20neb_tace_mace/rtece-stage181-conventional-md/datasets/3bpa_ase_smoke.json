@@ -1,0 +1,104 @@
+{
+  "dataset": "3BPA",
+  "labels": {
+    "energy_key": "energy",
+    "forces_key": "forces"
+  },
+  "root": "datasets/3BPA/dataset_3BPA",
+  "schema_version": "rtece_stage181_3bpa_ase_smoke.v1",
+  "splits": {
+    "iso_atoms": {
+      "energy_source": "calc.results.energy",
+      "exists": true,
+      "first_energy": -1029.4889999855063,
+      "first_forces_shape": null,
+      "first_num_atoms": 1,
+      "forces_source": null,
+      "num_configs": 4,
+      "path": "datasets/3BPA/dataset_3BPA/iso_atoms.xyz"
+    },
+    "test_1200K": {
+      "energy_source": "calc.results.energy",
+      "exists": true,
+      "first_energy": -17656.671736882017,
+      "first_forces_shape": [
+        27,
+        3
+      ],
+      "first_num_atoms": 27,
+      "forces_source": "calc.results.forces",
+      "num_configs": 2139,
+      "path": "datasets/3BPA/dataset_3BPA/test_1200K.xyz"
+    },
+    "test_300K": {
+      "energy_source": "calc.results.energy",
+      "exists": true,
+      "first_energy": -17660.06855946407,
+      "first_forces_shape": [
+        27,
+        3
+      ],
+      "first_num_atoms": 27,
+      "forces_source": "calc.results.forces",
+      "num_configs": 1669,
+      "path": "datasets/3BPA/dataset_3BPA/test_300K.xyz"
+    },
+    "test_600K": {
+      "energy_source": "calc.results.energy",
+      "exists": true,
+      "first_energy": -17659.831875761836,
+      "first_forces_shape": [
+        27,
+        3
+      ],
+      "first_num_atoms": 27,
+      "forces_source": "calc.results.forces",
+      "num_configs": 2138,
+      "path": "datasets/3BPA/dataset_3BPA/test_600K.xyz"
+    },
+    "test_dih": {
+      "energy_source": "calc.results.energy",
+      "exists": true,
+      "first_energy": -17660.91277968868,
+      "first_forces_shape": [
+        27,
+        3
+      ],
+      "first_num_atoms": 27,
+      "forces_source": "calc.results.forces",
+      "num_configs": 7047,
+      "path": "datasets/3BPA/dataset_3BPA/test_dih.xyz"
+    },
+    "train_300K": {
+      "energy_source": "calc.results.energy",
+      "exists": true,
+      "first_energy": -17660.461737861464,
+      "first_forces_shape": [
+        27,
+        3
+      ],
+      "first_num_atoms": 27,
+      "forces_source": "calc.results.forces",
+      "num_configs": 500,
+      "path": "datasets/3BPA/dataset_3BPA/train_300K.xyz"
+    },
+    "train_mixedT": {
+      "energy_source": "calc.results.energy",
+      "exists": true,
+      "first_energy": -17660.321436367645,
+      "first_forces_shape": [
+        27,
+        3
+      ],
+      "first_num_atoms": 27,
+      "forces_source": "calc.results.forces",
+      "num_configs": 500,
+      "path": "datasets/3BPA/dataset_3BPA/train_mixedT.xyz"
+    }
+  },
+  "units_assumed": {
+    "distance": "A",
+    "energy": "eV",
+    "forces": "eV/A"
+  }
+}
