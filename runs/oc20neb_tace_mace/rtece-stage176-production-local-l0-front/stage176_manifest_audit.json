@@ -1,0 +1,21 @@
+{
+  "checks": {
+    "artifacts": true,
+    "autograd_force_mode": true,
+    "has_early_stopping": true,
+    "has_warmup": true,
+    "lightning": true,
+    "manifest_has_local_path": true,
+    "not_projection_only": true,
+    "per_element_e0_fit": true,
+    "production_entrypoint": true,
+    "rank3": true,
+    "scalar_path_ids": true,
+    "schema_version": true,
+    "stage": true
+  },
+  "contract_pass": true,
+  "failed_checks": [],
+  "no_forbidden_sbatch_flags": true,
+  "schema_version": "rtece_stage176_manifest_audit.v1"
+}

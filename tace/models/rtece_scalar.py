@@ -19,6 +19,7 @@ class RTECEScalarConfig:
     learnable_radial_mixing: bool = False
     radial_species_adapter_channels: int = 0
     radial_species_adapter_scope: str = "all"
+    local_l0_chemistry_rank: int = 0
     max_atomic_number: int = 100
     use_element_density: bool = False
     use_density_quadratic: bool = False
@@ -49,6 +50,7 @@ _ATOMIC_SCALAR_PATH_IDS = {
     "atomic.radial_density",
     "atomic.element_density",
     "atomic.species_basis_density",
+    "atomic.local_l0_lowrank_density",
     "atomic.density_square",
     "atomic.vector_norm",
     "atomic.vector_cross_radial_dot",
@@ -169,6 +171,15 @@ def _normalize_radial_species_adapter_scope(value: str) -> str:
     return scope
 
 
+def _normalize_local_l0_chemistry_rank(value: int) -> int:
+    rank = int(value)
+    if rank < 0:
+        raise ValueError("local_l0_chemistry_rank must be non-negative")
+    if rank > 4:
+        raise ValueError("local_l0_chemistry_rank currently supports ranks 0 through 4")
+    return rank
+
+
 def _radial_species_adapter_label(config: RTECEScalarConfig) -> str:
     scope = _normalize_radial_species_adapter_scope(config.radial_species_adapter_scope)
     base = "learnable_edge_species_radial_adapter"
@@ -245,6 +256,7 @@ def build_rtece_config_from_path_ids(
     learnable_radial_mixing: bool = False,
     radial_species_adapter_channels: int = 0,
     radial_species_adapter_scope: str = "all",
+    local_l0_chemistry_rank: int = 0,
     max_atomic_number: int = 100,
     species_basis_channels: int = 0,
     species_basis_mode: str = "fixed_z_power",
@@ -276,6 +288,11 @@ def build_rtece_config_from_path_ids(
         raise ValueError("atomic.radial_density is required as the base scalar path")
     if "atomic.species_basis_density" in paths and species_basis_channels <= 0:
         raise ValueError("species_basis_channels must be positive for atomic.species_basis_density")
+    normalized_local_l0_chemistry_rank = _normalize_local_l0_chemistry_rank(local_l0_chemistry_rank)
+    if "atomic.local_l0_lowrank_density" in paths and normalized_local_l0_chemistry_rank <= 0:
+        raise ValueError("local_l0_chemistry_rank must be positive for atomic.local_l0_lowrank_density")
+    if "atomic.local_l0_lowrank_density" not in paths and normalized_local_l0_chemistry_rank:
+        raise ValueError("local_l0_chemistry_rank requires atomic.local_l0_lowrank_density")
     normalized_species_basis_mode = _normalize_species_basis_mode(species_basis_mode)
     edge_paths = _selected_edge_path_ids(paths)
     has_cavity_edge_paths = any(path_id.startswith("edge.cavity.") for path_id in edge_paths)
@@ -332,6 +349,7 @@ def build_rtece_config_from_path_ids(
         learnable_radial_mixing=bool(learnable_radial_mixing),
         radial_species_adapter_channels=normalized_radial_species_adapter_channels,
         radial_species_adapter_scope=normalized_radial_species_adapter_scope,
+        local_l0_chemistry_rank=normalized_local_l0_chemistry_rank,
         max_atomic_number=int(max_atomic_number),
         use_element_density="atomic.element_density" in paths,
         use_density_quadratic="atomic.density_square" in paths,
@@ -388,6 +406,9 @@ def build_rtece_config_from_manifest(manifest: Mapping[str, Any]) -> RTECEScalar
         ),
         radial_species_adapter_scope=_normalize_radial_species_adapter_scope(
             str(payload.get("radial_species_adapter_scope", "all"))
+        ),
+        local_l0_chemistry_rank=_normalize_local_l0_chemistry_rank(
+            int(payload.get("local_l0_chemistry_rank", 0))
         ),
         use_element_density=bool(payload.get("use_element_density", False)),
         use_density_quadratic=bool(payload.get("use_density_quadratic", False)),
@@ -449,6 +470,10 @@ def _scalar_path_descriptor_dim(path_id: str, config: RTECEScalarConfig) -> int:
         if config.species_basis_channels <= 0:
             raise ValueError("atomic.species_basis_density requires species_basis_channels > 0")
         return int(config.num_radial) * int(config.species_basis_channels)
+    if path_id == "atomic.local_l0_lowrank_density":
+        if config.local_l0_chemistry_rank <= 0:
+            raise ValueError("atomic.local_l0_lowrank_density requires local_l0_chemistry_rank > 0")
+        return int(config.num_radial) * int(config.local_l0_chemistry_rank)
     if path_id in {"atomic.vector_cross_radial_dot", "atomic.quadrupole_cross_radial_frobenius"}:
         return _num_off_diagonal_shell_pairs(config.atomic_cross_radial_sketch_channels)
     if path_id in _EDGE_SCALAR_PATH_DIMS:
@@ -468,6 +493,8 @@ def descriptor_dim(config: RTECEScalarConfig) -> int:
         dim += config.num_radial
     if config.species_basis_channels:
         dim += config.num_radial * int(config.species_basis_channels)
+    if config.local_l0_chemistry_rank:
+        dim += config.num_radial * int(config.local_l0_chemistry_rank)
     if config.use_atomic_moments:
         dim += 2 * config.num_radial
     dim += config.num_edge_sketches
@@ -522,6 +549,10 @@ def rtece_route_contract(
                 semantic_tier = "T3_species_atomic_moment_scalar_sketch"
                 descriptor_family = "species_basis_density_plus_atomic_moment_sketch"
                 retained.extend(["low_order_atomic_moments", "edge_relational_scalar_sketches"])
+    elif config.local_l0_chemistry_rank:
+        semantic_tier = "T3_trainable_local_l0_lowrank_density"
+        descriptor_family = "local_l0_lowrank_density"
+        retained.extend(["trainable_local_l0_chemistry_front", "early_scalarized_local_l0_density"])
     elif config.use_atomic_moments or config.num_edge_sketches:
         if config.scalar_path_ids and any("cross_radial" in path_id for path_id in config.scalar_path_ids):
             retained.append("atomic_cross_radial_invariants")
@@ -574,6 +605,12 @@ def rtece_route_contract(
         retained.append("trainable_low_rank_radial_mixing")
         semantic_tier = f"{semantic_tier}_learnable_radial_mixing"
         descriptor_family = f"{descriptor_family}_learnable_radial_mixing"
+    if config.local_l0_chemistry_rank:
+        if "trainable_local_l0_chemistry_front" not in retained:
+            retained.extend(["trainable_local_l0_chemistry_front", "early_scalarized_local_l0_density"])
+        if "local_l0_lowrank_density" not in descriptor_family:
+            semantic_tier = f"{semantic_tier}_local_l0_lowrank"
+            descriptor_family = f"{descriptor_family}_local_l0_lowrank"
     if config.radial_species_adapter_channels:
         adapter_label = _radial_species_adapter_label(config)
         retained.append("trainable_edge_species_radial_basis")
@@ -666,6 +703,8 @@ def rtece_route_contract(
         pareto_axes.append("trainable_species_basis")
     if config.learnable_radial_mixing:
         pareto_axes.append("trainable_feature_extractor")
+    if config.local_l0_chemistry_rank:
+        pareto_axes.append("trainable_local_l0_front")
     if config.radial_species_adapter_channels:
         pareto_axes.append("trainable_edge_species_radial_basis")
         if config.radial_species_adapter_scope != "all":
@@ -717,6 +756,7 @@ def rtece_route_contract(
         "feature_extractor": (
             "learnable_radial_linear_mixing" if config.learnable_radial_mixing else "fixed_radial_basis"
         )
+        + ("+trainable_local_l0_chemistry_front" if config.local_l0_chemistry_rank else "")
         + (f"+{_radial_species_adapter_label(config)}" if config.radial_species_adapter_channels else "")
         + ("+learnable_species_basis" if config.species_basis_channels and config.species_basis_mode == "learnable_embedding" else "")
         + ("+residual_scalar_descriptor_conditioner" if config.descriptor_conditioner != "none" else "")
@@ -780,6 +820,7 @@ def _config_manifest_payload(config: RTECEScalarConfig) -> dict[str, object]:
         "learnable_radial_mixing": bool(config.learnable_radial_mixing),
         "radial_species_adapter_channels": int(config.radial_species_adapter_channels),
         "radial_species_adapter_scope": str(config.radial_species_adapter_scope),
+        "local_l0_chemistry_rank": int(config.local_l0_chemistry_rank),
         "max_atomic_number": int(config.max_atomic_number),
         "use_element_density": bool(config.use_element_density),
         "use_density_quadratic": bool(config.use_density_quadratic),
@@ -853,6 +894,15 @@ def rtece_path_manifest(
             else f"fixed_z_power_{int(config.species_basis_channels)}"
         )
         moments.append(_moment_spec("moment.l0.species_basis_density", ell=0, radial_projection=base_radial_projection, chemistry_basis=chemistry_basis))
+    if config.local_l0_chemistry_rank:
+        moments.append(
+            _moment_spec(
+                "moment.l0.local_lowrank_density",
+                ell=0,
+                radial_projection=base_radial_projection,
+                chemistry_basis=f"trainable_center_neighbor_z_power_rank_{int(config.local_l0_chemistry_rank)}",
+            )
+        )
     if config.use_vector_moments or config.use_atomic_moments or edge_required_ell >= 1:
         moments.append(_moment_spec("moment.l1.vector", ell=1, radial_projection=radial_projection))
     if config.use_atomic_moments or edge_required_ell >= 2:
@@ -888,6 +938,17 @@ def rtece_path_manifest(
                 contraction="identity",
                 radial_projection="identity",
                 cost_group="atomic_low_rank_species_density",
+            )
+        )
+    if config.local_l0_chemistry_rank:
+        scalar_paths.append(
+            _scalar_path_spec(
+                "atomic.local_l0_lowrank_density",
+                placement="atomic",
+                inputs=["moment.l0.local_lowrank_density"],
+                contraction="center_neighbor_lowrank_l0_density",
+                radial_projection="identity",
+                cost_group="atomic_trainable_local_l0_density",
             )
         )
     if config.use_density_quadratic:
@@ -1481,6 +1542,7 @@ def compute_atomic_moments(
     max_ell: int | None = None,
     species_basis_embedding: torch.Tensor | None = None,
     radial_species_adapter: torch.nn.Module | None = None,
+    local_l0_chemistry_front: torch.nn.Module | None = None,
 ) -> dict[str, torch.Tensor | None]:
     _, distances, unit = compute_pair_geometry(graph)
     src, dst = graph.edge_index
@@ -1501,6 +1563,17 @@ def compute_atomic_moments(
         quadrupole = scatter_sum(radial[:, :, None, None] * quad_unit[:, None, :, :], dst, num_nodes)
     else:
         quadrupole = None
+    local_l0_lowrank_density = None
+    if config.local_l0_chemistry_rank:
+        if local_l0_chemistry_front is None:
+            raise ValueError("local L0 chemistry front is required for local_l0_chemistry_rank > 0")
+        local_l0_lowrank_density = local_l0_chemistry_front(
+            radial,
+            source_z=graph.z[src],
+            target_z=graph.z[dst],
+            dst=dst,
+            num_nodes=num_nodes,
+        )
     species_density = None
     if config.species_basis_channels:
         if config.species_basis_mode == "learnable_embedding":
@@ -1525,6 +1598,7 @@ def compute_atomic_moments(
         "density": density,
         "element_density": element_density,
         "species_density": species_density,
+        "local_l0_lowrank_density": local_l0_lowrank_density,
         "vector": vector,
         "quadrupole": quadrupole,
     }
@@ -1536,6 +1610,7 @@ def _atomic_scalar_path_descriptors(
     density: torch.Tensor,
     element_density: torch.Tensor | None = None,
     species_density: torch.Tensor | None = None,
+    local_l0_lowrank_density: torch.Tensor | None = None,
     vector_norm: torch.Tensor | None = None,
     quadrupole_norm: torch.Tensor | None = None,
     vector_cross_radial_dot: torch.Tensor | None = None,
@@ -1553,6 +1628,10 @@ def _atomic_scalar_path_descriptors(
             if species_density is None:
                 raise ValueError("species_density is required for atomic.species_basis_density")
             parts.append(species_density)
+        elif path_id == "atomic.local_l0_lowrank_density":
+            if local_l0_lowrank_density is None:
+                raise ValueError("local_l0_lowrank_density is required for atomic.local_l0_lowrank_density")
+            parts.append(local_l0_lowrank_density)
         elif path_id == "atomic.density_square":
             parts.append(density.square())
         elif path_id == "atomic.vector_norm":
@@ -1607,6 +1686,8 @@ def density_scalar_descriptors(
         if element_density is None:
             raise ValueError("species_density is required when species_basis_channels > 0")
         parts.append(element_density)
+    if config.local_l0_chemistry_rank:
+        raise ValueError("local L0 chemistry front requires scalar_path_ids")
     if config.use_vector_moments:
         if vector_norm is None:
             raise ValueError("vector_norm is required when use_vector_moments=True")
@@ -1714,6 +1795,7 @@ def atomic_scalar_descriptors(
     atomic_cross_radial_projection: torch.Tensor | None = None,
     species_basis_embedding: torch.Tensor | None = None,
     radial_species_adapter: torch.nn.Module | None = None,
+    local_l0_chemistry_front: torch.nn.Module | None = None,
 ) -> torch.Tensor:
     moments = compute_atomic_moments(
         graph,
@@ -1721,6 +1803,7 @@ def atomic_scalar_descriptors(
         radial_mixing,
         species_basis_embedding=species_basis_embedding,
         radial_species_adapter=radial_species_adapter,
+        local_l0_chemistry_front=local_l0_chemistry_front,
     )
     density = moments["density"]
     vector = moments["vector"]
@@ -1744,6 +1827,7 @@ def atomic_scalar_descriptors(
             density=density,
             element_density=moments["element_density"],
             species_density=moments["species_density"],
+            local_l0_lowrank_density=moments["local_l0_lowrank_density"],
             vector_norm=vector_norm,
             quadrupole_norm=quadrupole_norm,
             vector_cross_radial_dot=vector_cross_radial_dot,
@@ -1898,6 +1982,7 @@ def edge_relational_sketches(
     radial_mixing: torch.nn.Linear | None = None,
     species_basis_embedding: torch.Tensor | None = None,
     radial_species_adapter: torch.nn.Module | None = None,
+    local_l0_chemistry_front: torch.nn.Module | None = None,
 ) -> torch.Tensor:
     if config.num_edge_sketches <= 0:
         return graph.pos.new_zeros((graph.z.shape[0], 0))
@@ -2069,6 +2154,7 @@ def rtece_descriptors(
     atomic_cross_radial_projection: torch.Tensor | None = None,
     species_basis_embedding: torch.Tensor | None = None,
     radial_species_adapter: torch.nn.Module | None = None,
+    local_l0_chemistry_front: torch.nn.Module | None = None,
 ) -> torch.Tensor:
     adapter_scope = _normalize_radial_species_adapter_scope(config.radial_species_adapter_scope)
     atomic_radial_species_adapter = (
@@ -2084,6 +2170,7 @@ def rtece_descriptors(
         atomic_cross_radial_projection,
         species_basis_embedding,
         atomic_radial_species_adapter,
+        local_l0_chemistry_front,
     )
     sketches = edge_relational_sketches(
         graph,
@@ -2105,6 +2192,58 @@ def _fixed_z_power_species_embedding_table(
     z = torch.arange(int(max_atomic_number) + 1, dtype=dtype, device=device) / float(max_atomic_number)
     powers = torch.arange(1, int(species_basis_channels) + 1, dtype=dtype, device=device)
     return z[:, None].pow(powers[None, :])
+
+
+def _fixed_local_l0_chemistry_table(
+    *,
+    max_atomic_number: int,
+    rank: int,
+    dtype: torch.dtype = torch.float32,
+    device: torch.device | None = None,
+) -> torch.Tensor:
+    z = torch.arange(int(max_atomic_number) + 1, dtype=dtype, device=device) / float(max_atomic_number)
+    basis = torch.stack([torch.ones_like(z), z, z.square(), torch.sqrt(z.clamp_min(0.0))], dim=-1)
+    return basis[:, : int(rank)]
+
+
+class LocalL0ChemistryFront(torch.nn.Module):
+    def __init__(self, *, max_atomic_number: int, rank: int, num_radial: int) -> None:
+        super().__init__()
+        local_rank = _normalize_local_l0_chemistry_rank(rank)
+        if local_rank <= 0:
+            raise ValueError("local L0 chemistry front rank must be positive")
+        self.rank = int(local_rank)
+        self.num_radial = int(num_radial)
+        self.source_embedding = torch.nn.Embedding(int(max_atomic_number) + 1, self.rank, dtype=torch.float64)
+        self.target_embedding = torch.nn.Embedding(int(max_atomic_number) + 1, self.rank, dtype=torch.float64)
+        with torch.no_grad():
+            table = _fixed_local_l0_chemistry_table(
+                max_atomic_number=int(max_atomic_number),
+                rank=self.rank,
+                dtype=self.source_embedding.weight.dtype,
+                device=self.source_embedding.weight.device,
+            )
+            self.source_embedding.weight.copy_(table)
+            self.target_embedding.weight.copy_(table)
+
+    def forward(
+        self,
+        radial: torch.Tensor,
+        *,
+        source_z: torch.Tensor,
+        target_z: torch.Tensor,
+        dst: torch.Tensor,
+        num_nodes: int,
+    ) -> torch.Tensor:
+        max_index = self.source_embedding.num_embeddings - 1
+        source_index = source_z.to(device=radial.device, dtype=torch.long).clamp(min=0, max=max_index)
+        target_index = target_z.to(device=radial.device, dtype=torch.long).clamp(min=0, max=max_index)
+        source = self.source_embedding(source_index).to(dtype=radial.dtype)
+        target = self.target_embedding(target_index).to(dtype=radial.dtype)
+        edge_basis = source * target
+        values = radial[:, :, None] * edge_basis[:, None, :]
+        density = scatter_sum(values, dst, int(num_nodes))
+        return density.reshape(int(num_nodes), self.num_radial * self.rank)
 
 
 class RadialSpeciesAdapter(torch.nn.Module):
@@ -2146,6 +2285,14 @@ class RTECEScalarModel(torch.nn.Module):
             torch.nn.init.eye_(self.radial_mixing.weight)
         else:
             self.radial_mixing = None
+        if config.local_l0_chemistry_rank:
+            self.local_l0_chemistry_front = LocalL0ChemistryFront(
+                max_atomic_number=int(config.max_atomic_number),
+                rank=int(config.local_l0_chemistry_rank),
+                num_radial=int(config.num_radial),
+            )
+        else:
+            self.local_l0_chemistry_front = None
         if config.radial_species_adapter_channels:
             self.radial_species_adapter = RadialSpeciesAdapter(
                 max_atomic_number=int(config.max_atomic_number),
@@ -2267,6 +2414,11 @@ class RTECEScalarModel(torch.nn.Module):
             raise ValueError(
                 f"{backend_name} does not include learnable radial-mixing descriptor derivatives yet; "
                 "use force_mode='autograd' for trainable-feature rTECE candidates."
+            )
+        if self.config.local_l0_chemistry_rank:
+            raise ValueError(
+                f"{backend_name} does not include local L0 chemistry front descriptor derivatives yet; "
+                "use force_mode='autograd' for trainable local L0 rTECE candidates."
             )
         if self.config.radial_species_adapter_channels:
             raise ValueError(
@@ -2695,6 +2847,7 @@ class RTECEScalarModel(torch.nn.Module):
             self._atomic_cross_radial_projection_weight(),
             self._species_basis_embedding_weight(),
             self.radial_species_adapter,
+            self.local_l0_chemistry_front,
         )
         descriptors = self._readout_descriptors(descriptors)
         atomic_input = torch.cat([z_scaled, descriptors], dim=-1)
@@ -2721,6 +2874,7 @@ __all__ = [
     "RTECEGraph",
     "RTECEScalarModel",
     "RadialSpeciesAdapter",
+    "LocalL0ChemistryFront",
     "available_rtece_variants",
     "build_rtece_config",
     "config_with_moment_l_max",

@@ -91,6 +91,7 @@ def build_training_config(
     descriptor_bottleneck_dim: int = 0,
     radial_species_adapter_channels: int = 0,
     radial_species_adapter_scope: str = "all",
+    local_l0_chemistry_rank: int = 0,
     learnable_radial_mixing: bool = False,
     use_short_range_repulsion: bool = False,
     short_range_repulsion_potential: str = "softplus_overlap",
@@ -116,6 +117,7 @@ def build_training_config(
         "descriptor_bottleneck_dim": int(descriptor_bottleneck_dim),
         "radial_species_adapter_channels": int(radial_species_adapter_channels),
         "radial_species_adapter_scope": str(radial_species_adapter_scope),
+        "local_l0_chemistry_rank": int(local_l0_chemistry_rank),
     }
     paths = parse_scalar_path_ids(scalar_path_ids)
     if paths is not None:
@@ -576,6 +578,7 @@ def fit_rtece_lightning(
     descriptor_bottleneck_dim: int = 0,
     radial_species_adapter_channels: int = 0,
     radial_species_adapter_scope: str = "all",
+    local_l0_chemistry_rank: int = 0,
     learnable_radial_mixing: bool = False,
     use_short_range_repulsion: bool = False,
     short_range_repulsion_potential: str = "softplus_overlap",
@@ -628,6 +631,7 @@ def fit_rtece_lightning(
         descriptor_bottleneck_dim=descriptor_bottleneck_dim,
         radial_species_adapter_channels=radial_species_adapter_channels,
         radial_species_adapter_scope=radial_species_adapter_scope,
+        local_l0_chemistry_rank=local_l0_chemistry_rank,
         learnable_radial_mixing=learnable_radial_mixing,
         use_short_range_repulsion=use_short_range_repulsion,
         short_range_repulsion_potential=short_range_repulsion_potential,
@@ -765,6 +769,7 @@ def fit_rtece_lightning(
         "learnable_radial_mixing": bool(config.learnable_radial_mixing),
         "radial_species_adapter_channels": int(config.radial_species_adapter_channels),
         "radial_species_adapter_scope": str(config.radial_species_adapter_scope),
+        "local_l0_chemistry_rank": int(config.local_l0_chemistry_rank),
         "descriptor_conditioner": str(config.descriptor_conditioner),
         "descriptor_conditioner_hidden_channels": int(config.descriptor_conditioner_hidden_channels),
         "descriptor_bottleneck_dim": int(config.descriptor_bottleneck_dim),

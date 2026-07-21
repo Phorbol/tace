@@ -11311,3 +11311,182 @@ def test_stage175_local_tece_front_manifest_is_tece_aligned_and_sbatch_safe(tmp_
     assert "set -u" not in wrapper
     assert "--energy-ridge-grid 1e-08,1e-06,0.0001,0.01,1,100" in wrapper
 
+
+
+
+def test_stage176_local_l0_lowrank_front_is_rotation_invariant_and_trainable():
+    config = build_rtece_config_from_path_ids(
+        "stage176_local_l0_rank3",
+        ("atomic.radial_density", "atomic.local_l0_lowrank_density"),
+        cutoff=2.0,
+        num_radial=8,
+        hidden_channels=(8,),
+        local_l0_chemistry_rank=3,
+    )
+    z = torch.tensor([6, 8, 1, 7], dtype=torch.long)
+    pos = torch.tensor(
+        [
+            [0.0, 0.0, 0.0],
+            [0.7, 0.2, 0.1],
+            [-0.3, 0.6, -0.2],
+            [0.4, -0.5, 0.3],
+        ],
+        dtype=torch.float64,
+    )
+    edge_index = complete_directed_edges(4)
+    graph = RTECEGraph(z=z, pos=pos, edge_index=edge_index, batch=torch.zeros(4, dtype=torch.long))
+    rotated = RTECEGraph(
+        z=z,
+        pos=pos @ rotation_z(0.73).T,
+        edge_index=edge_index,
+        batch=torch.zeros(4, dtype=torch.long),
+    )
+    changed = RTECEGraph(
+        z=torch.tensor([6, 5, 7, 7], dtype=torch.long),
+        pos=pos,
+        edge_index=edge_index,
+        batch=torch.zeros(4, dtype=torch.long),
+    )
+    model = RTECEScalarModel(config).double()
+
+    desc = atomic_scalar_descriptors(graph, config, local_l0_chemistry_front=model.local_l0_chemistry_front)
+    desc_rot = atomic_scalar_descriptors(rotated, config, local_l0_chemistry_front=model.local_l0_chemistry_front)
+    desc_changed = atomic_scalar_descriptors(changed, config, local_l0_chemistry_front=model.local_l0_chemistry_front)
+
+    assert config.local_l0_chemistry_rank == 3
+    assert descriptor_dim(config) == 8 + 8 * 3
+    assert desc.shape == (4, 32)
+    assert torch.allclose(desc, desc_rot, atol=1e-10, rtol=1e-10)
+    assert not torch.allclose(desc, desc_changed, atol=1e-10, rtol=1e-10)
+    assert any("local_l0_chemistry_front" in name for name, _param in model.named_parameters())
+
+
+def test_stage176_local_l0_manifest_exposes_tece_degradation_contract():
+    config = build_rtece_config_from_path_ids(
+        "stage176_local_l0_rank3",
+        ("atomic.radial_density", "atomic.local_l0_lowrank_density"),
+        num_radial=8,
+        hidden_channels=(8,),
+        local_l0_chemistry_rank=3,
+    )
+
+    manifest = rtece_path_manifest(config)
+    route = rtece_route_contract(config, force_mode="analytic_pair")
+
+    assert manifest["config"]["local_l0_chemistry_rank"] == 3
+    assert route["semantic_tier"] == "T3_trainable_local_l0_lowrank_density"
+    assert route["descriptor_family"] == "local_l0_lowrank_density"
+    assert "trainable_local_l0_chemistry_front" in route["retained_tece_groups"]
+    assert "early_scalarized_local_l0_density" in route["retained_tece_groups"]
+    assert "trainable_local_l0_front" in route["pareto_axes"]
+    assert any(moment["id"] == "moment.l0.local_lowrank_density" for moment in manifest["moments"])
+    assert any(path["id"] == "atomic.local_l0_lowrank_density" for path in manifest["scalar_paths"])
+    assert route["feature_extractor"].endswith("+trainable_local_l0_chemistry_front")
+
+
+def test_stage176_local_l0_front_disables_analytic_inference_backends():
+    config = build_rtece_config_from_path_ids(
+        "stage176_local_l0_rank3",
+        ("atomic.radial_density", "atomic.local_l0_lowrank_density"),
+        num_radial=4,
+        hidden_channels=(8,),
+        local_l0_chemistry_rank=3,
+    )
+    model = RTECEScalarModel(config).double().eval()
+    graph = RTECEGraph(
+        z=torch.tensor([6, 8], dtype=torch.long),
+        pos=torch.tensor([[0.0, 0.0, 0.0], [0.8, 0.0, 0.0]], dtype=torch.float64),
+        edge_index=complete_directed_edges(2),
+        batch=torch.zeros(2, dtype=torch.long),
+    )
+
+    with pytest.raises(ValueError, match="local L0 chemistry front"):
+        model.forward_pair_analytic_forces(graph)
+
+
+def test_stage176_training_config_plumbs_local_l0_chemistry_rank():
+    from argparse import Namespace
+    from tace.lightning.rtece import build_training_config as build_lightning_training_config
+    from tace.scripts.rtece_train_scalar import build_training_config as build_cli_training_config
+
+    lightning_config = build_lightning_training_config(
+        variant="stage176_local_l0_rank3",
+        scalar_path_ids="atomic.radial_density,atomic.local_l0_lowrank_density",
+        num_radial=8,
+        hidden_channels="8",
+        local_l0_chemistry_rank=3,
+    )
+    cli_args = Namespace(
+        variant="stage176_local_l0_rank3",
+        scalar_path_ids="atomic.radial_density,atomic.local_l0_lowrank_density",
+        hidden_channels="8",
+        num_radial=8,
+        use_short_range_repulsion=False,
+        short_range_repulsion_potential="softplus_overlap",
+        short_range_repulsion_strength=0.0,
+        short_range_repulsion_beta=10.0,
+        short_range_repulsion_radius_scale=0.75,
+        learnable_radial_mixing=False,
+        radial_species_adapter_channels=0,
+        radial_species_adapter_scope="all",
+        moment_l_max=None,
+        species_basis_mode="fixed_z_power",
+        species_basis_channels=0,
+        atomic_cross_radial_sketch_channels=2,
+        atomic_cross_radial_projection="fixed_shell_mean",
+        atomic_cross_radial_projection_matrix=None,
+        descriptor_conditioner="none",
+        descriptor_conditioner_hidden_channels=0,
+        descriptor_bottleneck_dim=0,
+        local_l0_chemistry_rank=3,
+    )
+    cli_config = build_cli_training_config(cli_args)
+
+    assert lightning_config.local_l0_chemistry_rank == 3
+    assert cli_config.local_l0_chemistry_rank == 3
+    assert descriptor_dim(lightning_config) == descriptor_dim(cli_config) == 32
+
+
+
+def test_stage176_train_smoke_manifest_uses_production_cli_and_safe_sbatch(tmp_path):
+    from benchmarks.oc20neb_tace_mace.make_rtece_stage176_local_l0_front import (
+        audit_stage176_manifest,
+        make_stage176_manifest,
+        materialize_stage176,
+    )
+
+    manifest = make_stage176_manifest(
+        output_root=tmp_path / "stage176",
+        train_file="/tmp/fake_train.extxyz",
+        valid_file="/tmp/fake_valid.extxyz",
+        limit_configs=32,
+        valid_limit_configs=16,
+        max_steps=20,
+    )
+    audit = audit_stage176_manifest(manifest)
+
+    assert audit["contract_pass"] is True
+    assert manifest["schema_version"] == "rtece_stage176_production_local_l0_front.v1"
+    assert manifest["stage"] == "stage176_production_local_l0_front"
+    assert manifest["model_config"]["scalar_path_ids"] == [
+        "atomic.radial_density",
+        "atomic.local_l0_lowrank_density",
+    ]
+    assert manifest["model_config"]["local_l0_chemistry_rank"] == 3
+    assert manifest["uses_projection_only_script"] is False
+    assert manifest["training_entrypoint"] == "tace.scripts.rtece_train_scalar"
+    assert "Stage175" in "\n".join(manifest["review_basis"])
+
+    materialized = materialize_stage176(manifest)
+    wrapper = (tmp_path / "stage176" / "stage176_train_smoke.sbatch").read_text(encoding="utf-8")
+    assert materialized["stage"] == "stage176_production_local_l0_front"
+    assert "python -m tace.scripts.rtece_train_scalar" in wrapper
+    assert "--scalar-path-ids atomic.radial_density,atomic.local_l0_lowrank_density" in wrapper
+    assert "--local-l0-chemistry-rank 3" in wrapper
+    assert "--trainer-backend lightning" in wrapper
+    assert "--lr-warmup-steps" in wrapper
+    assert "--early-stopping-patience" in wrapper
+    assert "--export" not in wrapper
+    assert "--mem" not in wrapper
+    assert "--cpus-per-task" not in wrapper
+    assert "set -u" not in wrapper
