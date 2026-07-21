@@ -8780,6 +8780,67 @@ def test_stage166_deployable_proxy_baseline_scores_feature_sets():
 
 
 
+def test_stage167_local_radial_proxy_extracts_pair_histograms_and_scores():
+    from ase import Atoms
+
+    from benchmarks.oc20neb_tace_mace.summarize_rtece_stage167_local_radial_proxy import (
+        local_radial_proxy_features,
+        render_stage167_local_radial_proxy_markdown,
+        summarize_local_radial_proxy_feature_sets,
+    )
+
+    atoms_a = Atoms(
+        numbers=[6, 8],
+        positions=[[0.0, 0.0, 0.0], [0.7, 0.0, 0.0]],
+        cell=[8.0, 8.0, 8.0],
+        pbc=[False, False, False],
+    )
+    features_a = local_radial_proxy_features(atoms_a, cutoff=3.0, radial_bins=3)
+    assert features_a["natoms"] == pytest.approx(2.0)
+    assert any(key.startswith("pair_z6_z8_bin") for key in features_a)
+
+    case_features = {
+        "case-a": features_a,
+        "case-b": local_radial_proxy_features(
+            Atoms(
+                numbers=[6, 8],
+                positions=[[0.0, 0.0, 0.0], [1.1, 0.0, 0.0]],
+                cell=[8.0, 8.0, 8.0],
+                pbc=[False, False, False],
+            ),
+            cutoff=3.0,
+            radial_bins=3,
+        ),
+        "case-c": local_radial_proxy_features(
+            Atoms(
+                numbers=[6, 8],
+                positions=[[0.0, 0.0, 0.0], [2.5, 0.0, 0.0]],
+                cell=[8.0, 8.0, 8.0],
+                pbc=[False, False, False],
+            ),
+            cutoff=3.0,
+            radial_bins=3,
+        ),
+    }
+    case_offsets = {
+        case_id: 10.0 * row.get("pair_z6_z8_bin1", 0.0) + 20.0 * row.get("pair_z6_z8_bin2", 0.0)
+        for case_id, row in case_features.items()
+    }
+    summary = summarize_local_radial_proxy_feature_sets(
+        case_offsets_mev_atom=case_offsets,
+        case_features=case_features,
+        ridge=1.0e-8,
+    )
+
+    assert summary["schema_version"] == "rtece_stage167_local_radial_proxy.v1"
+    assert summary["rows"][0]["uses_case_id_as_feature"] is False
+    assert summary["best_train_rmse_feature_set"] in {"local_radial", "local_radial_plus_global"}
+    markdown = render_stage167_local_radial_proxy_markdown(summary)
+    assert "Stage167 Local Radial Proxy" in markdown
+    assert "case_id is used only for grouping" in markdown
+
+
+
 def test_stage145_summary_keeps_rmse_first_and_missing_outputs_explicit(tmp_path):
     import json
 
